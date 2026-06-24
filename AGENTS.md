@@ -83,6 +83,8 @@ opensource-competition/
 - 블록체인에는 원문 데이터나 개인정보를 올리지 않는다. eventHash만 기록한다.
 - 1차 PoC 블록체인은 Hardhat local node를 기준으로 한다. 테스트넷 배포는 시간이 남을 때 optional로 다룬다.
 - API key, private key, RPC secret, 지갑 mnemonic 등 민감 정보는 커밋하지 않는다.
+- DB schema 변경은 직접 DB에서만 처리하지 않고 Flyway migration으로 남긴다.
+- Docker PostgreSQL volume은 개인 로컬 상태로 보고 공유하지 않는다. 협업용 DB 상태는 migration과 seed SQL로 재현한다.
 - Agent가 외부 API key를 직접 보유하는 구조를 기본 설계로 두지 않는다. Guard가 정책 검증 후 외부 리소스를 호출하는 proxy/gateway 구조를 우선한다.
 - 정책 엔진은 1차 PoC에서 규칙 기반으로 구현한다. LLM 기반 판단은 고도화 항목으로 둔다.
 - 구현할 때는 시연 가능한 end-to-end 흐름을 우선하고, 금융 서비스 수준 기능은 제외한다.
@@ -105,6 +107,7 @@ opensource-competition/
 - 작업 목록과 일정: `docs/AgentPay_Guard_작업목록.md`
 - 구현 아키텍처: `docs/AgentPay_Guard_시스템_아키텍처.md`
 - 디렉토리별 개발 계획: `docs/AgentPay_Guard_디렉토리별_개발계획.md`
+- DB 협업 정책: `docs/AgentPay_Guard_DB_협업_정책.md`
 - 고도화 항목: `docs/AgentPay_Guard_고도화_방향.md`
 
 문서를 수정할 때는 날짜를 `YYYY-MM-DD` 형식으로 쓰고, 구현된 내용과 계획된 내용을 구분한다.
