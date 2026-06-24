@@ -56,12 +56,16 @@ planned:
 
 ```text
 agentpay-guard-api-server/
+agentpay-guard-dashboard/
+agentpay-guard-sample-agent/
+agentpay-guard-audit-anchor/
 docs/
-  AgentPay_Guard_기획안.md
-  AgentPay_Guard_PoC_범위.md
-  AgentPay_Guard_작업목록.md
-  AgentPay_Guard_고도화_방향.md
-  온프레미스-ai-시스템제어-보안-poc.md
+  README.md
+  overview/
+  architecture/
+  planning/
+  policies/
+  archive/
 ```
 
 planned 구조:
@@ -103,12 +107,14 @@ opensource-competition/
 
 ## 문서 관리
 
-- 프로젝트 개요와 범위: `docs/AgentPay_Guard_기획안.md`, `docs/AgentPay_Guard_PoC_범위.md`
-- 작업 목록과 일정: `docs/AgentPay_Guard_작업목록.md`
-- 구현 아키텍처: `docs/AgentPay_Guard_시스템_아키텍처.md`
-- 디렉토리별 개발 계획: `docs/AgentPay_Guard_디렉토리별_개발계획.md`
-- DB 협업 정책: `docs/AgentPay_Guard_DB_협업_정책.md`
-- 고도화 항목: `docs/AgentPay_Guard_고도화_방향.md`
+- 문서 인덱스: `docs/README.md`
+- 프로젝트 개요와 범위: `docs/overview/AgentPay_Guard_기획안.md`, `docs/overview/AgentPay_Guard_PoC_범위.md`
+- 작업 목록과 일정: `docs/planning/AgentPay_Guard_작업목록.md`
+- 구현 아키텍처: `docs/architecture/AgentPay_Guard_시스템_아키텍처.md`
+- 디렉토리별 개발 계획: `docs/planning/AgentPay_Guard_디렉토리별_개발계획.md`
+- 디렉토리별 ToDo: `docs/planning/AgentPay_Guard_디렉토리별_TODO.md`
+- DB 협업 정책: `docs/policies/AgentPay_Guard_DB_협업_정책.md`
+- 고도화 항목: `docs/overview/AgentPay_Guard_고도화_방향.md`
 
 문서를 수정할 때는 날짜를 `YYYY-MM-DD` 형식으로 쓰고, 구현된 내용과 계획된 내용을 구분한다.
 

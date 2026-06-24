@@ -159,7 +159,7 @@ cd agentpay-guard-api-server
 
 자세한 정책:
 
-- [DB 협업 정책](docs/AgentPay_Guard_DB_협업_정책.md)
+- [DB 협업 정책](docs/policies/AgentPay_Guard_DB_협업_정책.md)
 - [PostgreSQL init scripts](docker/postgres/init/README.md)
 
 ## 자주 쓰는 명령
@@ -190,11 +190,13 @@ cd agentpay-guard-api-server
 ## 주요 문서
 
 - [AGENTS.md](AGENTS.md)
-- [시스템 아키텍처](docs/AgentPay_Guard_시스템_아키텍처.md)
-- [디렉토리별 개발 계획](docs/AgentPay_Guard_디렉토리별_개발계획.md)
-- [작업 목록](docs/AgentPay_Guard_작업목록.md)
-- [PoC 범위](docs/AgentPay_Guard_PoC_범위.md)
-- [DB 협업 정책](docs/AgentPay_Guard_DB_협업_정책.md)
+- [문서 인덱스](docs/README.md)
+- [시스템 아키텍처](docs/architecture/AgentPay_Guard_시스템_아키텍처.md)
+- [디렉토리별 개발 계획](docs/planning/AgentPay_Guard_디렉토리별_개발계획.md)
+- [디렉토리별 ToDo](docs/planning/AgentPay_Guard_디렉토리별_TODO.md)
+- [작업 목록](docs/planning/AgentPay_Guard_작업목록.md)
+- [PoC 범위](docs/overview/AgentPay_Guard_PoC_범위.md)
+- [DB 협업 정책](docs/policies/AgentPay_Guard_DB_협업_정책.md)
 
 ## 개발 주의사항
 
