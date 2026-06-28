@@ -16,12 +16,14 @@ docs/
 ## Overview
 
 - [기획안](overview/AgentPay_Guard_기획안.md)
+- [구성요소 쉬운 설명](overview/AgentPay_Guard_구성요소_쉬운설명.md)
 - [PoC 범위](overview/AgentPay_Guard_PoC_범위.md)
 - [고도화 방향](overview/AgentPay_Guard_고도화_방향.md)
 
 ## Architecture
 
 - [시스템 아키텍처](architecture/AgentPay_Guard_시스템_아키텍처.md)
+- [초기 프로젝트 골격](architecture/AgentPay_Guard_초기_프로젝트_골격.md)
 
 ## Planning
 

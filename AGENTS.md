@@ -109,6 +109,7 @@ opensource-competition/
 
 - 문서 인덱스: `docs/README.md`
 - 프로젝트 개요와 범위: `docs/overview/AgentPay_Guard_기획안.md`, `docs/overview/AgentPay_Guard_PoC_범위.md`
+- 구성요소 쉬운 설명: `docs/overview/AgentPay_Guard_구성요소_쉬운설명.md`
 - 작업 목록과 일정: `docs/planning/AgentPay_Guard_작업목록.md`
 - 구현 아키텍처: `docs/architecture/AgentPay_Guard_시스템_아키텍처.md`
 - 디렉토리별 개발 계획: `docs/planning/AgentPay_Guard_디렉토리별_개발계획.md`

@@ -1,0 +1,18 @@
+{
+  "name": "agentpay-guard-audit-anchor",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Hardhat audit hash anchoring contract for AgentPay Guard PoC.",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+    "anchor:local": "hardhat run scripts/anchor-event.ts --network localhost"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.0",
+    "typescript": "^5.4.0"
+  }
+}

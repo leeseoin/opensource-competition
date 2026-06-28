@@ -191,7 +191,9 @@ cd agentpay-guard-api-server
 
 - [AGENTS.md](AGENTS.md)
 - [문서 인덱스](docs/README.md)
+- [구성요소 쉬운 설명](docs/overview/AgentPay_Guard_구성요소_쉬운설명.md)
 - [시스템 아키텍처](docs/architecture/AgentPay_Guard_시스템_아키텍처.md)
+- [초기 프로젝트 골격](docs/architecture/AgentPay_Guard_초기_프로젝트_골격.md)
 - [디렉토리별 개발 계획](docs/planning/AgentPay_Guard_디렉토리별_개발계획.md)
 - [디렉토리별 ToDo](docs/planning/AgentPay_Guard_디렉토리별_TODO.md)
 - [작업 목록](docs/planning/AgentPay_Guard_작업목록.md)
