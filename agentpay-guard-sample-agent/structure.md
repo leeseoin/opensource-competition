@@ -31,3 +31,5 @@ agentpay-guard-sample-agent/
 └── requirements.txt         # 설치할 패키지 목록 (또는 pyproject.toml)
 ```
 `
+
+// 서버 실행 python -m uvicorn app.main:app --reload
