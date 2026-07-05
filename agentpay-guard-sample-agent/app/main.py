@@ -1,11 +1,31 @@
+import sys
+from contextlib import asynccontextmanager
+
+# Windows 콘솔의 기본 코드페이지(cp949 등)는 이모지를 출력하지 못해 lifespan에서 죽는다.
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+
+from app.api.endpoints import agent as agent_router
+from app.api.endpoints import health as health_router
+from app.clients.anthropic_client import AnthropicClient
+from app.clients.guard_api_client import GuardAPIClient
+from app.core.config import get_settings
+from app.core.exceptions import register_exception_handlers
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 AgentPay Guard - Sample Agent 서버 시작 중...")
+    settings = get_settings()
+    app.state.guard_client = GuardAPIClient(base_url=settings.guard_api_base_url)
+    app.state.ai_client = AnthropicClient(api_key=settings.anthropic_api_key)
     yield
+    await app.state.guard_client.close()
+    await app.state.ai_client.close()
     print("🚀 AgentPay Guard - Sample Agent 서버 종료 중...")
 
 
@@ -26,16 +46,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+register_exception_handlers(app)
 
 
 # ==========================================
 # 라우터(엔드포인트) 연결 구역
 # ==========================================
-# 앱이 커지면 모든 API를 여기에 쓰지 않고,
-# 아래처럼 endpoints 폴더에 있는 라우터들을 조립만 합니다.
-
-# app.include_router(health_router.router, prefix="/health", tags=["Health Check"])
-# app.include_router(agent_router.router, prefix="/api/v1/agent", tags=["AI Agent"])
+app.include_router(health_router.router, prefix="/health", tags=["Health Check"])
+app.include_router(agent_router.router, prefix="/api/v1/agent", tags=["AI Agent"])
 
 # 서버가 잘 떴는지 확인하기 위한 기본 테스트 API
 @app.get("/", tags=["Root"])
@@ -45,4 +63,3 @@ async def root():
         "message": "AgentPay Guard Sample Agent API가 정상적으로 실행 중입니다.",
         "docs_url": "/docs"  # Swagger UI 주소 안내
     }
-

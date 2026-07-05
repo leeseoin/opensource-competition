@@ -1,9 +1,11 @@
-````markdown
+s````markdown
 ```text
 agentpay-guard-sample-agent/
 ├── app/
 │   ├── api/                 # 📍 Spring: Controller (엔드포인트 라우팅)
-│   │   ├── endpoints/       # 실제 API 경로들 (예: agent.py, health.py)
+│   │   ├── endpoints/       # 실제 API 경로들
+│   │   │   ├── health.py    # GET /health
+│   │   │   └── agent.py     # POST /api/v1/agent/invoke
 │   │   └── dependencies.py  # 의존성 주입 (Spring의 @Autowired 역할 일부)
 │   │
 │   ├── core/                # 📍 Spring: Config, ExceptionHandler, Security
@@ -22,7 +24,7 @@ agentpay-guard-sample-agent/
 │   ├── clients/             # 📍 Spring: WebClient, RestTemplate, FeignClient
 │   │   ├── base_client.py       # 💡 공통 핵심! (통신 세션, 에러 처리, 재시도 로직)
 │   │   ├── guard_api_client.py  # BaseClient 상속: Java Guard 통신 전담
-│   │   └── openai_client.py     # BaseClient 상속: 외부 AI API 통신 전담
+│   │   └── anthropic_client.py  # Anthropic 공식 SDK 사용: 외부 AI API 통신 전담 (.env의 ANTHROPIC_API_KEY 사용)
 │   │
 │   └── main.py              # 📍 Spring: @SpringBootApplication (앱 진입점)
 │
