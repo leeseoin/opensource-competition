@@ -30,6 +30,7 @@ docs/
 - [작업 목록](planning/AgentPay_Guard_작업목록.md)
 - [디렉토리별 개발 계획](planning/AgentPay_Guard_디렉토리별_개발계획.md)
 - [디렉토리별 ToDo](planning/AgentPay_Guard_디렉토리별_TODO.md)
+- [구현 진행 현황](planning/AgentPay_Guard_구현_진행현황.md)
 
 ## Policies
 

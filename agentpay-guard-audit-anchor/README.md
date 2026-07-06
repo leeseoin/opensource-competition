@@ -20,11 +20,50 @@ hardhat.config.ts              # Hardhat 설정
 
 ## planned 실행 흐름
 
+이 프로젝트는 Hardhat v2 기반이다. Hardhat은 최신 Node.js 버전을 바로 지원하지 않을 수 있으므로, 로컬 테스트는 Node.js 22 LTS 기준으로 실행한다.
+
+이 디렉토리에는 `.nvmrc`가 있으며 값은 `22`이다.
+
+### Node 버전 설정
+
+`nvm`을 이미 사용할 수 있으면 아래처럼 실행한다.
+
+```bash
+cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-audit-anchor
+nvm install
+nvm use
+node -v
+```
+
+`node -v`가 `v22.x.x`로 나오면 정상이다.
+
+Homebrew로 `nvm`을 설치했지만 현재 터미널에서 `nvm: command not found`가 나오면, 현재 터미널 세션에서만 아래 명령으로 `nvm`을 로드한다.
+
+```bash
+mkdir -p ~/.nvm
+export NVM_DIR="$HOME/.nvm"
+. /opt/homebrew/opt/nvm/nvm.sh
+```
+
+그 다음 다시 실행한다.
+
+```bash
+nvm install
+nvm use
+node -v
+```
+
+위 방식은 현재 터미널 세션에만 적용된다. 다른 터미널이나 다른 프로젝트의 기본 Node.js 버전은 바꾸지 않는다.
+
+### 의존성 설치와 테스트
+
 ```bash
 npm install
 npm run build
 npm test
 ```
+
+`npm test` 실행 시 Node.js 25 같은 미지원 버전을 사용하면 Hardhat 경고가 출력될 수 있다. 이 경우 `.nvmrc` 기준으로 `nvm use`를 실행한 뒤 다시 테스트한다.
 
 로컬 노드:
 

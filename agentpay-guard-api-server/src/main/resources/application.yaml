@@ -25,3 +25,11 @@ spring:
 logging:
   pattern:
     console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint}%clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+
+agentpay:
+  audit-anchor:
+    enabled: false
+    rpc-url: "http://127.0.0.1:8545"
+    contract-address: ""
+    private-key: ""
+    gas-limit: 300000
