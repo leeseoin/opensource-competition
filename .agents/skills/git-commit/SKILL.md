@@ -1,13 +1,13 @@
 ---
 name: git-commit
-description: 현재 저장소의 로컬 변경사항을 점검하고, 사용자 승인 후 git commit까지만 수행할 때 사용한다. push, PR/MR 생성, merge는 이 스킬에서 수행하지 않는다.
+description: Git 작업 1단계. 현재 저장소의 로컬 변경사항을 점검하고, 사용자 승인 후 git commit까지만 수행할 때 사용한다. push, PR/MR 생성, code review, merge는 이 스킬에서 수행하지 않는다.
 metadata:
   short-description: git commit
 ---
 
 # Git Commit
 
-로컬 변경사항을 안전하게 확인한 뒤 commit까지만 수행한다. 원격 push와 PR/MR 생성은 `git-pr` 스킬의 책임이다.
+로컬 변경사항을 안전하게 확인한 뒤 commit까지만 수행한다. 원격 push, PR/MR 생성, AI code review는 `git-pr` 스킬의 책임이고 merge는 `git-merge` 스킬의 책임이다.
 
 ## 절차
 
@@ -78,6 +78,6 @@ git status --short
 
 - `git add .`는 기본적으로 사용하지 않는다. 항상 파일을 명시한다.
 - 사용자 승인 없이 commit하지 않는다.
-- push, PR/MR 생성, merge는 수행하지 않는다.
+- push, PR/MR 생성, code review, merge는 수행하지 않는다.
 - destructive 명령은 사용하지 않는다.
 - 브랜치가 불명확하거나 변경 범위가 섞여 있으면 commit 전에 사용자에게 확인한다.
