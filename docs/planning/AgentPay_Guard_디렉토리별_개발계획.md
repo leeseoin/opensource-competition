@@ -71,7 +71,7 @@ PoC에서 다음 책임을 가진다.
 - Validation
 - Flyway
 - Springdoc OpenAPI
-- web3j 또는 Hardhat script 호출 방식 검토
+- web3j 기반 AuditAnchor 컨트랙트 호출
 
 ### 다른 프로젝트와의 관계
 
@@ -114,6 +114,32 @@ PoC에서 다음 책임을 가진다.
 - seed/demo data 생성
 - 단위 테스트 작성
 - 통합 테스트 작성
+
+### Java package 구조 원칙
+
+API server는 layer-first 패키지 구조를 사용한다.
+
+```text
+com.agentpayguard.api
+  controller/{approval,guard,merchant,payment}
+  dto/{anchor,approval,audit,guard,merchant,payment,policy}
+  service/{anchor,approval,audit,guard,merchant,payment,policy}
+  config
+```
+
+추가 개발 시에도 먼저 역할별 패키지를 나눈 뒤, 그 안에서 도메인을 나눈다.
+
+예시:
+
+```text
+controller/payment/PaymentRequestController.java
+dto/payment/PaymentRequestResponse.java
+service/payment/PaymentService.java
+entity/payment/PaymentRequestEntity.java      # planned
+repository/payment/PaymentRequestRepository.java # planned
+```
+
+현재는 영속화 구현 전이므로 `entity`, `repository` 패키지는 planned이다.
 
 ## 2. agentpay-guard-dashboard
 

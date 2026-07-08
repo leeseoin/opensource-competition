@@ -1,6 +1,7 @@
 # AgentPay Guard 구현 진행 현황
 
 작성일: 2026-07-05  
+최근 갱신일: 2026-07-08  
 상태: active
 
 ## 목적
@@ -44,6 +45,24 @@
 - Audit anchor 결과의 `chainId`, `contractAddress`, `txHash` 응답 포함
 - Jackson `ObjectMapper` Bean 명시 등록
 - Swagger/OpenAPI 의존성
+- Agent 연동용 `POST /api/v1/guard/validate` adapter API
+- Java package 구조를 layer-first 방식으로 정리
+
+현재 Java package 구조:
+
+```text
+com.agentpayguard.api
+  controller/{approval,guard,merchant,payment}
+  dto/{anchor,approval,audit,guard,merchant,payment,policy}
+  service/{anchor,approval,audit,guard,merchant,payment,policy}
+  config
+```
+
+패키지 원칙:
+
+- `controller`, `dto`, `service`, `entity`, `repository` 같은 역할별 패키지를 먼저 둔다.
+- 각 역할 패키지 안에서 `payment`, `merchant`, `quote`, `audit` 같은 도메인으로 나눈다.
+- 현재는 DB 영속화 클래스가 아직 없으므로 `entity`, `repository` 패키지는 planned 상태이다.
 
 검증됨:
 
@@ -56,6 +75,46 @@ cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-api-server
 
 ```text
 BUILD SUCCESSFUL
+```
+
+전체 테스트 검증:
+
+```bash
+cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-api-server
+./gradlew test --console=plain
+```
+
+결과:
+
+```text
+BUILD SUCCESSFUL
+```
+
+Agent v1 Guard API smoke test:
+
+```http
+POST /api/v1/guard/validate
+```
+
+요청 예시:
+
+```json
+{
+  "agentId": "agent-sample-001",
+  "intent": "hello from sample agent",
+  "estimatedCost": 0.005
+}
+```
+
+확인된 응답 요약:
+
+```json
+{
+  "decision": "ALLOW",
+  "reasonCode": "RULE_ALLOW",
+  "paymentRequestId": "c424a683-fab6-4aac-a6dc-9b79ea870544",
+  "anchorStatus": "PENDING"
+}
 ```
 
 기본 Noop anchoring 기동 검증:
@@ -206,17 +265,30 @@ planned:
 
 ### agentpay-guard-dashboard
 
-상태: 초기 scaffold
+상태: 초기 화면 구현
 
 구현됨:
 
 - React + TypeScript + Vite 프로젝트
-- 기본 Vite 화면
+- AgentPay Guard PoC용 정적 dashboard 화면
+- `DESIGN.md` 기반 UI 방향 문서
 - `package.json`, `package-lock.json`
+
+검증됨:
+
+```bash
+cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-dashboard
+npm run build
+```
+
+결과:
+
+```text
+built
+```
 
 planned:
 
-- Vite 기본 화면 제거
 - API client
 - Intent/Payment Request 화면
 - Approval 조작 화면
@@ -224,17 +296,20 @@ planned:
 
 ### agentpay-guard-sample-agent
 
-상태: planned
+상태: 초기 구현됨
 
 구현됨:
 
-- README placeholder
+- Python sample agent 프로젝트 구조
+- `.env.example`
+- Guard API 호출 client
+- Anthropic API key를 `.env`에서 읽는 구조
+- 예제 요청/구현 설명 문서
 
 planned:
 
-- Python CLI 프로젝트 구조
 - Mock Merchant quote 요청
-- Guard Payment Request 생성
+- API server의 `POST /api/v1/guard/validate` 응답 기반 처리 고도화
 - 정책 결과별 처리
 - demo scenario 스크립트
 
