@@ -50,8 +50,8 @@ PostgreSQL driver 확인:
 ./gradlew test
 ```
 
-현재 skeleton 상태에서는 datasource 설정이 없으면 `contextLoads()`가 실패할 수 있다.
-PostgreSQL 설정 또는 test profile을 추가한 뒤 통과시키는 것을 목표로 한다.
+현재 `contextLoads()` 기준 테스트는 PostgreSQL 설정과 Flyway migration을 포함해 통과한다.
+로컬 PostgreSQL이 실행 중이어야 한다.
 
 ## 애플리케이션 실행
 
@@ -127,7 +127,7 @@ OpenAPI 의존성 확인:
 
 ## PostgreSQL 설정 후 실행 예시
 
-나중에 `application.yaml`에 DB 설정을 추가하면 아래처럼 실행한다.
+`application.yaml`의 기본 개발 DB 설정을 사용하면 아래처럼 실행한다.
 
 ```bash
 ./gradlew bootRun
@@ -137,8 +137,8 @@ OpenAPI 의존성 확인:
 
 ```bash
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/agentpay_guard \
-SPRING_DATASOURCE_USERNAME=agentpay \
-SPRING_DATASOURCE_PASSWORD=agentpay \
+SPRING_DATASOURCE_USERNAME=agentpay_guard_seoin \
+SPRING_DATASOURCE_PASSWORD=agentpay_guard \
 ./gradlew bootRun
 ```
 
@@ -183,9 +183,42 @@ src/main/resources/application.yaml
 src/main/java/com/agentpayguard/api/AgentpayGuardApiServerApplication.java
 ```
 
+## Java package 구조
+
+API server는 layer-first 패키지 구조를 사용한다.
+
+```text
+src/main/java/com/agentpayguard/api/
+  controller/
+    approval/
+    guard/
+    merchant/
+    payment/
+  dto/
+    anchor/
+    approval/
+    audit/
+    guard/
+    merchant/
+    payment/
+    policy/
+  service/
+    anchor/
+    approval/
+    audit/
+    guard/
+    merchant/
+    payment/
+    policy/
+  config/
+```
+
+새 클래스는 `payment/PaymentService`처럼 도메인 먼저 두지 않고, `service/payment/PaymentService`처럼 역할별 패키지 아래에 둔다.
+DB 영속화가 추가되면 `entity/payment`, `repository/payment` 구조를 사용한다.
+
 ## 현재 주의 사항
 
 - `build/`, `.gradle/`, `bin/`은 커밋하지 않는다.
 - 실제 DB 비밀번호, API key, private key는 커밋하지 않는다.
 - OpenAPI가 보이지 않으면 먼저 `./gradlew dependencyInsight --dependency springdoc --configuration runtimeClasspath`로 의존성 해석 여부를 확인한다.
-- 앱 실행이 datasource에서 실패하면 PostgreSQL 설정 또는 테스트용 profile을 먼저 추가한다.
+- 앱 실행이 datasource에서 실패하면 먼저 루트에서 `docker compose up -d postgres`를 실행했는지 확인한다.

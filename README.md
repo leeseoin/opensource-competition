@@ -8,33 +8,42 @@ AgentPay Guard는 AI Agent가 유료 API, 구독형 서비스, 크레딧 기반 
 
 구현됨:
 
-- Spring Boot API server skeleton
+- Spring Boot API server
 - Docker Compose 기반 PostgreSQL 개발 DB
 - PostgreSQL 개발 role init SQL
 - Flyway 초기 schema migration
-- React dashboard / Python sample agent / Hardhat audit anchor 디렉토리 placeholder
+- Mock Merchant quote API
+- Payment Request 생성/조회 API
+- 규칙 기반 Policy Engine
+- Approval approve/reject scaffold
+- audit event canonical JSON 및 SHA-256 eventHash 생성
+- Noop audit anchor client
+- web3j 기반 AuditAnchor 컨트랙트 호출
+- Agent 연동용 `POST /api/v1/guard/validate` adapter API
+- React + TypeScript dashboard 초기 화면
+- Python sample agent 초기 구현
+- Hardhat + Solidity AuditAnchor 컨트랙트, 테스트, 로컬 배포/기록 스크립트
 - 프로젝트 문서와 DB 협업 정책
 
 planned:
 
-- Intent / Agent / Payment Request API
-- 규칙 기반 Policy Engine
-- Mock Merchant API
+- Intent / Agent 관리 API
+- Payment Request 목록 API
 - Payment Simulator
-- Approval Flow
-- Audit eventHash 생성
-- AuditAnchor 컨트랙트 연동
-- React + TypeScript Dashboard
-- Python Sample Agent
+- Approval 상태 전이 실제 반영
+- DB entity/repository 기반 영속화
+- Audit Anchor 조회/검증 API
+- Dashboard와 API server 실제 연동
+- Sample Agent 시나리오 고도화
 
 ## 프로젝트 구조
 
 ```text
 opensource-competition/
   agentpay-guard-api-server/       # Spring Boot backend
-  agentpay-guard-dashboard/        # React + TypeScript dashboard, planned
-  agentpay-guard-sample-agent/     # Python sample agent, planned
-  agentpay-guard-audit-anchor/     # Hardhat + Solidity contract, planned
+  agentpay-guard-dashboard/        # React + TypeScript dashboard
+  agentpay-guard-sample-agent/     # Python sample agent
+  agentpay-guard-audit-anchor/     # Hardhat + Solidity contract
   docker/
     postgres/
       init/                        # PostgreSQL 최초 초기화 SQL
@@ -187,11 +196,27 @@ cd agentpay-guard-api-server
 ./gradlew test
 ```
 
+### API server Java package 구조
+
+API server는 layer-first 패키지 구조를 사용한다.
+
+```text
+com.agentpayguard.api
+  controller/{approval,guard,merchant,payment}
+  dto/{anchor,approval,audit,guard,merchant,payment,policy}
+  service/{anchor,approval,audit,guard,merchant,payment,policy}
+  config
+```
+
+새 기능을 추가할 때는 먼저 `controller`, `dto`, `service`, `entity`, `repository` 같은 역할별 패키지를 만들고, 그 안에서 `payment`, `merchant`, `quote` 같은 도메인 하위 패키지로 나눈다.
+
 ## 주요 문서
 
 - [AGENTS.md](AGENTS.md)
 - [문서 인덱스](docs/README.md)
+- [구성요소 쉬운 설명](docs/overview/AgentPay_Guard_구성요소_쉬운설명.md)
 - [시스템 아키텍처](docs/architecture/AgentPay_Guard_시스템_아키텍처.md)
+- [초기 프로젝트 골격](docs/architecture/AgentPay_Guard_초기_프로젝트_골격.md)
 - [디렉토리별 개발 계획](docs/planning/AgentPay_Guard_디렉토리별_개발계획.md)
 - [디렉토리별 ToDo](docs/planning/AgentPay_Guard_디렉토리별_TODO.md)
 - [작업 목록](docs/planning/AgentPay_Guard_작업목록.md)

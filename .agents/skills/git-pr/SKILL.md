@@ -1,13 +1,13 @@
 ---
 name: git-pr
-description: 커밋된 작업 브랜치를 원격에 push하고 GitHub Pull Request 또는 GitLab Merge Request를 생성/조회/상태 확인할 때 사용한다. 로컬 commit 생성과 merge는 이 스킬에서 수행하지 않는다.
+description: Git 작업 2단계. 커밋된 작업 브랜치를 원격에 push하고 GitHub Pull Request 또는 GitLab Merge Request를 생성한 뒤, Codex 또는 Claude Code 협업/code review 내용을 PR/MR 본문에 명시할 때 사용한다. 로컬 commit 생성과 merge는 수행하지 않는다.
 metadata:
   short-description: git push + PR/MR
 ---
 
-# Git Push & PR/MR
+# Git PR/MR & AI Code Review
 
-커밋된 작업 브랜치를 원격에 올리고 PR/MR을 만든다. 로컬 commit은 `git-commit`, 리뷰 후 merge는 `git-review-merge`의 책임이다.
+커밋된 작업 브랜치를 원격에 올리고 PR/MR을 만든다. PR/MR 본문에는 Codex 또는 Claude Code와 협업한 범위와 code review 수행 여부를 명시한다. 로컬 commit은 `git-commit`, merge는 `git-merge`의 책임이다.
 
 ## 원칙
 
@@ -18,6 +18,9 @@ metadata:
 5. CLI가 없거나 인증되지 않았으면 웹 UI 절차를 안내한다.
 6. force push는 사용자 명시 요청과 승인 없이는 수행하지 않는다.
 7. merge는 수행하지 않는다.
+8. PR/MR 본문에는 Codex, Claude 등 AI 도구와 협업한 경우 그 사실을 명시한다. 실제 사용하지 않은 도구는 표기하지 않는다.
+9. PR/MR 생성 전 가능한 범위에서 Codex 관점의 code review를 수행하고, 주요 이슈가 있으면 PR 생성 전에 사용자에게 알린다.
+10. Claude Code가 별도로 리뷰했거나 사용자가 Claude Code와 함께 작업했다고 말한 경우에만 Claude Code를 표기한다.
 
 ## 로컬 확인
 
@@ -41,6 +44,19 @@ git branch -r
 - base 브랜치가 무엇인지
 - 원격에 push되지 않은 커밋이 있는지
 - 의도치 않은 파일이나 민감정보가 커밋에 포함되지 않았는지
+
+## PR 전 Code Review
+
+PR/MR 생성 전 다음을 확인한다.
+
+- `git diff <base>...HEAD --stat`
+- `git diff <base>...HEAD`
+- 민감정보, 의도치 않은 산출물, 대용량 파일 포함 여부
+- 테스트/검증 결과와 PR 본문 검증 항목의 일치 여부
+- Codex가 발견한 blocking 이슈가 있는지
+
+blocking 이슈가 있으면 PR/MR 생성 전에 사용자에게 보고하고 진행 여부를 확인한다.
+Claude Code 리뷰 결과는 사용자가 제공했거나 명시적으로 사용한 경우에만 포함한다.
 
 ## Push
 
@@ -114,11 +130,18 @@ Create merge request
 - [ ] CI 통과
 - [ ] 수동 확인
 
+## AI 협업
+- 사용 도구: Codex/Claude Code/없음
+- 사용 범위:
+- Code review: Codex 검토/Claude Code 검토/미수행
+
 ## 주의사항
 - 
 ```
 
 검증하지 못한 항목은 했다고 쓰지 않는다.
+AI 협업 도구를 사용한 경우 사용 도구와 사용 범위를 사실대로 적는다.
+Code review를 수행하지 못했으면 미수행으로 적고 이유를 남긴다.
 
 ## 상태 확인
 
