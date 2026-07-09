@@ -1,10 +1,9 @@
 """
 로컬 테스트용 임시 Mock Guard 서버.
 
-agentpay-guard-api-server(Spring Boot)에 /api/v1/guard/validate가 아직 구현되어
-있지 않아서, sample-agent의 ALLOW -> Anthropic 호출 경로까지 로컬에서 테스트하기
-위한 스텁이다. 실제 Spring Guard 서버가 /api/v1/guard/validate를 구현하면 이 파일은
-지워도 된다.
+agentpay-guard-api-server(Spring Boot)를 띄우지 않고 sample-agent의
+ALLOW -> Anthropic 호출 경로만 빠르게 확인하기 위한 선택적 스텁이다.
+실제 통합 테스트에서는 Spring Guard 서버의 /api/v1/guard/validate를 사용한다.
 
 실행:
     python dev/mock_guard_server.py
