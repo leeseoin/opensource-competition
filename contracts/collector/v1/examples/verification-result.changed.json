@@ -1,0 +1,33 @@
+{
+  "requestId": "verification-20260714-001",
+  "merchant": "musinsa",
+  "productExternalId": "product-12345",
+  "optionExternalId": "option-270-black",
+  "status": "changed",
+  "checkedAt": "2026-07-14T11:00:00+09:00",
+  "sourceUrl": "https://www.musinsa.com/products/12345",
+  "collectorVersion": "musinsa-v1",
+  "currentOffer": {
+    "price": {
+      "amount": 99000,
+      "currency": "KRW"
+    },
+    "shippingFee": {
+      "amount": 0,
+      "currency": "KRW"
+    },
+    "stockStatus": "available",
+    "optionLabel": "270 / 블랙",
+    "deliverySummary": "무료배송"
+  },
+  "changes": [
+    {
+      "field": "price",
+      "previousValue": 89000,
+      "currentValue": 99000,
+      "severity": "requires_confirmation"
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
