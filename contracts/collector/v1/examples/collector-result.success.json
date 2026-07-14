@@ -1,0 +1,90 @@
+{
+  "requestId": "research-20260714-001",
+  "operation": "search",
+  "status": "success",
+  "merchant": "musinsa",
+  "collectedAt": "2026-07-14T10:00:03+09:00",
+  "collectorVersion": "musinsa-v1",
+  "products": [
+    {
+      "externalId": "product-12345",
+      "name": "클래식 라운드 더비 슈즈",
+      "brand": "Example Brand",
+      "categoryPath": ["신발", "구두", "더비 슈즈"],
+      "productUrl": "https://www.musinsa.com/products/12345",
+      "imageUrls": [
+        "https://image.example.com/products/12345/main.jpg"
+      ],
+      "price": {
+        "amount": 89000,
+        "currency": "KRW"
+      },
+      "shipping": {
+        "fee": {
+          "amount": 0,
+          "currency": "KRW"
+        },
+        "summary": "무료배송",
+        "provenance": {
+          "sourceUrl": "https://www.musinsa.com/products/12345",
+          "collectedAt": "2026-07-14T10:00:03+09:00",
+          "collectorVersion": "musinsa-v1"
+        }
+      },
+      "stockStatus": "available",
+      "rating": 4.7,
+      "reviewCount": 128,
+      "options": [
+        {
+          "externalId": "option-270-black",
+          "label": "270 / 블랙",
+          "size": "270",
+          "color": "블랙",
+          "stockStatus": "available",
+          "price": {
+            "amount": 89000,
+            "currency": "KRW"
+          },
+          "provenance": {
+            "sourceUrl": "https://www.musinsa.com/products/12345",
+            "collectedAt": "2026-07-14T10:00:03+09:00",
+            "collectorVersion": "musinsa-v1"
+          }
+        }
+      ],
+      "measurements": {
+        "heelHeight": {
+          "value": 3,
+          "unit": "cm",
+          "provenance": {
+            "sourceUrl": "https://www.musinsa.com/products/12345",
+            "collectedAt": "2026-07-14T10:00:03+09:00",
+            "collectorVersion": "musinsa-v1"
+          }
+        }
+      },
+      "reviews": [
+        {
+          "externalId": "review-991",
+          "rating": 5,
+          "text": "평소 270을 신고 발볼이 넓은 편인데 잘 맞았습니다.",
+          "hasImage": true,
+          "purchasedOption": "270 / 블랙",
+          "createdAt": "2026-07-10T12:30:00+09:00",
+          "provenance": {
+            "sourceUrl": "https://www.musinsa.com/reviews/991",
+            "collectedAt": "2026-07-14T10:00:03+09:00",
+            "collectorVersion": "musinsa-v1"
+          }
+        }
+      ],
+      "provenance": {
+        "sourceUrl": "https://www.musinsa.com/products/12345",
+        "collectedAt": "2026-07-14T10:00:03+09:00",
+        "collectorVersion": "musinsa-v1"
+      }
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

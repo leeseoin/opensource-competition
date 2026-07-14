@@ -1,0 +1,36 @@
+{
+  "requestId": "research-invalid-001",
+  "operation": "search",
+  "status": "success",
+  "merchant": "musinsa",
+  "collectedAt": "2026-07-14T10:00:03+09:00",
+  "collectorVersion": "musinsa-v1",
+  "products": [
+    {
+      "externalId": "product-12345",
+      "name": "출처가 누락된 상품",
+      "brand": null,
+      "categoryPath": [],
+      "productUrl": "https://www.musinsa.com/products/12345",
+      "imageUrls": [],
+      "price": null,
+      "shipping": {
+        "fee": null,
+        "summary": null,
+        "provenance": {
+          "sourceUrl": "https://www.musinsa.com/products/12345",
+          "collectedAt": "2026-07-14T10:00:03+09:00",
+          "collectorVersion": "musinsa-v1"
+        }
+      },
+      "stockStatus": "unknown",
+      "rating": null,
+      "reviewCount": null,
+      "options": [],
+      "measurements": {},
+      "reviews": []
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
