@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "purchase-research": {
+      "command": "uv",
+      "args": ["run", "--directory", "../../services/research-backend", "purchase-research-mcp"],
+      "cwd": "."
+    }
+  }
+}

@@ -1,232 +1,39 @@
-# AgentPay Guard
+# Purchase Research Agent
 
-AgentPay Guard는 AI Agent가 유료 API, 구독형 서비스, 크레딧 기반 서비스, 사용량 기반 외부 리소스를 사용하기 전에 사용자 intent, 예산, 허용 서비스, 위험 요소를 검증하고 감사 가능한 기록을 남기는 보안 게이트웨이 PoC이다.
+사용자의 자연어 구매 요청을 구체화하고, 실제 판매처의 공개 상품·리뷰 정보를 수집해 근거 기반으로 비교한 뒤 선택 상품을 다시 검증하는 구매 조사 Agent PoC이다.
 
-현재 단계는 PoC 초기 구현이다. 실제 결제, 카드, 계좌, PG, 메인넷 자산 이동은 구현하지 않는다.
+현재 상태는 **하이브리드 아키텍처 설계 완료, 기능 구현 예정**이다.
 
-## 현재 상태
-
-구현됨:
-
-- Spring Boot API server
-- Docker Compose 기반 PostgreSQL 개발 DB
-- PostgreSQL 개발 role init SQL
-- Flyway 초기 schema migration
-- Mock Merchant quote API
-- Payment Request 생성/조회 API
-- 규칙 기반 Policy Engine
-- Approval approve/reject scaffold
-- audit event canonical JSON 및 SHA-256 eventHash 생성
-- Noop audit anchor client
-- web3j 기반 AuditAnchor 컨트랙트 호출
-- Agent 연동용 `POST /api/v1/guard/validate` adapter API
-- React + TypeScript dashboard 초기 화면
-- Python sample agent 초기 구현
-- Hardhat + Solidity AuditAnchor 컨트랙트, 테스트, 로컬 배포/기록 스크립트
-- 프로젝트 문서와 DB 협업 정책
-
-planned:
-
-- Intent / Agent 관리 API
-- Payment Request 목록 API
-- Payment Simulator
-- Approval 상태 전이 실제 반영
-- DB entity/repository 기반 영속화
-- Audit Anchor 조회/검증 API
-- Dashboard와 API server 실제 연동
-- Sample Agent 시나리오 고도화
-
-## 프로젝트 구조
+## 핵심 구성
 
 ```text
-opensource-competition/
-  agentpay-guard-api-server/       # Spring Boot backend
-  agentpay-guard-dashboard/        # React + TypeScript dashboard
-  agentpay-guard-sample-agent/     # Python sample agent
-  agentpay-guard-audit-anchor/     # Hardhat + Solidity contract
-  docker/
-    postgres/
-      init/                        # PostgreSQL 최초 초기화 SQL
-  docs/                            # 기획, 아키텍처, 작업 계획
-  docker-compose.yml
-  AGENTS.md
+Codex Plugin          사용자 대화, 조건 구체화, 도구 선택, 근거 설명
+Go Collector          판매처 검색·상세·옵션·리뷰 수집과 접근 통제
+Python Backend        MCP·FastAPI·정규화·DB 적재·리뷰 분석·상품 비교
+React Web             대화, 수집 진행률, 상품 비교, 근거, 재검증 화면
+PostgreSQL            상품·offer·review signal·snapshot·evidence 저장
 ```
 
-## 빠른 시작
-
-### 1. PostgreSQL 실행
-
-루트 디렉토리에서 실행한다.
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition
-docker compose up -d postgres
-docker compose ps
-```
-
-PostgreSQL container:
+## 목표 흐름
 
 ```text
-agentpay-guard-postgres
+구매 요청
+→ 조건 구체화
+→ Python MCP/API가 조사 작업 생성
+→ Go Collector가 실제 판매처 수집
+→ Python이 정규화·분석·저장
+→ 근거가 연결된 상품 비교
+→ 선택 상품 실시간 재수집·변경 검증
 ```
 
-개발 DB:
+## Repository
 
 ```text
-database: agentpay_guard
+services/collector/               # Go 수집 서비스
+services/research-backend/        # Python MCP·API·DB·분석 서비스
+apps/purchase-web/                # React 화면(planned)
+plugins/purchase-research-agent/  # Codex plugin
+docs/                             # 아키텍처와 구현 계획
 ```
 
-개발 계정:
-
-```text
-agentpay_guard_seoin / agentpay_guard
-agentpay_guard_jeongwoo / agentpay_guard
-```
-
-role 확인:
-
-```bash
-docker exec -it agentpay-guard-postgres \
-  psql -U postgres -d agentpay_guard -c "\du"
-```
-
-Spring Boot 접속 계정 확인:
-
-```bash
-PGPASSWORD=agentpay_guard psql \
-  -h 127.0.0.1 \
-  -p 5432 \
-  -U agentpay_guard_seoin \
-  -d agentpay_guard \
-  -c "select current_user, current_database();"
-```
-
-### 2. API server 실행
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-api-server
-./gradlew bootRun
-```
-
-앱 기본 주소:
-
-```text
-http://localhost:8080
-```
-
-OpenAPI JSON:
-
-```text
-http://localhost:8080/v3/api-docs
-```
-
-Swagger UI:
-
-```text
-http://localhost:8080/swagger-ui/index.html
-```
-
-## DB 협업 원칙
-
-DB volume 자체는 공유하지 않는다. 각 개발자는 로컬 Docker PostgreSQL을 실행한다.
-
-공유 대상:
-
-- `docker-compose.yml`
-- `docker/postgres/init/*.sql`
-- `agentpay-guard-api-server/src/main/resources/db/migration/*.sql`
-- seed SQL
-
-공유하지 않는 대상:
-
-- Docker volume 데이터
-- 개인 로컬 DB 상태
-- 실제 secret
-- DB dump 파일
-
-schema 변경은 직접 DB에서만 처리하지 않고 Flyway migration으로 남긴다.
-
-```text
-agentpay-guard-api-server/src/main/resources/db/migration/
-```
-
-현재 초기 migration:
-
-```text
-V1__init_schema.sql
-```
-
-DB가 꼬였고 개발 데이터를 지워도 되는 경우:
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition
-docker compose down -v
-docker compose up -d postgres
-cd agentpay-guard-api-server
-./gradlew bootRun
-```
-
-자세한 정책:
-
-- [DB 협업 정책](docs/policies/AgentPay_Guard_DB_협업_정책.md)
-- [PostgreSQL init scripts](docker/postgres/init/README.md)
-
-## 자주 쓰는 명령
-
-API server 명령:
-
-- [agentpay-guard-api-server/command.md](agentpay-guard-api-server/command.md)
-
-의존성 확인:
-
-```bash
-cd agentpay-guard-api-server
-./gradlew dependencyInsight --dependency springdoc --configuration runtimeClasspath
-```
-
-컴파일:
-
-```bash
-./gradlew compileJava
-```
-
-테스트:
-
-```bash
-./gradlew test
-```
-
-### API server Java package 구조
-
-API server는 layer-first 패키지 구조를 사용한다.
-
-```text
-com.agentpayguard.api
-  controller/{approval,guard,merchant,payment}
-  dto/{anchor,approval,audit,guard,merchant,payment,policy}
-  service/{anchor,approval,audit,guard,merchant,payment,policy}
-  config
-```
-
-새 기능을 추가할 때는 먼저 `controller`, `dto`, `service`, `entity`, `repository` 같은 역할별 패키지를 만들고, 그 안에서 `payment`, `merchant`, `quote` 같은 도메인 하위 패키지로 나눈다.
-
-## 주요 문서
-
-- [AGENTS.md](AGENTS.md)
-- [문서 인덱스](docs/README.md)
-- [구성요소 쉬운 설명](docs/overview/AgentPay_Guard_구성요소_쉬운설명.md)
-- [시스템 아키텍처](docs/architecture/AgentPay_Guard_시스템_아키텍처.md)
-- [초기 프로젝트 골격](docs/architecture/AgentPay_Guard_초기_프로젝트_골격.md)
-- [디렉토리별 개발 계획](docs/planning/AgentPay_Guard_디렉토리별_개발계획.md)
-- [디렉토리별 ToDo](docs/planning/AgentPay_Guard_디렉토리별_TODO.md)
-- [작업 목록](docs/planning/AgentPay_Guard_작업목록.md)
-- [PoC 범위](docs/overview/AgentPay_Guard_PoC_범위.md)
-- [DB 협업 정책](docs/policies/AgentPay_Guard_DB_협업_정책.md)
-
-## 개발 주의사항
-
-- 실제 결제 기능은 구현하지 않는다.
-- API key, private key, RPC secret, 지갑 mnemonic 등 민감 정보는 커밋하지 않는다.
-- 블록체인에는 원문 데이터나 개인정보를 올리지 않는다. eventHash만 기록한다.
-- PostgreSQL 개발 비밀번호는 PoC 로컬 개발용이다. 운영/배포용 secret으로 사용하지 않는다.
-- 이미 공유된 Flyway migration은 수정하지 않는다. 변경이 필요하면 새 migration을 추가한다.
+자세한 책임과 데이터 흐름은 [시스템 구조](docs/architecture/Purchase_Research_Agent_시스템_구조.md)를 참고한다.
