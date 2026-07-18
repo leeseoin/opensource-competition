@@ -5,7 +5,8 @@ Python 기반 구매 조사 application 서비스다.
 예정 책임:
 
 - Codex용 MCP server
-- React용 FastAPI와 SSE
+- Next.js와 Codex Gateway용 FastAPI와 SSE
+- 장기 서비스 전환 시 OpenAI API Agent orchestration
 - Go Collector client
 - 수집 결과 검증·정규화
 - PostgreSQL 적재

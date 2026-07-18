@@ -22,13 +22,13 @@
 
 ### 1차 PoC 포함
 
-- Codex Plugin을 통한 구매 조건 구체화
+- Next.js 챗봇과 Codex Gateway를 통한 구매 조건 구체화
 - 실제 판매처 한 곳의 검색·상세·옵션·공개 리뷰 수집
 - 상품·offer·review signal·evidence PostgreSQL 저장
 - 규칙 기반 필수 조건 필터와 설명 가능한 점수
 - 공식 정보, 리뷰 집계, Agent 추론 구분
 - 선택 상품의 가격·재고·옵션·배송 재검증
-- React 화면 연결이 가능한 FastAPI와 진행 상태 API
+- Next.js 화면 연결이 가능한 FastAPI와 진행 상태 API
 
 ### 1차 PoC 제외
 
@@ -42,25 +42,33 @@
 ## 3. 전체 아키텍처
 
 ```text
-사용자
-├─ Codex Plugin ─ stdio MCP ─┐
-└─ React Web ───── HTTP/SSE ─┤
-                              ↓
-                    Python Research Backend
+최종 사용자
+  ↓
+Next.js 챗봇
+  ↓ Next.js server route
+Codex Gateway
+  ↓ Codex process/app-server
+Codex + Purchase Research Plugin
+  ↓ MCP
+Python Research Backend
                     - 조사 세션과 상태
                     - Go Collector client
                     - 정규화·중복 제거
                     - 리뷰 신호 추출
                     - 비교·근거·재검증
                     - PostgreSQL repository
-                              ↓ internal HTTP
-                         Go Collector
+  ↓ internal HTTP
+Go Collector
                     - 판매처별 검색·상세
                     - 옵션·리뷰 parsing
                     - rate limit·timeout
                     - retry·blocked 감지
-                              ↓
-                       공개 판매처 페이지
+  ↓
+공개 판매처 페이지
+
+장기 서비스 전환 경로:
+
+Next.js → OpenAI API Agent → 같은 Python application use case
 ```
 
 ## 4. 언어별 책임
@@ -79,7 +87,8 @@ Go는 DB에 쓰거나 상품을 추천하지 않는다.
 
 ### Python Research Backend
 
-- Codex용 MCP server와 React용 FastAPI 제공
+- Codex가 호출할 MCP server 제공
+- Next.js와 장기 서비스 Agent용 FastAPI/SSE 제공
 - 조사 세션과 장기 작업 상태 관리
 - Go Collector 내부 HTTP client
 - CollectorResult schema 검증과 공통 domain model 정규화
@@ -92,13 +101,14 @@ Python만 최종 DB 쓰기를 소유한다.
 
 ### Codex Plugin
 
+- PoC에서 Next.js 질문을 받아 MCP 도구 호출 순서를 결정
 - 결과를 크게 바꾸는 누락 조건부터 1~3개씩 질문
 - Python MCP 도구 호출 순서 결정
 - 공식 사실, 리뷰 기반 신호, Agent 추론을 구분해 설명
 - 근거 부족·수집 실패·오래된 정보 공개
 - 최종 후보 선택 후 `verify_offer` 호출
 
-### React Web
+### Next.js Web
 
 - 구매 조건 대화와 조건 직접 수정
 - 판매처별 수집 진행 상태 표시
@@ -114,11 +124,11 @@ services/
 │   ├── cmd/server/
 │   ├── internal/
 │   │   ├── collector/                 # 수집 흐름과 worker 제한
-│   │   ├── merchants/                 # musinsa, abcmart, coupang
-│   │   ├── browser/                   # 동적 페이지 fallback
-│   │   ├── transport/http/            # Python용 internal API
-│   │   └── observability/
-│   └── testdata/                       # HTML/JSON fixture
+│   │   ├── config/                    # 실행 설정
+│   │   ├── merchants/abcmart/         # ABC마트 구현
+│   │   └── transport/http/            # Python용 internal API
+│   ├── testdata/abcmart/               # 저장 HTML fixture
+│   └── tests/                          # unit, integration
 │
 └── research-backend/                  # Python
     ├── src/research_backend/
@@ -133,8 +143,8 @@ services/
     ├── migrations/
     └── tests/
 
-apps/purchase-web/                     # React(planned)
-plugins/purchase-research-agent/       # Codex Plugin
+apps/purchase-web/                     # Next.js + React(planned)
+plugins/purchase-research-agent/       # PoC Codex workflow
 ```
 
 ## 6. Go → Python 수집 계약
@@ -144,14 +154,14 @@ Go는 raw HTML 전체 대신 판매처별로 parsing한 transport DTO를 반환�
 ```json
 {
   "status": "success",
-  "merchant": "musinsa",
-  "sourceUrl": "https://example.com/product/123",
-  "collectedAt": "2026-07-13T14:30:00+09:00",
-  "collectorVersion": "musinsa-v1",
+  "merchant": "abcmart",
+  "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
+  "collectedAt": "2026-07-16T14:30:00+09:00",
+  "collectorVersion": "abcmart-search-v1",
   "product": {
-    "externalId": "123",
-    "name": "상품명",
-    "price": 89000
+    "externalId": "1010110882",
+    "name": "페니 로퍼",
+    "price": 69000
   },
   "options": [],
   "reviews": [],
@@ -249,4 +259,4 @@ MCP 응답은 최종 홍보 문장이 아니라 구조화된 사실·근거·불
 - Go와 Python은 1차 PoC에서 내부 HTTP JSON으로 통신한다.
 - 메시지 큐와 gRPC는 초기 범위에서 제외한다.
 - 첫 판매처 하나를 end-to-end로 완성한 뒤 Adapter를 확장한다.
-- React와 Codex는 동일한 Python application use case를 공유한다.
+- PoC의 Codex MCP 경로와 장기 서비스 Agent API는 동일한 Python application use case를 공유한다.

@@ -1,4 +1,4 @@
-// Package config loads and validates runtime configuration for the Collector.
+// Package config는 Collector 실행 설정을 불러오고 유효성을 검증한다.
 package config
 
 import (
@@ -15,8 +15,7 @@ const (
 	defaultShutdownTimeout = 10 * time.Second
 )
 
-// Config contains the Collector process configuration. Load returns a fully
-// populated Config or an error when an environment value is invalid.
+// Config는 Collector process의 HTTP 주소와 lifecycle timeout 설정을 보관한다.
 type Config struct {
 	HTTPAddress     string
 	ReadTimeout     time.Duration
@@ -25,9 +24,8 @@ type Config struct {
 	ShutdownTimeout time.Duration
 }
 
-// Load reads Collector configuration from environment variables and supplies
-// defaults for omitted values. It fails when an address is empty or a timeout
-// is not a positive Go duration such as "5s".
+// Load는 환경변수에서 Collector 설정을 읽고 누락된 값에 기본값을 적용한다.
+// HTTP 주소가 비어 있거나 timeout이 "5s" 같은 양의 Go duration이 아니면 오류를 반환한다.
 func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddress:     envOrDefault("COLLECTOR_HTTP_ADDRESS", defaultHTTPAddress),
@@ -67,6 +65,7 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// envOrDefault는 환경변수가 없을 때 fallback을 반환하며, 명시된 빈 값은 그대로 보존한다.
 func envOrDefault(name, fallback string) string {
 	value, ok := os.LookupEnv(name)
 	if !ok {
