@@ -36,36 +36,21 @@ uvicorn app.main:app --host 0.0.0.0 --port 8012
 | `max_items` | 500 | 최대 수집 상품 수 |
 | `detail_limit` | 10 | 리뷰·옵션을 수집할 상위 상품 수 (0이면 미수집) |
 
-**응답 예시**
-```json
-{
-  "status": "ok",
-  "total_found": 40,
-  "returned": 40,
-  "elapsed_seconds": 35.2,
-  "items": [
-    {
-      "title": "상품명",
-      "brand": "브랜드명",
-      "price": "00,000원",
-      "link": "https://www.abcmart.co.kr/product?prdtNo=XXXXXXXXXX",
-      "review_count": 10,
-      "reviews": [
-        {
-          "content": "리뷰 내용 (최대 200자)",
-          "score": 5,
-          "date": "2026-00-00",
-          "size": "000"
-        }
-      ],
-      "options": {
-        "colors": ["COLOR1", "COLOR2"],
-        "sizes": ["225", "230", "235", "..."]
-      }
-    }
-  ]
-}
-```
+**응답 필드**
+
+| 필드 | 설명 |
+|------|------|
+| `status` | 요청 상태 (`ok` / `error`) |
+| `total_found` | 수집된 전체 상품 수 |
+| `returned` | 반환된 상품 수 |
+| `elapsed_seconds` | 소요 시간(초) |
+| `items[].title` | 상품명 |
+| `items[].brand` | 브랜드명 |
+| `items[].price` | 가격 |
+| `items[].review_count` | 전체 리뷰 수 |
+| `items[].reviews` | 리뷰 목록 (content, score, date, size) |
+| `items[].options.colors` | 색상 목록 |
+| `items[].options.sizes` | 사이즈 목록 |
 
 > `detail_limit` 초과 상품은 `title`, `brand`, `price`, `link`만 포함됩니다.
 
