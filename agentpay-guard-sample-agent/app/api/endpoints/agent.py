@@ -16,7 +16,7 @@ def _analyze(products: list[dict]) -> dict:
         return {"total": 0, "price_missing": 0, "title_missing": 0, "duplicates": 0, "price_range": None}
 
     prices = []
-    seen_titles: set[str] = set()
+    seen_links: set[str] = set()
     price_missing = 0
     title_missing = 0
     duplicates = 0
@@ -24,18 +24,21 @@ def _analyze(products: list[dict]) -> dict:
     for p in products:
         price_str = p.get("price", "")
         title = p.get("title", "")
+        link = p.get("link", "")
 
         if not price_str:
             price_missing += 1
 
         if not title:
             title_missing += 1
-        elif title in seen_titles:
-            duplicates += 1
-        else:
-            seen_titles.add(title)
 
-        # 숫자 추출
+        # link 기준 중복 체크 (같은 이름 다른 SKU는 중복 아님)
+        if link:
+            if link in seen_links:
+                duplicates += 1
+            else:
+                seen_links.add(link)
+
         nums = "".join(c for c in price_str if c.isdigit())
         if nums:
             prices.append(int(nums))
@@ -162,11 +165,12 @@ async def search_products(
     refined = [p for p in products if p.get("price")]
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
-    output_file = output_dir / f"{site}_{keyword}_top{max_items}.json"
+    output_file = output_dir / f"{site}_{keyword}_top{max_items}_{ts_file}.json"
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(refined, f, ensure_ascii=False, indent=2)
 
-    raw_file = f"output/raw/{site}_{keyword}_raw.json"
+    # 원본 저장
+    raw_file = crawler.save_raw(keyword, site, products, ts_file)
 
     # A-Z 분석 리포트 저장
     report_dir = Path("logs/reports")
