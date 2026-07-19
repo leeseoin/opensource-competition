@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-07-18
+최종 갱신일: 2026-07-19
 
 ## 목적
 
@@ -36,7 +36,7 @@
 |---|---|---|---|
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 첫 판매처와 요청 계약 확정, Go/Python DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
-| 실제 판매처 Adapter | 부분 구현 | ABC마트 공개 검색 지원, 무신사 정책 차단 확인 | ABC마트 상세·리뷰와 무신사 합법적 접근 경로 확인 |
+| 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·무신사 공개 검색 | 상품 상세·옵션·리뷰와 운영 수집 정책 확정 |
 | Python Backend와 DB | 부분 구현 | 패키지 골격과 미구현 MCP entrypoint | Collector 검증·정규화·저장 수직 흐름 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | Plugin manifest와 workflow 초안 | 실제 MCP tool과 application use case 연결 |
@@ -88,6 +88,7 @@
 - [x] 모든 기존 type/function/test의 한국어 주석 정비
 - [x] 검색용 Go transport request/response DTO 구현
 - [x] 검색용 merchant adapter interface 구현
+- [x] 판매처 이름으로 Searcher를 선택하는 Registry 구현
 - [ ] merchant/domain allowlist 구현
 - [ ] URL scheme, host, port 검증 구현
 - [ ] DNS·redirect 이후 private IP와 localhost 차단
@@ -97,7 +98,7 @@
 - [x] ABC마트 요청 최소 1초 간격 제한
 - [ ] 다른 판매처 추가 시 판매처별 rate limiter 정책 구현
 - [ ] 판매처별 concurrency limiter 구현
-- [ ] blocked, unsupported, temporarily_unavailable 상태 매핑
+- [ ] blocked, unsupported, temporarily_unavailable 상태 매핑 **(부분 구현: 미등록 판매처 unsupported, 원격 오류 temporarily_unavailable)**
 - [ ] request ID와 merchant를 포함한 구조화 로그
 - [x] 저장된 실제 ABC마트 검색 HTML fixture 구성
 - [x] 실제 ABC마트 search endpoint 구현과 handler·adapter test
@@ -118,11 +119,16 @@
 - [ ] 이용 정책과 운영 요청 빈도 제한 최종 확정
 - [x] 첫 판매처를 ABC마트로 결정하고 1차 지원 범위를 공개 검색으로 제한
 - [x] 1차 목표 판매처를 ABC마트와 무신사로 제한
-- [ ] 무신사의 정책을 준수하는 공개 수집 경로 확인 **(robots 정책으로 차단)**
+- [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 재확인
+- [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 파서 구현
+- [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test 구현
+- [ ] 무신사 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보 **(외부 결정 필요)**
+- [ ] 무신사 장기 운영 수집 범위와 요청 빈도 확정
 - [x] ABC마트 검색 adapter 구현
 - [ ] 상품 상세·가격·배송 adapter 구현
 - [ ] 옵션·재고·사이즈표 adapter 구현
 - [ ] 공개 리뷰 pagination adapter 구현
+- [ ] 상품 단위 리뷰 작업 큐와 제한된 고루틴 Worker Pool 구현
 - [ ] 리뷰 작성자 식별정보 제외 검증
 - [ ] 리뷰 이미지를 저장하지 않고 `hasImage`만 반환하는지 검증
 - [x] 검색 결과 provenance와 collector version 포함 검증
@@ -268,6 +274,9 @@
 | ABC마트 실제 검색 adapter | 완료 | `services/collector/internal/merchants/abcmart/search.go:79` `Searcher.Search`, `:229` `parseSearchItems`, `:306` `parseSizeStocks` | `services/collector/tests/unit/abcmart/search_test.go`, `tests/integration/abcmart_live_test.go`; 저장 HTML·실제 검색 통과 |
 | ABC마트 요청 간격 제한 | 완료 | `services/collector/internal/merchants/abcmart/search.go:160` `Searcher.waitForTurn` | `services/collector/tests/unit/abcmart/search_test.go:90`; test·race 통과 |
 | ABC마트 검색 HTTP endpoint | 완료 | `services/collector/internal/transport/http/search.go:17` `searchHandler`, `:33` `ServeHTTP`, `internal/transport/http/server.go:47` route | `services/collector/tests/unit/http/server_test.go:55`; test·race·vet 통과 |
+| 판매처 Search Registry | 완료 | `services/collector/internal/collector/registry.go:8` `SearchRegistry`, `:34` `Search` | `services/collector/tests/unit/collector/registry_test.go:19`, `:35`; 테스트 통과 |
+| 무신사 공개 검색 Adapter | 완료 | `services/collector/internal/merchants/musinsa/search.go` `Searcher`, `Search`, `parseSearchItems` | 단위 테스트와 `MUSINSA_LIVE_SMOKE=1` 실제 상품 3개 변환 통과 |
+| Registry HTTP 연결 | 완료 | `services/collector/internal/transport/http/search.go` `newSearchHandler`, Registry 호출 | ABC마트·무신사 등록과 HTTP 전달 테스트 통과 |
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
 | 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | 성공·부분 성공·무효 예제 존재, 자동 검증 재확인 필요 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
@@ -288,6 +297,8 @@
 | 2026-07-16 | 무신사 parser test | 폐기 전 최소 HTML의 `__NEXT_DATA__` JSON 해석 실패 | 테스트 자료를 줄이는 과정에서 닫는 중괄호가 하나 많았음 | JSON을 수정해 원인을 확인했으나 robots 정책 확인 후 무신사 코드는 최종 제거 | 해결 |
 | 2026-07-16 | ABC마트 검색 조건 | 결과 개수 1개와 270 사이즈를 함께 요청하면 앞 상품이 맞지 않아 결과가 비어 보임 | 서버에서 1개만 받은 뒤 Collector가 사이즈 조건을 적용함 | 서버에서는 최소 30개를 받은 뒤 조건을 적용하고 마지막에 요청 개수만큼 잘라 반환 | 해결 |
 | 2026-07-18 | Collector 구조 | 구현하지 않은 기능의 빈 폴더와 `.gitkeep` 때문에 현재 사용 파일을 구분하기 어려움 | 초기 설계용 placeholder를 실제 구현 후에도 유지함 | `browser`, `observability`, 빈 `fixture`·`musinsa`와 불필요한 `.gitkeep` 제거, 현재 구조 문서화 | 해결 |
+| 2026-07-19 | 무신사 데이터 접근 | 무신사 검색 페이지는 사용자 브라우저에서 열리지만 자체 Go Collector로 자동 수집할 수 없음 | 지정된 Agent만 허용하고 일반 User-agent는 전체 경로를 차단하는 robots 정책 | User-agent 위장은 제외하고 정책 Adapter로 `blocked` 반환. 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보를 후속 작업으로 등록 | 부분 해결 |
+| 2026-07-19 | 무신사 소량 검색 PoC | 리뷰뿐 아니라 검색어 기반 상품 후보가 필요함 | 검색 페이지가 SPA이지만 초기 상품은 HTML의 `__NEXT_DATA__`에 서버 렌더링됨 | 일반 User-agent와 최소 1초 간격을 사용하는 Searcher 구현, 실제 `구두` 상품 3개 smoke test 통과 | PoC 해결 |
 
 ### 2026-07-16 Go Collector 기본 골격 테스트와 한국어 주석 정비
 
@@ -346,7 +357,46 @@
 - 유지 대상: 실행 서버, 공통 수집 형식, 설정, ABC마트 adapter, HTTP transport, ABC마트 testdata, unit·integration tests
 - 발생 문제: planned 구조와 구현된 구조가 같은 디렉토리에 섞여 현재 사용 여부를 파악하기 어려웠다.
 - 해결: planned 기능은 TODO에만 남기고 실제 코드가 생길 때 폴더를 생성하는 규칙으로 정리했다.
-- 남은 위험: 무신사는 목표 판매처지만 현재 robots 정책상 일반 Collector 접근이 허용되지 않아 adapter를 만들지 않는다.
+- 남은 위험: 당시에는 무신사 수집을 중단했으며, 이후 2026-07-19 소량 검색 PoC로 초기 상품 JSON 수집을 다시 구현했다. 장기 운영 정책은 별도로 확정해야 한다.
+
+### 2026-07-19 판매처 Registry와 무신사 정책 Adapter(당시 결정)
+
+- 진행상황: ABC마트로 고정된 HTTP 분기를 제거하고 판매처 이름으로 Searcher를 선택하는 Registry를 구현했다. 무신사 요청은 외부 상품 페이지에 접속하지 않고 정책 출처가 포함된 `blocked` 결과를 반환한다.
+- 구현 위치:
+  - `services/collector/internal/collector/registry.go:8` `SearchRegistry`: 판매처와 Searcher 등록
+  - `services/collector/internal/collector/registry.go:34` `Search`: 등록 판매처 전달과 미등록 판매처 `unsupported` 처리
+  - `services/collector/internal/merchants/musinsa/search.go:17` `Searcher`: 무신사 정책 Adapter
+  - `services/collector/internal/merchants/musinsa/search.go:36` `Search`: 무신사 `blocked` 결과와 robots 출처 반환
+  - `services/collector/internal/transport/http/search.go:28` `newSearchHandler`: ABC마트와 무신사 Registry 등록
+  - `services/collector/tests/unit/collector/registry_test.go:19` `TestSearchRegistryRoutesMerchant`: 등록 판매처 전달 검증
+  - `services/collector/tests/unit/collector/registry_test.go:35` `TestSearchRegistryRejectsUnknownMerchant`: 미등록 판매처 검증
+  - `services/collector/tests/unit/musinsa/search_test.go:12` `TestSearchReturnsPolicyBlocked`: 무신사 정책 응답 검증
+  - `services/collector/tests/unit/http/server_test.go:87` `TestDefaultServerRoutesMusinsaPolicy`: 운영 Registry HTTP 연결 검증
+- 발생 문제: 무신사의 현재 robots 정책은 `ChatGPT-User` 등 지정된 Agent에는 접근을 허용하지만 일반 User-agent에는 전체 경로를 허용하지 않는다. 공개된 기업 CMS API는 상품 검색용이 아니고, 공식 발표된 무신사 MCP의 외부용 endpoint도 확인되지 않았다.
+- 원인: 무신사가 데이터 접근 주체와 경로를 제한하고 있으며 우리 Go Collector는 허용 목록에 포함되지 않는다.
+- 해결: 허용된 Agent를 사칭하거나 접근 통제를 우회하지 않고, 정책 차단을 정상적인 Collector 상태로 모델링했다. 실제 데이터 구현은 승인된 API·MCP·제휴 Feed 또는 별도 허가가 확보되면 같은 `Searcher` 자리에 연결한다.
+- 남은 위험: 현재 무신사 상품 데이터는 반환하지 않는다. robots 정책 변경 여부와 공식 데이터 접근 수단은 다시 확인해야 한다.
+- 검증:
+  - `services/collector`에서 `go test ./...`: 전체 통과
+  - Registry, 무신사 Adapter, 운영 HTTP 연결 단위 테스트 통과
+
+### 2026-07-19 무신사 공개 검색 PoC
+
+- 진행상황: 일반 User-agent로 `구두` 검색을 한 번 확인하고, HTML의 `__NEXT_DATA__`에 포함된 초기 상품을 공통 `Product`로 변환하는 실제 Searcher로 정책 Adapter를 교체했다.
+- 수집 필드: 상품번호, 상품명, 브랜드, 현재 가격, 상품 URL, 썸네일, 품절 여부, 평점, 리뷰 수
+- 구현 위치:
+  - `services/collector/internal/merchants/musinsa/search.go` `Searcher.Search`: 검색 요청, 응답 제한, 상태 변환
+  - 같은 파일 `parseSearchItems`: `__NEXT_DATA__` JSON 상품 목록 해석
+  - 같은 파일 `toProduct`: 개인정보 없는 공통 상품 구조 변환
+  - `services/collector/tests/unit/musinsa/search_test.go`: 가짜 HTML 응답 기반 성공·구조 변경 테스트
+  - `services/collector/tests/integration/musinsa_live_test.go`: 명시적으로 활성화하는 실제 검색 smoke test
+- 발생 문제: 기본 Go 빌드 캐시가 sandbox 밖에 있어 `operation not permitted`가 발생했고, 최소 테스트 JSON에 닫는 중괄호가 하나 많아 파싱이 실패했다.
+- 해결: `GOCACHE=/private/tmp/purchase-research-go-cache`를 사용하고 테스트 JSON 구조를 수정했다.
+- 남은 작업: 상품 상세·옵션, 공개 리뷰 최소 필드 변환, 상품 단위 작업 큐와 제한된 고루틴 Worker Pool
+- 검증:
+  - `GOCACHE=/private/tmp/purchase-research-go-cache go test ./...`: 전체 통과
+  - `GOCACHE=/private/tmp/purchase-research-go-cache go vet ./...`: 통과
+  - `MUSINSA_LIVE_SMOKE=1 ... TestMusinsaActualSearch`: 실제 `구두` 상품 3개 변환 통과
 
 ## 작업 기록 템플릿
 

@@ -1,7 +1,10 @@
 # Purchase Research Agent 시스템 구조
 
 작성일: 2026-07-13
-상태: planned
+최종 수정일: 2026-07-19
+상태: in progress
+
+이 문서는 개발을 시작하기 전에 전체 구조와 각 폴더의 책임을 확인하는 기준 문서다. 앞으로 구조가 바뀌면 날짜별 보고서보다 이 문서를 먼저 갱신한다.
 
 ## 1. 제품 목표
 
@@ -68,8 +71,19 @@ Go Collector
 
 장기 서비스 전환 경로:
 
-Next.js → OpenAI API Agent → 같은 Python application use case
+Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같은 MCP와 Python application use case
 ```
+
+### 현재 구현 상태
+
+| 영역 | 현재 상태 | 설명 |
+|---|---|---|
+| Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·무신사 공개 검색 및 opt-in smoke test가 동작함 |
+| Contracts | 초안 작성 | 검색 요청, 수집 결과, 재검증 결과 JSON Schema와 예제가 있음 |
+| Python Research Backend | 뼈대만 있음 | package 구조는 있지만 Collector 연결, MCP, DB 기능은 미구현 |
+| Codex Plugin | 뼈대만 있음 | manifest, MCP 설정, 구매 조사 skill 초안이 있음 |
+| Next.js Web | 미구현 | 역할을 설명하는 README만 있음 |
+| PostgreSQL | 미구현 | 저장 모델만 설계되어 있음 |
 
 ## 4. 언어별 책임
 
@@ -84,6 +98,35 @@ Next.js → OpenAI API Agent → 같은 Python application use case
 - `sourceUrl`, `collectedAt`, `collectorVersion`, warning을 포함한 `CollectorResult` 반환
 
 Go는 DB에 쓰거나 상품을 추천하지 않는다.
+
+### 판매처 추가 구조
+
+HTTP handler가 `if merchant == "abcmart"`처럼 판매처를 직접 판단하지 않는다. 판매처 Registry가 요청의 `merchant` 값에 맞는 Searcher를 선택한다.
+
+```text
+상품 검색 요청
+  ↓
+판매처 Registry
+  ├── abcmart → ABC마트 Searcher → 공개 검색 수집
+  ├── musinsa → 무신사 Searcher → 공개 검색 HTML의 초기 JSON 수집
+  └── 새 판매처 → 새 Searcher를 등록해 추가
+```
+
+새 판매처를 추가할 때는 공통 `Searcher` 인터페이스를 구현하고 Registry에 등록한다. HTTP 요청 검증, 응답 JSON 형식, Python 연결 코드는 판매처마다 다시 만들지 않는다.
+
+### 무신사 데이터 접근 결정
+
+2026-07-19 일반 User-agent로 공개 검색 페이지를 소량 확인한 결과, 서버 렌더링 HTML의 `__NEXT_DATA__`에서 상품 기본정보를 읽을 수 있었다. 현재 PoC Searcher는 검색 요청 한 번에서 상품번호·상품명·브랜드·가격·품절 여부·평점·리뷰 수를 공통 계약으로 변환한다.
+
+허용된 Agent 이름으로 User-agent만 변경하는 것은 무신사나 다른 서비스로 가장하는 방식이므로 사용하지 않는다. 로그인·cookie·CAPTCHA·Cloudflare 우회도 하지 않는다.
+
+실제 무신사 데이터를 연결하려면 다음 중 하나가 필요하다.
+
+- 무신사가 공개하거나 승인한 상품 API 또는 MCP
+- 프로젝트 목적과 요청 빈도를 설명한 뒤 받은 별도 수집 허가
+- 상품 사용 권한이 포함된 공식 제휴 Feed
+
+무신사는 [ChatGPT 무신사 앱에 자체 MCP를 적용했다고 발표](https://newsroom.musinsa.com/newsroom-menu/2026-0609-01)했지만, 현재 우리 서버가 직접 사용할 수 있는 공개 MCP endpoint는 확인되지 않았다. 현재 검색 구현은 소량 PoC이며, 장기 운영 전에는 공식 MCP·API·제휴 Feed·별도 허가와 서비스 정책을 다시 확인한다.
 
 ### Python Research Backend
 
@@ -124,8 +167,10 @@ services/
 │   ├── cmd/server/
 │   ├── internal/
 │   │   ├── collector/                 # 수집 흐름과 worker 제한
+│   │   │   └── registry.go            # 판매처 이름과 Searcher 연결
 │   │   ├── config/                    # 실행 설정
 │   │   ├── merchants/abcmart/         # ABC마트 구현
+│   │   ├── merchants/musinsa/         # 무신사 공개 검색 Adapter
 │   │   └── transport/http/            # Python용 internal API
 │   ├── testdata/abcmart/               # 저장 HTML fixture
 │   └── tests/                          # unit, integration
@@ -145,29 +190,70 @@ services/
 
 apps/purchase-web/                     # Next.js + React(planned)
 plugins/purchase-research-agent/       # PoC Codex workflow
+contracts/collector/v1/                # Go ↔ Python JSON Schema와 예제
+docs/
+├── architecture/                      # 최신 시스템 구조와 확장 설계
+├── planning/                          # 구현 TODO와 제출 전 체크리스트
+├── development/                       # 구현 근거, 검증, 문제 해결 기록
+└── reports/                           # 날짜별 협업·업무 기록
 ```
+
+상위 폴더는 다음처럼 이해하면 된다.
+
+| 폴더 | 쉬운 설명 | 현재 상태 |
+|---|---|---|
+| `apps/` | 최종 사용자가 보는 화면 | Next.js 개발 예정 |
+| `plugins/` | Codex가 구매 조사 기능을 사용하는 방법 | Plugin 뼈대만 있음 |
+| `contracts/` | Go와 Python이 주고받는 데이터 규격 | v1 Schema 초안 있음 |
+| `services/` | 실제 수집·분석·저장을 실행하는 서버 | Go 검색만 부분 구현 |
+| `docs/` | 구조, 할 일, 구현 기록과 제출 전 확인사항을 관리하는 문서 | 계속 갱신 |
 
 ## 6. Go → Python 수집 계약
 
-Go는 raw HTML 전체 대신 판매처별로 parsing한 transport DTO를 반환한다. Python은 이를 공통 domain model로 검증·정규화한다.
+`contracts/`는 Go Collector와 Python Research Backend가 서로 다른 데이터 형식을 사용하지 않도록 정한 공통 규격이다. Spring Boot 기준으로 보면 서비스 사이에서 공유하는 요청·응답 DTO 명세와 비슷하다.
+
+Go는 raw HTML 전체 대신 판매처별로 parsing한 JSON 결과를 반환한다. Python은 결과를 DB에 저장하기 전에 같은 JSON Schema로 검사하고 공통 domain model로 정규화한다.
+
+### Contract v1 구성
+
+| 파일 | 방향 | 역할 | 현재 상태 |
+|---|---|---|---|
+| `search-request.schema.json` | Python → Go | 판매처와 검색어, 조건 전달 | 초안 |
+| `collector-result.schema.json` | Go → Python | 상품, 옵션, 리뷰, 출처, 실패 정보 반환 | 초안 |
+| `verification-result.schema.json` | Go → Python | 구매 전 최신 가격·재고·옵션 변경 반환 | 초안 |
+| `examples/` | 공통 | 정상·부분 성공·검증 실패 예제 | 초안 |
+
+실제 파일과 검증 방법은 [Collector Contract v1](../../contracts/collector/v1/README.md)에서 확인한다.
+
+### 검색 요청 예시
 
 ```json
 {
-  "status": "success",
+  "requestId": "my-test-001",
   "merchant": "abcmart",
-  "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
-  "collectedAt": "2026-07-16T14:30:00+09:00",
-  "collectorVersion": "abcmart-search-v1",
-  "product": {
-    "externalId": "1010110882",
-    "name": "페니 로퍼",
-    "price": 69000
-  },
-  "options": [],
-  "reviews": [],
-  "warnings": []
+  "query": "구두",
+  "requestedAt": "2026-07-19T10:00:00+09:00",
+  "limit": 3
 }
 ```
+
+### 수집 결과의 기본 형태
+
+```json
+{
+  "requestId": "my-test-001",
+  "operation": "search",
+  "status": "success",
+  "merchant": "abcmart",
+  "collectedAt": "2026-07-19T10:00:02+09:00",
+  "collectorVersion": "abcmart-search-v1",
+  "products": [],
+  "warnings": [],
+  "errors": []
+}
+```
+
+가격·재고·옵션과 같은 판매처 사실에는 `sourceUrl`, `collectedAt`, `collectorVersion`을 포함한다. 이를 통해 어떤 페이지에서 언제 어떤 Collector 버전으로 수집했는지 확인할 수 있다.
 
 필수 상태:
 
@@ -176,6 +262,13 @@ Go는 raw HTML 전체 대신 판매처별로 parsing한 transport DTO를 반환�
 - `blocked`: 로그인·CAPTCHA·접근 제한
 - `unsupported`: 현재 parser가 지원하지 않는 페이지
 - `temporarily_unavailable`: timeout 또는 일시적 원격 오류
+
+### Contract 변경 규칙
+
+- Go 코드만 먼저 바꾸거나 Python 코드만 먼저 바꾸지 않는다.
+- Schema, 예제, Go DTO, Python model과 관련 테스트를 같은 변경 단위로 갱신한다.
+- 기존 v1 사용자에게 영향을 주는 필드 제거와 의미 변경은 `v2`에서 진행한다.
+- 현재 Schema는 초안이므로 Python 연결과 contract test가 끝나기 전까지 확정으로 표시하지 않는다.
 
 ## 7. 내부 API 초안
 

@@ -9,13 +9,14 @@ import (
 
 	"github.com/leeseoin/opensource-competition/services/collector/internal/collector"
 	"github.com/leeseoin/opensource-competition/services/collector/internal/merchants/abcmart"
+	"github.com/leeseoin/opensource-competition/services/collector/internal/merchants/musinsa"
 )
 
 const maxSearchRequestBytes = 64 * 1024
 
 // searchHandler는 상품 검색 JSON 요청을 검사하고 판매처 검색 결과를 반환한다.
 type searchHandler struct {
-	abcmartSearcher collector.Searcher
+	searcher collector.Searcher
 }
 
 // apiErrorResponse는 HTTP 요청 자체가 잘못됐을 때 반환하는 오류 body다.
@@ -24,9 +25,13 @@ type apiErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// newSearchHandler는 ABC마트 검색 구현체를 사용하는 HTTP handler를 생성한다.
+// newSearchHandler는 등록된 판매처 검색기를 사용하는 HTTP handler를 생성한다.
 func newSearchHandler(searchTimeout time.Duration) *searchHandler {
-	return &searchHandler{abcmartSearcher: abcmart.NewSearcher(searchTimeout)}
+	registry := collector.NewSearchRegistry(map[string]collector.Searcher{
+		"abcmart": abcmart.NewSearcher(searchTimeout),
+		"musinsa": musinsa.NewSearcher(searchTimeout),
+	})
+	return &searchHandler{searcher: registry}
 }
 
 // ServeHTTP는 POST 검색 요청만 허용하고 요청 검증 후 실제 판매처 검색 결과를 반환한다.
@@ -54,26 +59,7 @@ func (h *searchHandler) ServeHTTP(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 		writeAPIError(w, stdhttp.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if request.Merchant != "abcmart" {
-		writeJSON(w, stdhttp.StatusOK, collector.SearchResult{
-			RequestID:        request.RequestID,
-			Operation:        collector.OperationSearch,
-			Status:           collector.StatusUnsupported,
-			Merchant:         request.Merchant,
-			CollectedAt:      time.Now(),
-			CollectorVersion: "collector-v1",
-			Products:         []collector.Product{},
-			Warnings:         []collector.Issue{},
-			Errors: []collector.Issue{{
-				Code:      "MERCHANT_UNSUPPORTED",
-				Message:   "현재 검색을 지원하는 판매처는 abcmart입니다",
-				Retryable: false,
-			}},
-		})
-		return
-	}
-
-	writeJSON(w, stdhttp.StatusOK, h.abcmartSearcher.Search(r.Context(), request))
+	writeJSON(w, stdhttp.StatusOK, h.searcher.Search(r.Context(), request))
 }
 
 // ensureJSONEnds는 첫 JSON 객체 뒤에 다른 JSON 값이 없는지 검사한다.

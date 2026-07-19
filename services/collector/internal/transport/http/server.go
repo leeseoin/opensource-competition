@@ -28,7 +28,7 @@ func NewServer(address string, readTimeout, writeTimeout, idleTimeout, shutdownT
 		writeTimeout,
 		idleTimeout,
 		shutdownTimeout,
-		newSearchHandler(writeTimeout).abcmartSearcher,
+		newSearchHandler(writeTimeout).searcher,
 	)
 }
 
@@ -44,7 +44,7 @@ func NewServerWithSearcher(
 ) *Server {
 	mux := stdhttp.NewServeMux()
 	mux.HandleFunc("/internal/v1/health", healthHandler)
-	mux.Handle("/internal/v1/collect/search", &searchHandler{abcmartSearcher: searcher})
+	mux.Handle("/internal/v1/collect/search", &searchHandler{searcher: searcher})
 
 	return &Server{
 		server: &stdhttp.Server{

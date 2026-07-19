@@ -17,6 +17,8 @@ const (
 	StatusSuccess = "success"
 	// StatusPartial은 일부 정보만 수집됐음을 나타낸다.
 	StatusPartial = "partial"
+	// StatusBlocked는 판매처 정책이나 접근 통제로 수집하지 않았음을 나타낸다.
+	StatusBlocked = "blocked"
 	// StatusUnsupported는 요청한 판매처나 작업을 현재 지원하지 않음을 나타낸다.
 	StatusUnsupported = "unsupported"
 	// StatusTemporarilyUnavailable은 timeout이나 일시적인 원격 오류를 나타낸다.

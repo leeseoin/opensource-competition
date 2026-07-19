@@ -84,7 +84,32 @@ func TestSearchRoute(t *testing.T) {
 	}
 }
 
-// TestSearchRouteRejectsBadRequests는 잘못된 JSON과 지원하지 않는 판매처 처리를 검증한다.
+// TestDefaultServerRoutesMusinsaSearcher는 운영 Registry가 무신사 요청을 실제 검색기로 전달하는지 검증한다.
+func TestDefaultServerRoutesMusinsaSearcher(t *testing.T) {
+	server := collectorhttp.NewServer(":0", time.Second, time.Second, time.Second, time.Second)
+	body := `{"requestId":"musinsa-001","merchant":"musinsa","query":"구두","requestedAt":"2026-07-19T12:00:00+09:00"}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/internal/v1/collect/search", bytes.NewBufferString(body))
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	server.Handler().ServeHTTP(
+		recorder,
+		request.WithContext(ctx),
+	)
+
+	var result collector.SearchResult
+	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if recorder.Code != stdhttp.StatusOK || result.Status != collector.StatusTemporarilyUnavailable {
+		t.Fatalf("status = %d, result = %#v", recorder.Code, result)
+	}
+	if len(result.Errors) != 1 || result.Errors[0].Code != "MUSINSA_REQUEST_FAILED" {
+		t.Fatalf("errors = %#v", result.Errors)
+	}
+}
+
+// TestSearchRouteRejectsBadRequests는 잘못된 JSON 요청을 거부하는지 검증한다.
 func TestSearchRouteRejectsBadRequests(t *testing.T) {
 	handler := testHandler(searcherFunc(func(context.Context, collector.SearchRequest) collector.SearchResult {
 		t.Fatal("invalid request must not call searcher")
@@ -97,7 +122,6 @@ func TestSearchRouteRejectsBadRequests(t *testing.T) {
 	}{
 		{name: "missing fields", body: `{"merchant":"abcmart"}`, wantStatus: stdhttp.StatusBadRequest},
 		{name: "unknown field", body: `{"requestId":"r","merchant":"abcmart","query":"구두","requestedAt":"2026-07-16T12:00:00+09:00","unknown":true}`, wantStatus: stdhttp.StatusBadRequest},
-		{name: "unsupported merchant", body: `{"requestId":"r","merchant":"other-shop","query":"구두","requestedAt":"2026-07-16T12:00:00+09:00"}`, wantStatus: stdhttp.StatusOK},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

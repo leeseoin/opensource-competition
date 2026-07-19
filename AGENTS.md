@@ -81,4 +81,5 @@
 - 시스템 구조: `docs/architecture/Purchase_Research_Agent_시스템_구조.md`
 - 구현 계획: `docs/planning/Purchase_Research_Agent_TODO.md`
 - 개발 진행·구현 근거·문제 기록: `docs/development/Purchase_Research_Agent_개발_진행_관리.md`
+- 대회 제출 전 규정 확인: `docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md`
 - 날짜는 `YYYY-MM-DD` 형식을 사용한다.
