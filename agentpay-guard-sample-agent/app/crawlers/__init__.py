@@ -1,5 +1,4 @@
 from .abcmart import AbcMartCrawler
-from .musinsa import MusinSaCrawler
-from .reviews import ReviewFetcher
+from .detail_fetcher import DetailFetcher
 
-__all__ = ["MusinSaCrawler", "AbcMartCrawler", "ReviewFetcher"]
+__all__ = ["AbcMartCrawler", "DetailFetcher"]

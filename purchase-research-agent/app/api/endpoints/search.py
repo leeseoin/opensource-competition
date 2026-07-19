@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from app.services.crawler_service import SUPPORTED_SITES, CrawlerService
+from app.services.crawler_service import SUPPORTED_CATEGORIES, SUPPORTED_SITES, CrawlerService
 
 router = APIRouter()
 
@@ -28,7 +28,6 @@ def _analyze(products: list[dict]) -> dict:
 
         if not price_str:
             price_missing += 1
-
         if not title:
             title_missing += 1
 
@@ -70,9 +69,7 @@ def _build_report(
     suggestions: list[str] = []
     found = analysis["total"]
     if found < max_items:
-        suggestions.append(
-            f"요청 {max_items}개 중 {found}개만 수집됨 → 페이지네이션 파라미터 재확인 또는 스크롤 횟수 증가 필요"
-        )
+        suggestions.append(f"요청 {max_items}개 중 {found}개만 수집됨 → 페이지네이션 또는 스크롤 재확인 필요")
     if analysis["duplicates"] > 0:
         suggestions.append(f"중복 항목 {analysis['duplicates']}개 → 상품 ID 기반 중복 제거 로직 강화 필요")
     if analysis["price_missing"] > 0:
@@ -94,7 +91,7 @@ def _build_report(
 | 항목 | 값 |
 |------|-----|
 | 사이트 | {site_name} ({site}) |
-| 키워드 | {keyword} |
+| 키워드/카테고리 | {keyword} |
 | 요청 시각 | {ts} |
 | 최대 요청 수 | {max_items}개 |
 
@@ -123,16 +120,46 @@ def _build_report(
 """
 
 
+def _save_and_log(
+    crawler: CrawlerService,
+    products: list[dict], errors: list[str], analysis: dict,
+    label: str, site: str, ts: str, ts_file: str, elapsed: float, max_items: int,
+) -> tuple[str, str, str]:
+    refined = [p for p in products if p.get("price")]
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
+    output_file = output_dir / f"{site}_{label}_top{max_items}_{ts_file}.json"
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(refined, f, ensure_ascii=False, indent=2)
+
+    raw_file = crawler.save_raw(label, site, products, ts_file)
+
+    report_dir = Path("logs/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_file = report_dir / f"{site}_{label}_{ts_file}.md"
+    report_md = _build_report(
+        keyword=label, site=site, ts=ts,
+        elapsed=elapsed, products=products,
+        errors=errors, analysis=analysis,
+        max_items=max_items,
+        output_file=str(output_file),
+        raw_file=raw_file,
+    )
+    with open(report_file, "w", encoding="utf-8") as f:
+        f.write(report_md)
+
+    _append_summary_log(ts, site, label, elapsed, analysis, bool(errors))
+    return refined, str(output_file), str(report_file)
+
+
 @router.post("/search")
 async def search_products(
     keyword: str,
     site: str = "musinsa",
     max_items: int = 500,
-    with_reviews: bool = False,
-    reviews_per_item: int = 5,
 ):
     """
-    상품 검색 크롤링 + A-Z 분석 리포트 생성
+    상품 검색 크롤링 + 분석 리포트 생성
 
     - **keyword**: 검색 키워드
     - **site**: `musinsa` 또는 `abcmart`
@@ -149,7 +176,6 @@ async def search_products(
         crawler = CrawlerService()
         products, errors = await crawler.search_items(
             keyword, site, max_items=max_items,
-            with_reviews=with_reviews, reviews_per_item=reviews_per_item,
         )
     except Exception:
         tb = traceback.format_exc()
@@ -158,31 +184,12 @@ async def search_products(
 
     elapsed = round(time.time() - started_at, 2)
     analysis = _analyze(products)
-
-    refined = [p for p in products if p.get("price")]
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
-    output_file = output_dir / f"{site}_{keyword}_top{max_items}_{ts_file}.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(refined, f, ensure_ascii=False, indent=2)
-
-    raw_file = crawler.save_raw(keyword, site, products, ts_file)
-
-    report_dir = Path("logs/reports")
-    report_dir.mkdir(parents=True, exist_ok=True)
-    report_file = report_dir / f"{site}_{keyword}_{ts_file}.md"
-    report_md = _build_report(
-        keyword=keyword, site=site, ts=ts,
-        elapsed=elapsed, products=products,
-        errors=errors, analysis=analysis,
-        max_items=max_items,
-        output_file=str(output_file),
-        raw_file=raw_file,
+    crawler = CrawlerService()
+    refined, output_file, report_file = _save_and_log(
+        crawler, products, errors, analysis,
+        label=keyword, site=site, ts=ts, ts_file=ts_file, elapsed=elapsed, max_items=max_items,
     )
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(report_md)
-
-    _append_summary_log(ts, site, keyword, elapsed, analysis, bool(errors))
+    raw_file = str(Path("output/raw") / f"{site}_{keyword}_raw_{ts_file}.json")
 
     print(f"[DONE] [{site}] '{keyword}' {len(refined)}개 / {elapsed}s")
 
@@ -197,11 +204,74 @@ async def search_products(
         "returned": len(refined),
         "errors": errors,
         "analysis": analysis,
-        "output_file": str(output_file),
+        "output_file": output_file,
         "raw_file": raw_file,
-        "report_file": str(report_file),
+        "report_file": report_file,
         "items": refined,
     }
+
+
+@router.post("/category")
+async def search_by_category(
+    category: str,
+    max_items: int = 500,
+    detail_limit: int = 10,
+):
+    """
+    ABC마트 카테고리 기반 크롤링 + 리뷰/옵션 수집
+
+    - **category**: 카테고리 키 (예: `스니커즈_남성`, `러닝화_여성`, `신발_아동`)
+    - **max_items**: 최대 수집 개수 (기본 500)
+    - **detail_limit**: 리뷰/옵션을 수집할 상위 상품 수 (기본 10, 0이면 미수집)
+    """
+    if category not in SUPPORTED_CATEGORIES:
+        return {"status": "error", "message": f"지원 카테고리: {SUPPORTED_CATEGORIES}"}
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+    started_at = time.time()
+
+    try:
+        crawler = CrawlerService()
+        products, errors = await crawler.search_by_category(category, max_items=max_items, detail_limit=detail_limit)
+    except Exception:
+        tb = traceback.format_exc()
+        errors = [f"치명적 오류:\n{tb}"]
+        products = []
+
+    elapsed = round(time.time() - started_at, 2)
+    analysis = _analyze(products)
+    crawler = CrawlerService()
+    refined, output_file, report_file = _save_and_log(
+        crawler, products, errors, analysis,
+        label=category, site="abcmart", ts=ts, ts_file=ts_file, elapsed=elapsed, max_items=max_items,
+    )
+    raw_file = str(Path("output/raw") / f"abcmart_{category}_raw_{ts_file}.json")
+
+    print(f"[DONE] [abcmart:category] '{category}' {len(refined)}개 / {elapsed}s")
+
+    return {
+        "status": "ok",
+        "site": "abcmart",
+        "category": category,
+        "timestamp": ts,
+        "elapsed_seconds": elapsed,
+        "max_requested": max_items,
+        "total_found": analysis["total"],
+        "returned": len(refined),
+        "errors": errors,
+        "analysis": analysis,
+        "output_file": output_file,
+        "raw_file": raw_file,
+        "report_file": report_file,
+        "items": refined,
+    }
+
+
+@router.get("/categories")
+async def list_categories():
+    """ABC마트 지원 카테고리 목록"""
+    return {"categories": SUPPORTED_CATEGORIES}
 
 
 def _append_summary_log(

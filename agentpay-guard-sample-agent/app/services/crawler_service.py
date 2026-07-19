@@ -1,13 +1,11 @@
 import json
 from pathlib import Path
 
-from app.crawlers import AbcMartCrawler, MusinSaCrawler, ReviewFetcher
+from app.crawlers import AbcMartCrawler, DetailFetcher
+from app.crawlers.abcmart import CATEGORIES
 
-SITE_NAMES = {
-    "abcmart": "ABC마트",
-    "musinsa": "무신사",
-}
-SUPPORTED_SITES = list(SITE_NAMES.keys())
+SUPPORTED_SITES = ["abcmart"]
+SUPPORTED_CATEGORIES = list(CATEGORIES.keys())
 
 
 class CrawlerService:
@@ -17,22 +15,29 @@ class CrawlerService:
         keyword: str,
         site: str,
         max_items: int = 500,
-        with_reviews: bool = False,
-        reviews_per_item: int = 5,
     ) -> tuple[list[dict], list[str]]:
         if site not in SUPPORTED_SITES:
-            raise ValueError(f"지원하지 않는 사이트: {site}")
+            raise ValueError(f"지원하지 않는 사이트: {site}. 지원 목록: {SUPPORTED_SITES}")
 
-        if site == "musinsa":
-            products, errors = await MusinSaCrawler().crawl(keyword, max_items)
-        elif site == "abcmart":
+        if site == "abcmart":
             products, errors = await AbcMartCrawler().crawl(keyword, max_items)
         else:
             products, errors = [], []
 
-        if with_reviews and site == "musinsa":
-            products, rev_errors = await ReviewFetcher().attach(products, reviews_per_item)
-            errors.extend(rev_errors)
+        return products, errors
+
+    async def search_by_category(
+        self,
+        category: str,
+        max_items: int = 500,
+        detail_limit: int = 10,
+    ) -> tuple[list[dict], list[str]]:
+        """ABC마트 카테고리 기반 수집 + 상위 detail_limit개 상품 리뷰/옵션 수집"""
+        products, errors = await AbcMartCrawler().crawl_category(category, max_items)
+
+        if detail_limit > 0 and products:
+            products, detail_errors = await DetailFetcher().attach(products, limit=detail_limit)
+            errors.extend(detail_errors)
 
         return products, errors
 
