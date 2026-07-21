@@ -30,6 +30,15 @@
     "merchant": {
       "$ref": "#/$defs/merchant"
     },
+    "totalCount": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "판매처가 반환한 검색 조건 기준 전체 상품 수다. 판매처가 제공하지 않으면 null이다."
+    },
+    "hasNext": {
+      "type": ["boolean", "null"],
+      "description": "판매처 검색 결과에 다음 페이지가 있는지 나타낸다. 판매처가 제공하지 않으면 null이다."
+    },
     "collectedAt": {
       "$ref": "#/$defs/dateTime"
     },

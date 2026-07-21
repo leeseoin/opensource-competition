@@ -20,8 +20,10 @@
 - [x] 검색 요청 JSON Schema 초안과 정상 예제 작성
 - [x] 수집 결과 JSON Schema 초안과 성공·부분 성공·무효 예제 작성
 - [x] 재검증 결과 JSON Schema 초안과 변경 예제 작성
+- [x] 판매처 공통 수집 데이터 v1 초안 문서 작성
+- [x] Go Collector 판매처 원본→공통 Product 변환 동작 문서 작성
 - [ ] 첫 판매처 선정과 공개 접근 범위 확인 **(진행 중: ABC마트 검색·robots 확인, 상세·리뷰 확인 필요)**
-- [ ] Go `CollectorResult` JSON schema 확정
+- [ ] Go `CollectorResult` JSON schema 확정 **(공통 수집 데이터 명세의 검색 조건·가격·페이지·재고 상태 반영 필요)**
 - [ ] 상품 상세 수집 요청 Schema 작성
 - [ ] 리뷰 수집 요청과 pagination Schema 작성
 - [ ] 재검증 요청 Schema 작성
@@ -51,17 +53,23 @@
 ## Phase 2: 실제 판매처 한 곳
 
 - [x] ABC마트 검색 Adapter
+- [x] ABC마트 검색을 `result-total/list` JSON 방식으로 전환
+- [x] ABC마트·29CM `totalCount`, `hasNext` 공통 응답 매핑
 - [x] ABC마트 요청 최소 1초 간격 제한
 - [x] 판매처 Registry로 ABC마트 고정 분기 제거
+- [x] 29CM `robots.txt`의 공개 검색·상품 경로 허용 범위 확인
+- [x] 29CM 공개 검색 화면의 상품 응답 구조 확인
+- [x] 29CM 상품 기본정보 Searcher와 fixture 단위 테스트
+- [x] 29CM opt-in live smoke test
 - [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 확인
 - [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 구조 확인
 - [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test
-- [ ] 무신사 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보 **(외부 결정 필요)**
-- [ ] 무신사 장기 운영 수집 범위와 요청 빈도 확정
+- [ ] 무신사 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보 **(보류)**
+- [ ] 무신사 장기 운영 수집 범위와 요청 빈도 확정 **(보류)**
 - [ ] 상품 상세·가격·배송 Adapter
 - [ ] 옵션·재고·사이즈표 Adapter
 - [ ] 공개 리뷰와 사진 여부 Adapter
-- [ ] 무신사 리뷰 상품 작업 큐와 제한된 고루틴 Worker Pool
+- [ ] 29CM·ABC마트 리뷰 상품 작업 큐와 제한된 고루틴 Worker Pool
 - [ ] partial/blocked/unsupported 처리 **(부분 구현: 미등록 판매처 unsupported, 원격 오류 temporarily_unavailable)**
 - [x] ABC마트 검색 opt-in live smoke test
 - [x] 무신사 검색 opt-in live smoke test

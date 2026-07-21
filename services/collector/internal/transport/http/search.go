@@ -10,6 +10,7 @@ import (
 	"github.com/leeseoin/opensource-competition/services/collector/internal/collector"
 	"github.com/leeseoin/opensource-competition/services/collector/internal/merchants/abcmart"
 	"github.com/leeseoin/opensource-competition/services/collector/internal/merchants/musinsa"
+	"github.com/leeseoin/opensource-competition/services/collector/internal/merchants/twentyninecm"
 )
 
 const maxSearchRequestBytes = 64 * 1024
@@ -28,6 +29,7 @@ type apiErrorResponse struct {
 // newSearchHandler는 등록된 판매처 검색기를 사용하는 HTTP handler를 생성한다.
 func newSearchHandler(searchTimeout time.Duration) *searchHandler {
 	registry := collector.NewSearchRegistry(map[string]collector.Searcher{
+		"29cm":    twentyninecm.NewSearcher(searchTimeout),
 		"abcmart": abcmart.NewSearcher(searchTimeout),
 		"musinsa": musinsa.NewSearcher(searchTimeout),
 	})

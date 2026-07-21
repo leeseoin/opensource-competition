@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "result": "SUCCESS"
+  },
+  "data": {
+    "keywordTypes": [
+      "PRODUCT"
+    ],
+    "list": [
+      {
+        "itemId": 2468262,
+        "itemType": "PRODUCT",
+        "itemUrl": {
+          "webLink": "https://product.29cm.co.kr/catalog/2468262"
+        },
+        "itemInfo": {
+          "itemType": "PRODUCT",
+          "productName": "[29EDITION] BELLA SLINGBACK / BLACK",
+          "thumbnailUrl": "https://img.29cm.co.kr/item/example-2468262.jpg",
+          "isSoldOut": false,
+          "originalPrice": 168000,
+          "displayPrice": 100960,
+          "sellPrice": 134400,
+          "saleRate": 40.0,
+          "brandId": 18373,
+          "brandName": "기호",
+          "reviewScore": 4.5,
+          "reviewCount": 753
+        },
+        "itemEvent": {
+          "eventProperties": {
+            "itemNo": 2468262,
+            "largeCategoryName": "여성슈즈",
+            "middleCategoryName": "플랫슈즈",
+            "smallCategoryName": "플랫"
+          }
+        }
+      },
+      {
+        "itemId": 3236312,
+        "itemType": "PRODUCT",
+        "itemUrl": {
+          "webLink": "https://product.29cm.co.kr/catalog/3236312"
+        },
+        "itemInfo": {
+          "itemType": "PRODUCT",
+          "productName": "Strap Stiletto Heel Slingback - Black",
+          "thumbnailUrl": "https://img.29cm.co.kr/item/example-3236312.jpg",
+          "isSoldOut": true,
+          "originalPrice": 89000,
+          "displayPrice": 49760,
+          "sellPrice": 57850,
+          "saleRate": 44.0,
+          "brandId": 79931,
+          "brandName": "포른른",
+          "reviewScore": 4.5,
+          "reviewCount": 174
+        },
+        "itemEvent": {
+          "eventProperties": {
+            "itemNo": 3236312,
+            "largeCategoryName": "여성슈즈",
+            "middleCategoryName": "힐/펌프스",
+            "smallCategoryName": "하이힐"
+          }
+        }
+      },
+      {
+        "itemId": 999,
+        "itemType": "CONTENT",
+        "itemUrl": {
+          "webLink": "https://www.29cm.co.kr/content/post/999"
+        },
+        "itemInfo": {
+          "productName": "상품이 아닌 콘텐츠",
+          "displayPrice": 0
+        }
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "size": 3,
+      "hasNext": true,
+      "totalCount": 5452
+    }
+  }
+}

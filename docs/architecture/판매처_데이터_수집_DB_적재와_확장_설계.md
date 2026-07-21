@@ -76,8 +76,8 @@ SearchRegistry가 merchant 확인
 | HTTP 요청 검사 | `services/collector/internal/transport/http/search.go:38` | JSON을 읽고 기본값과 형식을 검사한다. |
 | 판매처 선택 | `services/collector/internal/collector/registry.go:34` | `merchant` 값에 맞는 Searcher를 고른다. |
 | ABC마트 요청 | `services/collector/internal/merchants/abcmart/search.go:79` | ABC마트 검색 페이지를 요청한다. |
-| ABC마트 HTML 해석 | `services/collector/internal/merchants/abcmart/search.go:229` | HTML에서 상품 block을 찾는다. |
-| ABC마트 공통 변환 | `services/collector/internal/merchants/abcmart/search.go:346` | ABC마트 상품을 공통 `Product`로 바꾼다. |
+| ABC마트 JSON 해석 | `services/collector/internal/merchants/abcmart/search.go` `Searcher.Search` | `result-total/list`의 상품과 페이지 정보를 읽는다. |
+| ABC마트 공통 변환 | `services/collector/internal/merchants/abcmart/search.go` `toProduct` | ABC마트 상품을 공통 `Product`로 바꾼다. |
 | 무신사 요청 | `services/collector/internal/merchants/musinsa/search.go:93` | 무신사 검색 페이지를 요청한다. |
 | 무신사 JSON 해석 | `services/collector/internal/merchants/musinsa/search.go:220` | HTML의 `__NEXT_DATA__` JSON을 읽는다. |
 | 무신사 공통 변환 | `services/collector/internal/merchants/musinsa/search.go:250` | 무신사 상품을 공통 `Product`로 바꾼다. |
@@ -86,9 +86,11 @@ SearchRegistry가 merchant 확인
 
 ## 4. ABC마트 데이터 수집 방식
 
+> 2026-07-20 공개 검색 화면의 `/display/search-word/result-total/list` JSON을 확인한 뒤 기존 HTML 파서를 JSON 방식으로 교체했다. 공통 필드 기준은 [판매처 공통 수집 데이터 명세](판매처_공통_수집_데이터_명세.md)를 따른다.
+
 ### 4.1 한 문장 설명
 
-ABC마트는 검색 결과 HTML에 상품 정보와 신발 사이즈 재고가 들어 있으므로, Go가 HTML에서 필요한 문장을 찾아 읽는다.
+ABC마트는 공개 검색 화면이 요청하는 JSON에 상품 정보, 사이즈별 재고와 페이지 정보가 들어 있으므로 Go가 JSON 필드를 읽는다.
 
 ### 4.2 실제 흐름
 
@@ -97,25 +99,34 @@ ABC마트는 검색 결과 HTML에 상품 정보와 신발 사이즈 재고가 �
         ↓
 ABC마트 검색 URL 생성
         ↓
-HTML 한 번 요청
+JSON 한 번 요청
         ↓
-상품별 <li> block 분리
+SEARCH 배열의 상품 순회
         ↓
-상품번호·브랜드·상품명·가격·이미지 추출
+상품번호·브랜드·상품명·가격·카테고리·이미지 추출
         ↓
 사이즈와 공개 재고 수량 추출
+        ↓
+SEARCH_COUNT와 PAGE에서 totalCount·hasNext 계산
         ↓
 공통 Product로 변환
 ```
 
-HTML은 대략 다음과 같은 형태다.
+JSON은 대략 다음과 같은 형태다.
 
-```html
-<li data-product-no="1010110882">
-  <span class="prod-brand">호킨스</span>
-  <span class="prod-name">페니 로퍼</span>
-  <span class="price-cost">69,000</span>
-</li>
+```json
+{
+  "SEARCH": [
+    {
+      "PRDT_NO": "1010110882",
+      "PRDT_NAME": "페니 로퍼",
+      "PRDT_DC_PRICE": "69000",
+      "SIZE_LIST": {"250": "0", "270": "10"}
+    }
+  ],
+  "SEARCH_COUNT": 1650,
+  "PAGE": {"finalPageNo": 55}
+}
 ```
 
 현재 ABC마트에서 가져오는 데이터:
@@ -126,15 +137,18 @@ HTML은 대략 다음과 같은 형태다.
 - 가격
 - 상품 URL
 - 대표 이미지 URL
+- 카테고리
+- 리뷰 개수
 - 판매 중 또는 품절 상태
 - 신발 사이즈
 - 사이즈별 공개 재고 유무
+- 전체 검색 결과 수와 다음 페이지 여부
 - 수집 URL과 수집 시각
 
 현재 가져오지 못하는 데이터:
 
 - 상세 배송 정보
-- 검색 HTML에 없는 추가 옵션
+- 검색 JSON에 없는 추가 옵션
 - 전체 사이즈표와 실측
 - 공개 리뷰
 - 상품 상세 설명
@@ -148,7 +162,7 @@ ABC마트 Searcher는 검색 결과를 최소 30개 요청한 뒤 사용자의 �
 ```text
 ABC마트 검색 요청 1회
         ↓
-상품 후보 최소 30개가 포함된 HTML
+상품 후보 최소 30개가 포함된 JSON
         ↓
 조건 필터
         ↓
@@ -286,9 +300,9 @@ GET https://goods.musinsa.com/api2/review/v1/view/list
 | 가격 | 완료 | 완료 |
 | 대표 이미지 URL | 완료 | 완료 |
 | 검색 단계 품절 여부 | 완료 | 완료 |
-| 사이즈·옵션 | 검색 HTML 범위에서 부분 완료 | 미구현 |
-| 옵션별 재고 | 검색 HTML 범위에서 부분 완료 | 미구현 |
-| 평점·리뷰 수 | 미구현 | 검색 결과에서 완료 |
+| 사이즈·옵션 | 검색 JSON 범위에서 부분 완료 | 미구현 |
+| 옵션별 재고 | 검색 JSON 범위에서 부분 완료 | 미구현 |
+| 평점·리뷰 수 | 리뷰 수 완료, 평점 미구현 | 검색 결과에서 완료 |
 | 리뷰 본문 | 미구현 | 응답 구조만 확인 |
 | 상품 상세 | 미구현 | 미구현 |
 | 고루틴 Worker Pool | 미구현 | 미구현 |

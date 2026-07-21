@@ -78,7 +78,7 @@ Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같
 
 | 영역 | 현재 상태 | 설명 |
 |---|---|---|
-| Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·무신사 공개 검색 및 opt-in smoke test가 동작함 |
+| Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색 및 opt-in smoke test가 동작하고, 무신사는 검색 PoC만 유지함 |
 | Contracts | 초안 작성 | 검색 요청, 수집 결과, 재검증 결과 JSON Schema와 예제가 있음 |
 | Python Research Backend | 뼈대만 있음 | package 구조는 있지만 Collector 연결, MCP, DB 기능은 미구현 |
 | Codex Plugin | 뼈대만 있음 | manifest, MCP 설정, 구매 조사 skill 초안이 있음 |
@@ -107,12 +107,19 @@ HTTP handler가 `if merchant == "abcmart"`처럼 판매처를 직접 판단하�
 상품 검색 요청
   ↓
 판매처 Registry
+  ├── 29cm → 29CM Searcher → 공개 검색 상품 응답 수집
   ├── abcmart → ABC마트 Searcher → 공개 검색 수집
-  ├── musinsa → 무신사 Searcher → 공개 검색 HTML의 초기 JSON 수집
+  ├── musinsa → 무신사 Searcher → 검색 PoC만 유지
   └── 새 판매처 → 새 Searcher를 등록해 추가
 ```
 
 새 판매처를 추가할 때는 공통 `Searcher` 인터페이스를 구현하고 Registry에 등록한다. HTTP 요청 검증, 응답 JSON 형식, Python 연결 코드는 판매처마다 다시 만들지 않는다.
+
+### 29CM 데이터 접근 결정
+
+2026-07-20 29CM은 일반 Agent에 공개 검색·상품 경로를 허용하고 로그인·주문·마이페이지 등 일부 경로를 제한하는 것을 확인했다. 공개 검색 화면은 서버 HTML에 상품을 직접 넣지 않고 로그인 없는 별도 상품 응답으로 목록을 구성한다.
+
+현재 29CM Searcher는 상품번호·상품명·브랜드·표시 가격·품절 여부·카테고리·평점·리뷰 수를 공통 계약으로 변환한다. 실제 `구두` 검색 상품 3개를 반환하는 opt-in smoke test까지 확인했다. 상세 옵션, 옵션별 재고와 리뷰 본문은 아직 구현 전이다.
 
 ### 무신사 데이터 접근 결정
 

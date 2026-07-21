@@ -36,7 +36,7 @@
 |---|---|---|---|
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 첫 판매처와 요청 계약 확정, Go/Python DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
-| 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·무신사 공개 검색 | 상품 상세·옵션·리뷰와 운영 수집 정책 확정 |
+| 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
 | Python Backend와 DB | 부분 구현 | 패키지 골격과 미구현 MCP entrypoint | Collector 검증·정규화·저장 수직 흐름 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | Plugin manifest와 workflow 초안 | 실제 MCP tool과 application use case 연결 |
@@ -56,7 +56,7 @@
 - [x] 재검증 결과 JSON Schema 초안 작성
 - [x] success, partial, changed 예제 작성
 - [x] provenance 누락 무효 예제 작성
-- [ ] 첫 판매처와 공개 접근 범위 확정
+- [x] 1차 개발 판매처를 ABC마트와 29CM로 확정하고 무신사 확장 보류
 - [ ] 상품 상세 수집 요청 계약 작성
 - [ ] 리뷰 수집 요청과 pagination 계약 작성
 - [ ] 현재 offer 재수집 요청·응답 계약 작성
@@ -96,12 +96,14 @@
 - [x] ABC마트 검색 timeout 설정
 - [ ] idempotent 요청 retry 상한과 backoff 구현
 - [x] ABC마트 요청 최소 1초 간격 제한
+- [x] 29CM 요청 최소 1초 간격 제한
 - [ ] 다른 판매처 추가 시 판매처별 rate limiter 정책 구현
 - [ ] 판매처별 concurrency limiter 구현
 - [ ] blocked, unsupported, temporarily_unavailable 상태 매핑 **(부분 구현: 미등록 판매처 unsupported, 원격 오류 temporarily_unavailable)**
 - [ ] request ID와 merchant를 포함한 구조화 로그
 - [x] 저장된 실제 ABC마트 검색 HTML fixture 구성
 - [x] 실제 ABC마트 search endpoint 구현과 handler·adapter test
+- [x] 저장된 29CM 검색 JSON fixture와 adapter test
 - [ ] fixture product endpoint 구현과 contract test
 - [ ] fixture reviews endpoint 구현과 contract test
 - [ ] fixture current-offer endpoint 구현과 contract test
@@ -118,7 +120,11 @@
 - [x] 개발·smoke test 요청에 최소 1초 간격 적용
 - [ ] 이용 정책과 운영 요청 빈도 제한 최종 확정
 - [x] 첫 판매처를 ABC마트로 결정하고 1차 지원 범위를 공개 검색으로 제한
-- [x] 1차 목표 판매처를 ABC마트와 무신사로 제한
+- [x] 1차 목표 판매처를 ABC마트와 29CM로 변경하고 무신사 추가 개발 보류
+- [x] 29CM 일반 Agent 공개 검색·상품 경로 허용 범위 확인
+- [x] 29CM 공개 검색 상품 응답 구조 확인
+- [x] 29CM 상품 기본정보 Searcher 구현
+- [x] 29CM fixture 단위 테스트와 opt-in live smoke test
 - [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 재확인
 - [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 파서 구현
 - [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test 구현
@@ -271,14 +277,14 @@
 | Health endpoint | 완료 | `services/collector/internal/transport/http/health.go:14` `healthHandler` | `services/collector/tests/unit/http/server_test.go:28` 테스트 통과 |
 | 기존 Go 한국어 주석 | 완료 | `services/collector/cmd/server/main.go`, `internal/config`, `internal/transport/http`의 기존 type/function/test | `gofmt`, `go test`, `go vet` 통과 |
 | 검색 공통 DTO와 검증 | 완료 | `services/collector/internal/collector/search.go:38` `Searcher`, `:43` `SearchRequest`, `:55` `ApplyDefaults`, `:68` `Validate` | `services/collector/tests/unit/collector/search_test.go`; test·race·vet 통과 |
-| ABC마트 실제 검색 adapter | 완료 | `services/collector/internal/merchants/abcmart/search.go:79` `Searcher.Search`, `:229` `parseSearchItems`, `:306` `parseSizeStocks` | `services/collector/tests/unit/abcmart/search_test.go`, `tests/integration/abcmart_live_test.go`; 저장 HTML·실제 검색 통과 |
+| ABC마트 실제 검색 adapter | 완료 | `services/collector/internal/merchants/abcmart/search.go:101` `Searcher.Search`, `:187` `normalizeItem`, `:224` `parseSizeStocks` | 저장 JSON 단위 테스트와 실제 검색 통과; `totalCount=1650`, `hasNext=true` 확인 |
 | ABC마트 요청 간격 제한 | 완료 | `services/collector/internal/merchants/abcmart/search.go:160` `Searcher.waitForTurn` | `services/collector/tests/unit/abcmart/search_test.go:90`; test·race 통과 |
 | ABC마트 검색 HTTP endpoint | 완료 | `services/collector/internal/transport/http/search.go:17` `searchHandler`, `:33` `ServeHTTP`, `internal/transport/http/server.go:47` route | `services/collector/tests/unit/http/server_test.go:55`; test·race·vet 통과 |
 | 판매처 Search Registry | 완료 | `services/collector/internal/collector/registry.go:8` `SearchRegistry`, `:34` `Search` | `services/collector/tests/unit/collector/registry_test.go:19`, `:35`; 테스트 통과 |
 | 무신사 공개 검색 Adapter | 완료 | `services/collector/internal/merchants/musinsa/search.go` `Searcher`, `Search`, `parseSearchItems` | 단위 테스트와 `MUSINSA_LIVE_SMOKE=1` 실제 상품 3개 변환 통과 |
 | Registry HTTP 연결 | 완료 | `services/collector/internal/transport/http/search.go` `newSearchHandler`, Registry 호출 | ABC마트·무신사 등록과 HTTP 전달 테스트 통과 |
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
-| 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | 성공·부분 성공·무효 예제 존재, 자동 검증 재확인 필요 |
+| 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext` 선택 필드 추가; 성공·부분 성공 예제 `check-jsonschema` 통과 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
 | MCP entrypoint | placeholder | `services/research-backend/src/research_backend/interfaces/mcp/server.py:8` `main` | import 가능, 실행 시 미구현 오류 반환 |
 
@@ -299,6 +305,7 @@
 | 2026-07-18 | Collector 구조 | 구현하지 않은 기능의 빈 폴더와 `.gitkeep` 때문에 현재 사용 파일을 구분하기 어려움 | 초기 설계용 placeholder를 실제 구현 후에도 유지함 | `browser`, `observability`, 빈 `fixture`·`musinsa`와 불필요한 `.gitkeep` 제거, 현재 구조 문서화 | 해결 |
 | 2026-07-19 | 무신사 데이터 접근 | 무신사 검색 페이지는 사용자 브라우저에서 열리지만 자체 Go Collector로 자동 수집할 수 없음 | 지정된 Agent만 허용하고 일반 User-agent는 전체 경로를 차단하는 robots 정책 | User-agent 위장은 제외하고 정책 Adapter로 `blocked` 반환. 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보를 후속 작업으로 등록 | 부분 해결 |
 | 2026-07-19 | 무신사 소량 검색 PoC | 리뷰뿐 아니라 검색어 기반 상품 후보가 필요함 | 검색 페이지가 SPA이지만 초기 상품은 HTML의 `__NEXT_DATA__`에 서버 렌더링됨 | 일반 User-agent와 최소 1초 간격을 사용하는 Searcher 구현, 실제 `구두` 상품 3개 smoke test 통과 | PoC 해결 |
+| 2026-07-20 | ABC마트 검색 원본 선택 | 상품 전체 수와 다음 페이지 여부를 HTML 파서로 정확히 알 수 없음 | 기존 구현이 화면용 HTML 조각만 해석함 | 공개 검색 화면의 `result-total/list` JSON으로 전환하고 `SEARCH_COUNT`, `PAGE.finalPageNo`를 공통 결과에 매핑 | 해결 |
 
 ### 2026-07-16 Go Collector 기본 골격 테스트와 한국어 주석 정비
 
@@ -339,11 +346,11 @@
   - `services/collector/tests/integration/abcmart_live_test.go:14` `TestABC마트실제검색`: 실제 ABC마트 opt-in 검증
   - `services/collector/internal/transport/http/search.go:32` `searchHandler.ServeHTTP`: 검색 HTTP endpoint
   - `services/collector/internal/transport/http/server.go:25`: `/internal/v1/collect/search` route
-  - `services/collector/testdata/abcmart/search-goods.html:1`: 실제 ABC마트 응답 구조 기반 저장 HTML
+  - 당시 사용한 ABC마트 저장 HTML fixture는 2026-07-20 JSON 전환 후 제거하고 `search-products.json`으로 교체했다.
 - 발생 문제: 최초 선택한 무신사가 일반 Collector user-agent를 robots에서 차단했고, ABC마트 검색에서 결과 개수를 먼저 1개로 제한하면 뒤쪽의 요청 사이즈 상품을 찾지 못했다.
 - 원인: 무신사 wildcard 정책이 전체 경로를 금지했으며, ABC마트 결과에는 서버 개수 제한 뒤에 Collector의 사이즈 조건이 적용됐다.
 - 해결: 무신사 코드를 제거하고 wildcard 접근을 허용하는 ABC마트로 전환했다. ABC마트에서는 최소 30개를 수집한 뒤 조건을 적용하고 최종 반환 개수를 제한하며, 요청 사이에는 최소 1초 간격을 적용했다.
-- 남은 위험: ABC마트 HTML class나 검색 parameter가 변경되면 parser가 `unsupported` 오류를 반환한다. 상품 상세·리뷰, retry, 동시성 상한은 아직 없다.
+- 당시 남은 위험: ABC마트 HTML class 변경 위험이 있었으며, 이 문제는 2026-07-20 JSON 전환으로 줄였다. JSON 필드 변경, 상품 상세·리뷰, retry, 동시성 상한 위험은 남아 있다.
 - 검증:
   - `services/collector`에서 `GOCACHE=/tmp/purchase-research-go-cache go test -count=1 ./...`: 통과
   - `services/collector`에서 `GOCACHE=/tmp/purchase-research-go-cache go test -race ./...`: 통과
@@ -397,6 +404,28 @@
   - `GOCACHE=/private/tmp/purchase-research-go-cache go test ./...`: 전체 통과
   - `GOCACHE=/private/tmp/purchase-research-go-cache go vet ./...`: 통과
   - `MUSINSA_LIVE_SMOKE=1 ... TestMusinsaActualSearch`: 실제 `구두` 상품 3개 변환 통과
+
+### 2026-07-20 검색 결과 totalCount·hasNext 구현과 ABC마트 JSON 전환
+
+- 진행상황: 공통 `SearchResult`에 판매처 검색 기준 전체 상품 수와 다음 페이지 여부를 추가했다. 29CM의 기존 pagination을 연결하고 ABC마트는 HTML 파서 대신 `result-total/list` JSON을 사용하도록 교체했다.
+- 구현 위치:
+  - `services/collector/internal/collector/search.go:117` `SearchResult`: nullable `totalCount`, `hasNext` 공통 필드
+  - `services/collector/internal/merchants/abcmart/search.go:101` `Searcher.Search`: ABC마트 JSON 요청·검증·로컬 필터
+  - `services/collector/internal/merchants/abcmart/search.go:149`: `SEARCH_COUNT`, `PAGE.finalPageNo` 페이지 정보 매핑
+  - `services/collector/internal/merchants/abcmart/search.go:187` `normalizeItem`: 문자열 가격·리뷰 수·사이즈 재고 변환
+  - `services/collector/internal/merchants/twentyninecm/search.go:179`: 29CM pagination 매핑
+  - `contracts/collector/v1/collector-result.schema.json`: 두 선택 필드 계약 추가
+- 발생 문제: 최초 단위 테스트에서 이전 HTML 응답 보조 함수 이름이 남아 컴파일이 실패했고, JSON fixture의 두 상품이 모두 270 사이즈 필터를 통과해 기대 개수와 달랐다.
+- 원인: HTML에서 JSON으로 테스트를 전환하며 보조 함수 한 곳을 빠뜨렸고, fixture 재고 조건이 테스트 목적과 겹쳤다.
+- 해결: 응답 보조 함수를 JSON 기준으로 통일하고 두 번째 상품의 270 재고를 품절로 조정해 필터 조건을 명확히 했다.
+- 남은 위험: `result-total/list`는 외부 개발자용으로 문서화된 공식 API가 아니므로 응답 필드 변경을 fixture와 opt-in smoke test로 감지해야 한다. `totalCount`와 `hasNext`는 로컬 필터 적용 후 개수가 아니라 판매처 원본 검색 기준이다.
+- 검증:
+  - `GOCACHE=/tmp/opensource-competition-go-cache go test ./...`: 통과
+  - `GOCACHE=/tmp/opensource-competition-go-cache go test -race ./...`: 통과
+  - `GOCACHE=/tmp/opensource-competition-go-cache go vet ./...`: 통과
+  - ABC마트·29CM opt-in live smoke test: 통과
+  - ABC마트 실제 `구두` 검색: `totalCount=1650`, `hasNext=true` 확인
+  - `uvx check-jsonschema ...`: 성공·부분 성공 예제 검증 통과
 
 ## 작업 기록 템플릿
 

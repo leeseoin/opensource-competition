@@ -109,6 +109,31 @@ func TestDefaultServerRoutesMusinsaSearcher(t *testing.T) {
 	}
 }
 
+// TestDefaultServerRoutesTwentyNineCMSearcher는 운영 Registry가 29CM 요청을 실제 검색기로 전달하는지 검증한다.
+func TestDefaultServerRoutesTwentyNineCMSearcher(t *testing.T) {
+	server := collectorhttp.NewServer(":0", time.Second, time.Second, time.Second, time.Second)
+	body := `{"requestId":"29cm-001","merchant":"29cm","query":"구두","requestedAt":"2026-07-20T12:00:00+09:00"}`
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/internal/v1/collect/search", bytes.NewBufferString(body))
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	server.Handler().ServeHTTP(
+		recorder,
+		request.WithContext(ctx),
+	)
+
+	var result collector.SearchResult
+	if err := json.NewDecoder(recorder.Body).Decode(&result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if recorder.Code != stdhttp.StatusOK || result.Status != collector.StatusTemporarilyUnavailable {
+		t.Fatalf("status = %d, result = %#v", recorder.Code, result)
+	}
+	if len(result.Errors) != 1 || result.Errors[0].Code != "29CM_REQUEST_FAILED" {
+		t.Fatalf("errors = %#v", result.Errors)
+	}
+}
+
 // TestSearchRouteRejectsBadRequests는 잘못된 JSON 요청을 거부하는지 검증한다.
 func TestSearchRouteRejectsBadRequests(t *testing.T) {
 	handler := testHandler(searcherFunc(func(context.Context, collector.SearchRequest) collector.SearchResult {

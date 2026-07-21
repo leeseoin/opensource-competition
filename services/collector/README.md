@@ -4,22 +4,25 @@ Go 기반 판매처 데이터 수집 서비스다.
 
 현재 구현:
 
-- ABC마트 공개 검색 결과의 상품 검색
-- 상품 번호, 상품명, 브랜드, 가격, 상품 URL 수집
+- ABC마트 공개 검색 JSON의 상품 검색
+- 상품 번호, 상품명, 브랜드, 가격, 카테고리, 리뷰 수, 상품 URL 수집
 - 검색 결과에 공개된 사이즈와 사이즈별 재고 수집
+- ABC마트·29CM 검색 결과의 `totalCount`, `hasNext` 수집
 - `POST /internal/v1/collect/search`
 - `GET /internal/v1/health`
 - 판매처 Registry와 지원하지 않는 판매처 상태 반환
+- 29CM 공개 검색 화면의 상품 응답에서 상품 기본정보 수집
 - 무신사 공개 검색 HTML의 `__NEXT_DATA__`에서 상품 기본정보 수집
-- timeout, 응답 크기 제한, A-RT 외부 redirect 차단
-- ABC마트·무신사 요청 사이의 최소 1초 간격 제한
+- timeout, 응답 크기 제한, 판매처 외부 redirect 차단
+- ABC마트·29CM·무신사 요청 사이의 최소 1초 간격 제한
 - 역할별로 분리된 단위 테스트
-- `tests/integration`의 opt-in 실제 ABC마트·무신사 검색 테스트
+- `tests/integration`의 opt-in 실제 ABC마트·29CM·무신사 검색 테스트
 
 판매처 범위:
 
 - ABC마트: 공개 검색 수집 지원
-- 무신사: 공개 검색 페이지의 서버 렌더링 초기 상품 데이터 수집 지원
+- 29CM: 공개 검색 상품 기본정보 수집 지원
+- 무신사: 기술 PoC만 유지하고 추가 개발 보류
 
 아직 구현되지 않은 책임:
 
@@ -42,9 +45,10 @@ collector/
 │   │   ├── registry.go         # 판매처 이름과 Searcher 연결
 │   ├── config/                 # 실행 설정
 │   ├── merchants/abcmart/      # ABC마트 수집기
-│   ├── merchants/musinsa/      # 무신사 공개 검색 Adapter
+│   ├── merchants/twentyninecm/ # 29CM 공개 검색 Adapter
+│   ├── merchants/musinsa/      # 무신사 검색 PoC
 │   └── transport/http/         # HTTP API
-├── testdata/abcmart/           # 저장 HTML
+├── testdata/                   # 판매처별 저장 HTML·JSON
 └── tests/                      # unit, integration 테스트
 ```
 
@@ -62,7 +66,7 @@ go vet ./...
 테스트 파일 구성:
 
 - `tests/unit/`: 저장 자료와 가짜 HTTP 응답을 사용하는 빠른 단위 테스트
-- `testdata/`: 단위 테스트용 저장 HTML
+- `testdata/`: 단위 테스트용 저장 HTML·JSON
 - `tests/integration/`: 실제 외부 서비스에 접속하는 통합 테스트
 
 `internal/`에는 실행에 사용되는 실제 코드만 둔다.
@@ -72,6 +76,13 @@ go vet ./...
 ```bash
 cd services/collector
 ABCMART_LIVE_SMOKE=1 go test -count=1 -run TestABC마트실제검색 -v ./tests/integration
+```
+
+실제 29CM 공개 검색 결과 확인도 명시적으로 실행한 경우에만 동작한다.
+
+```bash
+cd services/collector
+TWENTYNINECM_LIVE_SMOKE=1 go test -count=1 -run TestTwentyNineCMActualSearch -v ./tests/integration
 ```
 
 실제 무신사 검색 결과 확인도 명시적으로 실행한 경우에만 동작한다.
@@ -126,3 +137,18 @@ props.pageProps.dehydratedState.queries[].state.data.pages[].items[]
 ```
 
 상품 상세·옵션과 리뷰 수집은 아직 구현 전이다. 리뷰는 상품 단위 작업 큐와 제한된 Worker Pool로 구현할 예정이다.
+
+## 29CM 검색 수집 범위
+
+확인일: 2026-07-20
+
+[29CM robots.txt](https://www.29cm.co.kr/robots.txt)는 일반 Agent에 `/`를 허용하고 로그인·주문·마이페이지 등 일부 경로를 제한한다. 현재 Searcher는 허용된 공개 검색 화면이 로그인 없이 요청하는 상품 응답에서 다음 기본정보를 읽는다.
+
+- 상품번호, 상품명, 브랜드
+- 현재 표시 가격과 품절 여부
+- 상품·썸네일 URL
+- 대·중·소 카테고리
+- 평점과 리뷰 수
+- 수집 URL과 수집 시각
+
+2026-07-20 실제 `구두` 검색 smoke test에서 상품 3개가 공통 `Product`로 변환되는 것을 확인했다. 사이즈·옵션·리뷰 본문과 DB 적재는 아직 구현 전이다.

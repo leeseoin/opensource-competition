@@ -1,14 +1,14 @@
-// Package abcmart는 ABC마트의 공개 상품 페이지를 수집하는 판매처 adapter를 제공한다.
+// Package abcmart는 ABC마트의 공개 상품 검색 데이터를 공통 수집 결과로 변환한다.
 package abcmart
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,24 +19,14 @@ import (
 
 const (
 	merchantName       = "abcmart"
-	collectorVersion   = "abcmart-search-v1"
-	searchEndpoint     = "https://abcmart.a-rt.com/display/search-word/result/list"
+	collectorVersion   = "abcmart-search-v2"
+	searchEndpoint     = "https://abcmart.a-rt.com/display/search-word/result-total/list"
 	productEndpoint    = "https://abcmart.a-rt.com/product"
-	maxSearchBodyBytes = 2 * 1024 * 1024
+	maxSearchBodyBytes = 4 * 1024 * 1024
 	minRequestInterval = time.Second
 )
 
-var (
-	productStartPattern = regexp.MustCompile(`<li class="([^"]*smart-search-product-item[^"]*)" data-product-no="([^"]+)"`)
-	imagePattern        = regexp.MustCompile(`<img src="([^"]+)" class="search-prod-image"`)
-	brandPattern        = regexp.MustCompile(`(?s)<span class="prod-brand">\s*(.*?)\s*</span>`)
-	namePattern         = regexp.MustCompile(`(?s)<span class="prod-name">\s*(?:<span[^>]*>.*?</span>)?\s*(.*?)\s*</span>`)
-	pricePattern        = regexp.MustCompile(`(?s)<span class="price-cost">\s*([0-9,]+)\s*</span>`)
-	optionPattern       = regexp.MustCompile(`<ol class="prod-size-list[^"]*" data-option="([^"]*)" data-option-info="([^"]*)"`)
-	tagPattern          = regexp.MustCompile(`<[^>]+>`)
-)
-
-// Searcher는 ABC마트 공개 검색 결과를 요청하고 상품 HTML을 공통 결과로 변환한다.
+// Searcher는 ABC마트 공개 검색 JSON을 요청하고 상품과 페이지 정보를 공통 결과로 변환한다.
 type Searcher struct {
 	client          *http.Client
 	now             func() time.Time
@@ -45,18 +35,45 @@ type Searcher struct {
 	nextRequestTime time.Time
 }
 
-// searchItem은 ABC마트 검색 목록에서 읽은 상품과 사이즈별 공개 재고를 표현한다.
-type searchItem struct {
-	ProductNo  string
-	Name       string
-	Brand      string
-	ImageURL   string
-	Price      int
-	IsSoldOut  bool
-	SizeStocks []sizeStock
+// searchResponse는 ABC마트 검색 JSON에서 상품과 페이지 계산에 필요한 필드만 표현한다.
+type searchResponse struct {
+	Search      []searchItem `json:"SEARCH"`
+	SearchCount *int         `json:"SEARCH_COUNT"`
+	Page        *struct {
+		FinalPageNo *int `json:"finalPageNo"`
+	} `json:"PAGE"`
 }
 
-// sizeStock은 하나의 신발 사이즈와 검색 페이지에 공개된 수량을 표현한다.
+// searchItem은 ABC마트 상품 JSON의 원본 문자열 필드를 표현한다.
+type searchItem struct {
+	ProductNo      string            `json:"PRDT_NO"`
+	Name           string            `json:"PRDT_NAME"`
+	Brand          string            `json:"BRAND_NAME"`
+	ImageURL       string            `json:"PRDT_IMAGE_URL"`
+	DiscountPrice  string            `json:"PRDT_DC_PRICE"`
+	Category       string            `json:"CTGR_NAME_ALL"`
+	ProductOptions string            `json:"PRDT_OPTION"`
+	ColorID        string            `json:"COLOR_ID"`
+	SoldOut        string            `json:"SOLD_OUT"`
+	ReviewCount    string            `json:"RVW_COUNT"`
+	SizeList       map[string]string `json:"SIZE_LIST"`
+}
+
+// normalizedItem은 숫자와 옵션을 검증한 뒤 공통 상품으로 변환할 ABC마트 상품을 표현한다.
+type normalizedItem struct {
+	ProductNo   string
+	Name        string
+	Brand       string
+	ImageURL    string
+	Price       int
+	Category    []string
+	Color       string
+	IsSoldOut   bool
+	ReviewCount *int
+	SizeStocks  []sizeStock
+}
+
+// sizeStock은 하나의 신발 사이즈와 검색 JSON에 공개된 수량을 표현한다.
 type sizeStock struct {
 	Size     string
 	Quantity int
@@ -72,10 +89,16 @@ func NewSearcher(timeout time.Duration) *Searcher {
 
 // NewSearcherWithClient는 테스트용 HTTP client와 시계를 주입해 ABC마트 검색기를 생성한다.
 func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterval time.Duration) *Searcher {
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second, CheckRedirect: checkRedirect}
+	}
+	if now == nil {
+		now = time.Now
+	}
 	return &Searcher{client: client, now: now, minInterval: minInterval}
 }
 
-// Search는 ABC마트 공개 검색 결과에서 상품과 사이즈별 공개 재고를 수집한다.
+// Search는 ABC마트 공개 검색 JSON에서 상품, 사이즈별 재고, 전체 수와 다음 페이지 여부를 수집한다.
 func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) collector.SearchResult {
 	collectedAt := s.now()
 	searchURL := buildSearchURL(request)
@@ -93,7 +116,7 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 		return failedResult(result, "REQUEST_BUILD_FAILED", err.Error(), false, searchURL)
 	}
 	httpRequest.Header.Set("User-Agent", "PurchaseResearchAgent/0.1 (+public product research; low rate)")
-	httpRequest.Header.Set("Accept", "text/html,application/xhtml+xml")
+	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("Accept-Language", request.Locale)
 
 	response, err := s.client.Do(httpRequest)
@@ -104,13 +127,7 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 
 	if response.StatusCode != http.StatusOK {
 		retryable := response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
-		return failedResult(
-			result,
-			"ABCMART_HTTP_ERROR",
-			fmt.Sprintf("ABC마트 검색 결과가 HTTP %d를 반환했습니다", response.StatusCode),
-			retryable,
-			searchURL,
-		)
+		return failedResult(result, "ABCMART_HTTP_ERROR", fmt.Sprintf("ABC마트 검색 결과가 HTTP %d를 반환했습니다", response.StatusCode), retryable, searchURL)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxSearchBodyBytes+1))
@@ -121,12 +138,30 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 		return failedResult(result, "ABCMART_RESPONSE_TOO_LARGE", "ABC마트 검색 응답이 허용 크기를 넘었습니다", false, searchURL)
 	}
 
-	items, err := parseSearchItems(body)
-	if err != nil {
-		return failedResult(result, "ABCMART_PAGE_CHANGED", err.Error(), false, searchURL)
+	var payload searchResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return failedResult(result, "ABCMART_RESPONSE_INVALID", fmt.Sprintf("ABC마트 검색 JSON 해석 실패: %v", err), false, searchURL)
+	}
+	if payload.Search == nil {
+		return failedResult(result, "ABCMART_PAGE_CHANGED", "ABC마트 검색 JSON에서 SEARCH 목록을 찾지 못했습니다", false, searchURL)
+	}
+	if payload.SearchCount == nil || payload.Page == nil || payload.Page.FinalPageNo == nil {
+		return failedResult(result, "ABCMART_PAGE_CHANGED", "ABC마트 검색 JSON에서 페이지 정보를 찾지 못했습니다", false, searchURL)
+	}
+	if *payload.SearchCount < 0 || *payload.Page.FinalPageNo < 0 {
+		return failedResult(result, "ABCMART_RESPONSE_INVALID", "ABC마트 검색 JSON의 페이지 정보가 음수입니다", false, searchURL)
 	}
 
-	for _, item := range items {
+	totalCount := *payload.SearchCount
+	hasNext := *payload.Page.FinalPageNo > 1
+	result.TotalCount = &totalCount
+	result.HasNext = &hasNext
+
+	for _, rawItem := range payload.Search {
+		item, err := normalizeItem(rawItem)
+		if err != nil {
+			return failedResult(result, "ABCMART_RESPONSE_INVALID", err.Error(), false, searchURL)
+		}
 		if request.Filters.InStockOnly && item.IsSoldOut {
 			continue
 		}
@@ -148,22 +183,117 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 	if len(request.Filters.Categories) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
 		result.Status = collector.StatusPartial
 		result.Warnings = append(result.Warnings, collector.Issue{
-			Code:      "FILTERS_PARTIALLY_SUPPORTED",
-			Message:   "현재 ABC마트 검색은 가격, 재고, 신발 사이즈 조건만 지원합니다",
-			Retryable: false,
-			SourceURL: &searchURL,
+			Code: "FILTERS_PARTIALLY_SUPPORTED", Message: "현재 ABC마트 검색은 가격, 재고, 신발 사이즈 조건만 지원합니다",
+			Retryable: false, SourceURL: &searchURL,
 		})
 	}
 	return result
 }
 
+// normalizeItem은 ABC마트 문자열 가격·리뷰 수·사이즈 재고를 검증 가능한 공통 값으로 바꾼다.
+func normalizeItem(item searchItem) (normalizedItem, error) {
+	if item.ProductNo == "" || item.Name == "" {
+		return normalizedItem{}, fmt.Errorf("ABC마트 상품의 번호 또는 이름이 비어 있습니다")
+	}
+	price, err := parseNonNegativeInt(item.DiscountPrice)
+	if err != nil {
+		return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 가격 해석 실패: %w", item.ProductNo, err)
+	}
+	stocks, err := parseSizeStocks(item.ProductOptions, item.SizeList)
+	if err != nil {
+		return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 사이즈 재고 해석 실패: %w", item.ProductNo, err)
+	}
+	var reviewCount *int
+	if item.ReviewCount != "" {
+		value, parseErr := parseNonNegativeInt(item.ReviewCount)
+		if parseErr != nil {
+			return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 리뷰 수 해석 실패: %w", item.ProductNo, parseErr)
+		}
+		reviewCount = &value
+	}
+	return normalizedItem{
+		ProductNo: item.ProductNo, Name: item.Name, Brand: item.Brand, ImageURL: item.ImageURL,
+		Price: price, Category: splitCategoryPath(item.Category), Color: item.ColorID,
+		IsSoldOut: strings.EqualFold(item.SoldOut, "y"), ReviewCount: reviewCount, SizeStocks: stocks,
+	}, nil
+}
+
+// parseNonNegativeInt는 공백을 제거한 0 이상의 정수 문자열을 변환한다.
+func parseNonNegativeInt(value string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 0 {
+		return 0, fmt.Errorf("0 이상의 정수가 아닙니다: %q", value)
+	}
+	return parsed, nil
+}
+
+// parseSizeStocks는 옵션 표시 순서를 유지하며 SIZE_LIST의 공개 수량을 구조화한다.
+func parseSizeStocks(optionValues string, sizeList map[string]string) ([]sizeStock, error) {
+	sizes := make([]string, 0, len(sizeList))
+	seen := make(map[string]bool, len(sizeList))
+	for _, size := range strings.Split(optionValues, ",") {
+		size = strings.TrimSpace(size)
+		if size != "" && !seen[size] {
+			sizes = append(sizes, size)
+			seen[size] = true
+		}
+	}
+	leftovers := make([]string, 0)
+	for size := range sizeList {
+		if !seen[size] {
+			leftovers = append(leftovers, size)
+		}
+	}
+	sort.Strings(leftovers)
+	sizes = append(sizes, leftovers...)
+
+	stocks := make([]sizeStock, 0, len(sizes))
+	for _, size := range sizes {
+		quantityText, exists := sizeList[size]
+		if !exists {
+			continue
+		}
+		quantity, err := parseNonNegativeInt(quantityText)
+		if err != nil {
+			return nil, fmt.Errorf("사이즈 %s: %w", size, err)
+		}
+		stocks = append(stocks, sizeStock{Size: size, Quantity: quantity})
+	}
+	return stocks, nil
+}
+
+// splitCategoryPath는 `신발 > 구두 > 로퍼` 문자열을 빈 값 없는 카테고리 경로로 바꾼다.
+func splitCategoryPath(value string) []string {
+	parts := strings.Split(value, ">")
+	path := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			path = append(path, part)
+		}
+	}
+	return path
+}
+
+// hasAvailableRequestedSize는 요청 사이즈 중 공개 수량이 1개 이상인 사이즈가 있는지 검사한다.
+func hasAvailableRequestedSize(stocks []sizeStock, requested []string) bool {
+	for _, stock := range stocks {
+		if stock.Quantity <= 0 {
+			continue
+		}
+		for _, size := range requested {
+			if stock.Size == size {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // waitForTurn은 한 Searcher가 ABC마트에 보내는 요청 사이에 최소 간격을 보장한다.
-// 대기 중 context가 취소되면 원격 요청을 보내지 않고 context 오류를 반환한다.
 func (s *Searcher) waitForTurn(ctx context.Context) error {
 	if s.minInterval <= 0 {
 		return nil
 	}
-
 	s.rateMu.Lock()
 	now := time.Now()
 	scheduled := now
@@ -179,7 +309,6 @@ func (s *Searcher) waitForTurn(ctx context.Context) error {
 	}
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
-
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -188,7 +317,7 @@ func (s *Searcher) waitForTurn(ctx context.Context) error {
 	}
 }
 
-// buildSearchURL은 검색 요청을 ABC마트의 공개 검색 결과 목록 URL로 변환한다.
+// buildSearchURL은 검색 요청을 ABC마트 공개 상품 JSON URL로 변환한다.
 func buildSearchURL(request collector.SearchRequest) string {
 	values := url.Values{}
 	pageSize := request.Limit
@@ -225,131 +354,10 @@ func checkRedirect(request *http.Request, previous []*http.Request) error {
 	}
 }
 
-// parseSearchItems는 ABC마트 검색 결과 HTML에서 상품 block을 찾아 필요한 필드를 읽는다.
-func parseSearchItems(body []byte) ([]searchItem, error) {
-	text := string(body)
-	indexes := productStartPattern.FindAllStringSubmatchIndex(text, -1)
-	if len(indexes) == 0 {
-		return nil, fmt.Errorf("ABC마트 상품 목록을 찾지 못했습니다")
-	}
-
-	items := make([]searchItem, 0, len(indexes))
-	for index, location := range indexes {
-		end := len(text)
-		if index+1 < len(indexes) {
-			end = indexes[index+1][0]
-		}
-		block := text[location[0]:end]
-		item, err := parseSearchItem(block, text[location[4]:location[5]], text[location[2]:location[3]])
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
-
-// parseSearchItem은 상품 block 하나에서 번호, 이름, 브랜드, 가격, 이미지, 사이즈 재고를 읽는다.
-func parseSearchItem(block, productNo, classes string) (searchItem, error) {
-	name, ok := firstTextMatch(namePattern, block)
-	if !ok {
-		return searchItem{}, fmt.Errorf("ABC마트 상품 %s의 이름을 찾지 못했습니다", productNo)
-	}
-	priceText, ok := firstTextMatch(pricePattern, block)
-	if !ok {
-		return searchItem{}, fmt.Errorf("ABC마트 상품 %s의 가격을 찾지 못했습니다", productNo)
-	}
-	price, err := strconv.Atoi(strings.ReplaceAll(priceText, ",", ""))
-	if err != nil {
-		return searchItem{}, fmt.Errorf("ABC마트 상품 %s의 가격 해석 실패: %w", productNo, err)
-	}
-	brand, _ := firstTextMatch(brandPattern, block)
-	imageURL, _ := firstRawMatch(imagePattern, block)
-
-	var stocks []sizeStock
-	if matches := optionPattern.FindStringSubmatch(block); len(matches) == 3 {
-		stocks = parseSizeStocks(matches[1], matches[2])
-	}
-
-	return searchItem{
-		ProductNo:  productNo,
-		Name:       name,
-		Brand:      brand,
-		ImageURL:   html.UnescapeString(imageURL),
-		Price:      price,
-		IsSoldOut:  !strings.Contains(classes, "selling"),
-		SizeStocks: stocks,
-	}, nil
-}
-
-// firstTextMatch는 첫 정규식 capture에서 HTML tag와 공백을 제거한 문자열을 반환한다.
-func firstTextMatch(pattern *regexp.Regexp, block string) (string, bool) {
-	value, ok := firstRawMatch(pattern, block)
-	if !ok {
-		return "", false
-	}
-	value = tagPattern.ReplaceAllString(value, "")
-	value = html.UnescapeString(value)
-	return strings.Join(strings.Fields(value), " "), true
-}
-
-// firstRawMatch는 첫 정규식 capture를 가공하지 않고 반환한다.
-func firstRawMatch(pattern *regexp.Regexp, block string) (string, bool) {
-	matches := pattern.FindStringSubmatch(block)
-	if len(matches) < 2 {
-		return "", false
-	}
-	return matches[1], true
-}
-
-// parseSizeStocks는 공개된 사이즈 목록과 사이즈별 수량 문자열을 구조화한다.
-func parseSizeStocks(optionValues, optionInfo string) []sizeStock {
-	quantities := make(map[string]int)
-	for _, entry := range strings.Split(optionInfo, "/") {
-		parts := strings.Split(entry, ",")
-		if len(parts) < 2 {
-			continue
-		}
-		quantity, err := strconv.Atoi(parts[1])
-		if err == nil {
-			quantities[parts[0]] = quantity
-		}
-	}
-
-	stocks := make([]sizeStock, 0)
-	for _, size := range strings.Split(optionValues, ",") {
-		size = strings.TrimSpace(size)
-		if size == "" {
-			continue
-		}
-		stocks = append(stocks, sizeStock{Size: size, Quantity: quantities[size]})
-	}
-	return stocks
-}
-
-// hasAvailableRequestedSize는 요청 사이즈 중 공개 수량이 1개 이상인 사이즈가 있는지 검사한다.
-func hasAvailableRequestedSize(stocks []sizeStock, requested []string) bool {
-	for _, stock := range stocks {
-		if stock.Quantity <= 0 {
-			continue
-		}
-		for _, size := range requested {
-			if stock.Size == size {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// toProduct는 ABC마트 검색 상품을 Collector 공통 상품으로 변환한다.
-func toProduct(item searchItem, sourceURL string, collectedAt time.Time) collector.Product {
+// toProduct는 검증한 ABC마트 검색 상품을 Collector 공통 상품으로 변환한다.
+func toProduct(item normalizedItem, sourceURL string, collectedAt time.Time) collector.Product {
 	productURL := productEndpoint + "?prdtNo=" + url.QueryEscape(item.ProductNo)
-	provenance := collector.Provenance{
-		SourceURL:        sourceURL,
-		CollectedAt:      collectedAt,
-		CollectorVersion: collectorVersion,
-	}
+	provenance := collector.Provenance{SourceURL: sourceURL, CollectedAt: collectedAt, CollectorVersion: collectorVersion}
 	price := collector.Money{Amount: item.Price, Currency: "KRW"}
 	options := make([]collector.Option, 0, len(item.SizeStocks))
 	for _, stock := range item.SizeStocks {
@@ -359,14 +367,16 @@ func toProduct(item searchItem, sourceURL string, collectedAt time.Time) collect
 		if stock.Quantity > 0 {
 			stockStatus = collector.StockAvailable
 		}
+		var color *string
+		label := stock.Size
+		if item.Color != "" {
+			value := item.Color
+			color = &value
+			label += " / " + value
+		}
 		options = append(options, collector.Option{
-			ExternalID: &optionID,
-			Label:      stock.Size,
-			Size:       &size,
-			Color:      nil,
-			Stock:      stockStatus,
-			Price:      &price,
-			Provenance: provenance,
+			ExternalID: &optionID, Label: label, Size: &size, Color: color,
+			Stock: stockStatus, Price: &price, Provenance: provenance,
 		})
 	}
 
@@ -385,40 +395,21 @@ func toProduct(item searchItem, sourceURL string, collectedAt time.Time) collect
 	}
 
 	return collector.Product{
-		ExternalID:   item.ProductNo,
-		Name:         item.Name,
-		Brand:        brand,
-		CategoryPath: []string{},
-		ProductURL:   productURL,
-		ImageURLs:    imageURLs,
-		Price:        &price,
-		Shipping: collector.Shipping{
-			Fee:        nil,
-			Summary:    nil,
-			Provenance: provenance,
-		},
-		StockStatus:  stockStatus,
-		Rating:       nil,
-		ReviewCount:  nil,
-		Options:      options,
-		Measurements: map[string]collector.MeasurementValue{},
-		Reviews:      []collector.Review{},
-		Provenance:   provenance,
+		ExternalID: item.ProductNo, Name: item.Name, Brand: brand, CategoryPath: item.Category,
+		ProductURL: productURL, ImageURLs: imageURLs, Price: &price,
+		Shipping:    collector.Shipping{Fee: nil, Summary: nil, Provenance: provenance},
+		StockStatus: stockStatus, Rating: nil, ReviewCount: item.ReviewCount, Options: options,
+		Measurements: map[string]collector.MeasurementValue{}, Reviews: []collector.Review{}, Provenance: provenance,
 	}
 }
 
-// newResult는 오류가 없고 상품이 비어 있는 ABC마트 검색 결과를 생성한다.
+// newResult는 페이지 정보를 아직 모르는 빈 ABC마트 검색 결과를 생성한다.
 func newResult(request collector.SearchRequest, collectedAt time.Time) collector.SearchResult {
 	return collector.SearchResult{
-		RequestID:        request.RequestID,
-		Operation:        collector.OperationSearch,
-		Status:           collector.StatusSuccess,
-		Merchant:         request.Merchant,
-		CollectedAt:      collectedAt,
-		CollectorVersion: collectorVersion,
-		Products:         []collector.Product{},
-		Warnings:         []collector.Issue{},
-		Errors:           []collector.Issue{},
+		RequestID: request.RequestID, Operation: collector.OperationSearch, Status: collector.StatusSuccess,
+		Merchant: request.Merchant, TotalCount: nil, HasNext: nil,
+		CollectedAt: collectedAt, CollectorVersion: collectorVersion,
+		Products: []collector.Product{}, Warnings: []collector.Issue{}, Errors: []collector.Issue{},
 	}
 }
 
@@ -428,11 +419,6 @@ func failedResult(result collector.SearchResult, code, message string, retryable
 	if retryable {
 		result.Status = collector.StatusTemporarilyUnavailable
 	}
-	result.Errors = append(result.Errors, collector.Issue{
-		Code:      code,
-		Message:   message,
-		Retryable: retryable,
-		SourceURL: &sourceURL,
-	})
+	result.Errors = append(result.Errors, collector.Issue{Code: code, Message: message, Retryable: retryable, SourceURL: &sourceURL})
 	return result
 }

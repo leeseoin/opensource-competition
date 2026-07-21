@@ -1,7 +1,7 @@
 # Collector Contract v1
 
 작성일: 2026-07-14
-최종 수정일: 2026-07-19
+최종 수정일: 2026-07-20
 
 ## 목적
 
@@ -84,6 +84,8 @@ Contract의 목적은 Go와 Python 내부 코드를 똑같이 만드는 것이 �
 - `search-request.schema.json`: Python이 Go에 전달하는 판매처 상품 검색 요청
 - `collector-result.schema.json`: 검색·상품 상세·공개 리뷰 수집 결과
 - `verification-result.schema.json`: 구매 후보의 현재 가격·재고·옵션 재검증 결과
+
+검색 결과에는 판매처가 알려준 전체 상품 수 `totalCount`와 다음 페이지 여부 `hasNext`를 선택 필드로 포함한다. 판매처가 값을 제공하지 않거나 요청이 실패하면 `null`을 사용한다. 두 값은 Collector가 반환한 상품 배열 길이가 아니라 로컬 필터 적용 전 판매처 검색 결과를 기준으로 한다.
 
 ## 핵심 원칙
 

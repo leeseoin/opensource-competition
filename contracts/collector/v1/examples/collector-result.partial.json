@@ -3,6 +3,8 @@
   "operation": "product",
   "status": "partial",
   "merchant": "musinsa",
+  "totalCount": null,
+  "hasNext": null,
   "collectedAt": "2026-07-14T10:05:00+09:00",
   "collectorVersion": "musinsa-v1",
   "products": [

@@ -4,7 +4,7 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: Go/Python 역할 분리와 디렉토리 구조 설계 완료, Collector 공통 계약과 Go HTTP 서버 골격 구현, 실제 구매 조사 기능은 planned
+- 현재 상태: Go/Python 역할 분리와 공통 계약 설계 완료, ABC마트·29CM 검색 Collector 구현, 무신사 확장은 보류, Python DB 적재와 실제 구매 조사 기능은 planned
 - 핵심 기술: Go, Python, MCP, FastAPI, Next.js, React, PostgreSQL
 
 ## 구성요소 책임

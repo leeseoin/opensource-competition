@@ -38,10 +38,15 @@ func TestABC마트실제검색(t *testing.T) {
 	if len(result.Products[0].Options) == 0 {
 		t.Fatal("실제 ABC마트 상품에서 공개 사이즈 재고를 읽지 못했습니다")
 	}
+	if result.TotalCount == nil || *result.TotalCount < len(result.Products) || result.HasNext == nil {
+		t.Fatalf("실제 ABC마트 페이지 정보가 올바르지 않습니다: totalCount=%v, hasNext=%v", result.TotalCount, result.HasNext)
+	}
 	t.Logf(
-		"상품 확인: %s, 옵션 %d개 (%s)",
+		"상품 확인: %s, 옵션 %d개, 전체 %d개, 다음 페이지 %t (%s)",
 		result.Products[0].Name,
 		len(result.Products[0].Options),
+		*result.TotalCount,
+		*result.HasNext,
 		result.Products[0].ProductURL,
 	)
 }
