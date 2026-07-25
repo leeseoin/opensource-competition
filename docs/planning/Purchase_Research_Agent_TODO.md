@@ -79,15 +79,16 @@
 ## Phase 3: Python Backend와 DB
 
 - [ ] Python package와 설정 재정비
-- [ ] Go Collector client
-- [ ] Pydantic transport schema validation
+- [x] Go Collector 검색 HTTP client
+- [x] Pydantic Collector v1 검색 요청·응답 검증
 - [x] 루트 Docker Compose의 PostgreSQL·영구 volume·health check 구성
 - [x] SQLAlchemy 2 모델과 Alembic migration 기반 구성
 - [x] 첫 상품 수집 테이블 migration 작성
 - [x] Docker Compose에서 migration 실제 적용·재적용 검증
 - [ ] 개발·테스트·배포 환경별 Compose 설정과 비밀값 주입 정책 **(부분 구현: 로컬 `.env.example`과 Compose 기본값·덮어쓰기 구성 완료)**
-- [ ] product/offer/option/snapshot/evidence repository
-- [ ] 중복 수집과 transaction 정책
+- [x] product/merchant-product/offer-snapshot/option/evidence 검색 결과 repository
+- [x] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
+- [x] ABC마트·29CM 실제 검색 결과 PostgreSQL 적재 검증
 - [ ] 조사 세션과 작업 상태
 
 완료 기준: Go 수집 결과가 검증·정규화되어 PostgreSQL에 재현 가능하게 저장된다.

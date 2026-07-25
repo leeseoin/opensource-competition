@@ -5,7 +5,9 @@ description = "MCP, API, persistence, and analysis backend for grounded product 
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18,<2",
+    "httpx>=0.28,<1",
     "psycopg[binary]>=3.2,<4",
+    "pydantic>=2.12,<3",
     "sqlalchemy>=2.0,<3",
 ]
 
@@ -16,6 +18,7 @@ dev = [
 
 [project.scripts]
 purchase-research-mcp = "research_backend.interfaces.mcp.server:main"
+purchase-research-collect = "research_backend.interfaces.cli.collect_search:main"
 
 [build-system]
 requires = ["hatchling"]

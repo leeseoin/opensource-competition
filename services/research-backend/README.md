@@ -20,8 +20,11 @@ Python 기반 구매 조사 application 서비스다.
 - SQLAlchemy 모델: `products`, `merchant_products`, `offer_snapshots`, `product_options`, `evidence`
 - Alembic 첫 migration
 - Docker Compose PostgreSQL과 migration 실행 서비스
+- Go Collector 검색 HTTP client와 Pydantic v1 응답 검증
+- 판매처 상품 upsert, 가격·재고 snapshot, 옵션과 근거 transaction 저장
+- 실제 검색·저장 개발용 CLI
 
-아직 Go Collector 응답을 실제로 저장하는 repository와 API는 구현 전이다.
+조사 세션, 리뷰 저장·분석, MCP와 FastAPI API는 아직 구현 전이다.
 
 ## 로컬 DB 실행
 
@@ -68,4 +71,52 @@ uv run alembic current
 
 ```bash
 uv run alembic revision --autogenerate -m "변경 설명"
+```
+
+## 실제 Collector 검색 결과 저장
+
+첫 번째 터미널에서 Go Collector를 실행한다.
+
+```bash
+cd services/collector
+go run ./cmd/server
+```
+
+두 번째 터미널의 저장소 루트에서 PostgreSQL과 migration을 준비한다.
+
+```bash
+docker compose up -d postgres
+docker compose run --rm migrate
+```
+
+Python CLI로 실제 공개 검색 결과를 수집하고 저장한다.
+
+```bash
+services/research-backend/.venv/bin/purchase-research-collect \
+  --merchant abcmart \
+  --query "구두" \
+  --limit 2
+
+services/research-backend/.venv/bin/purchase-research-collect \
+  --merchant 29cm \
+  --query "구두" \
+  --limit 2
+```
+
+결과는 저장한 판매처 상품, 가격 snapshot, 옵션과 근거 개수를 JSON으로 출력한다.
+같은 판매처 상품을 다시 수집하면 `merchant_products`는 재사용하고
+`offer_snapshots`과 `evidence`는 새 수집 시각의 기록으로 추가한다.
+
+DB 저장 결과는 다음처럼 확인한다.
+
+```bash
+docker compose exec postgres sh -lc \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT mp.merchant, mp.external_id, p.name FROM merchant_products mp JOIN products p ON p.id = mp.product_id;"'
+```
+
+실제 PostgreSQL repository 통합 테스트는 명시적으로 활성화한다.
+
+```bash
+RUN_POSTGRES_INTEGRATION=1 uv run pytest tests/integration/test_postgres_search_result.py
 ```

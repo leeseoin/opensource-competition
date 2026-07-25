@@ -153,10 +153,10 @@
 - [x] 미구현 MCP 실행을 명시적으로 차단하는 placeholder 작성
 - [x] `uv.lock`과 서비스 내부 `.venv` 기반 DB 의존성 고정
 - [ ] 환경설정 model과 `.env.example` 정비
-- [ ] Collector transport Pydantic model 구현
-- [ ] Collector 응답 schema validation 구현
-- [ ] Collector HTTP client와 timeout 구현
-- [ ] Collector 오류·상태의 application 오류 매핑
+- [x] Collector transport Pydantic model 구현
+- [x] Collector 응답 Pydantic 계약 검증 구현
+- [x] Collector HTTP client와 timeout 구현
+- [x] Collector 오류·상태의 application 오류 매핑
 - [ ] 공통 product/offer/option/review domain model 구현
 - [ ] transport DTO에서 domain model 정규화
 - [x] PostgreSQL local compose 구성 (`compose.yaml`: PostgreSQL 16, volume, health check)
@@ -164,13 +164,13 @@
 - [x] Docker Compose에서 migration 실제 적용·재적용 검증 (PostgreSQL 16에서 두 번 실행 후 5개 테이블 확인)
 - [x] 루트 `.env.example`로 PostgreSQL 포트·DB 이름·사용자·비밀번호 Compose 덮어쓰기 구성
 - [ ] research session repository 구현
-- [ ] product/offer/option repository 구현
-- [ ] snapshot/evidence repository 구현
-- [ ] 중복 수집 식별과 upsert 정책 구현
-- [ ] transaction·rollback 정책 구현
+- [x] product/offer/option repository 구현
+- [x] snapshot/evidence repository 구현
+- [x] 중복 수집 식별과 upsert 정책 구현
+- [x] transaction·rollback 정책 구현
 - [ ] 추천 snapshot과 verification snapshot 분리 저장
-- [ ] unit test: schema validation과 정규화
-- [ ] integration test: Collector stub과 PostgreSQL 저장
+- [x] unit test: Pydantic 계약, HTTP 요청, 저장·중복 정책
+- [x] integration test: 실제 PostgreSQL 저장과 테스트 행 정리
 
 완료 조건: fixture Collector 결과가 Python에서 검증·정규화되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
 
@@ -428,6 +428,30 @@
   - ABC마트·29CM opt-in live smoke test: 통과
   - ABC마트 실제 `구두` 검색: `totalCount=1650`, `hasNext=true` 확인
   - `uvx check-jsonschema ...`: 성공·부분 성공 예제 검증 통과
+
+### 2026-07-25 Collector 실제 검색 결과 PostgreSQL 적재
+
+- 진행상황: Python Backend가 Go Collector 검색 API를 호출하고 Pydantic으로 응답을 검증한 뒤, 상품·가격 snapshot·옵션·근거를 하나의 DB transaction으로 저장하도록 구현했다.
+- 구현 위치:
+  - `services/research-backend/src/research_backend/clients/collector/models.py:47` `SearchRequest`: Collector 검색 요청 계약과 timezone 검증
+  - `services/research-backend/src/research_backend/clients/collector/models.py:153` `CollectorResult`: Collector v1 응답 계약 검증
+  - `services/research-backend/src/research_backend/clients/collector/http.py:29` `CollectorHttpClient.search`: 내부 검색 API POST와 오류 변환
+  - `services/research-backend/src/research_backend/repositories/search_result.py:24` `SqlAlchemySearchResultRepository.save`: 상품·snapshot·옵션·근거 저장
+  - `services/research-backend/src/research_backend/repositories/search_result.py:91` `_upsert_merchant_product`: `merchant + externalId` 중복 처리
+  - `services/research-backend/src/research_backend/application/use_cases/collect_search.py:31` `CollectSearchProducts.execute`: Collector 상태 확인과 transaction 경계
+  - `services/research-backend/src/research_backend/interfaces/cli/collect_search.py:50` `run`: 실제 검색·DB 저장 CLI
+  - `services/research-backend/tests/integration/test_postgres_search_result.py:23` `test_search_result_is_saved_to_postgres`: PostgreSQL 저장과 정리 검증
+- 발생 문제: 최초 실제 Collector 실행은 sandbox의 8090 포트 바인딩 제한으로 실패했고, 최초 PostgreSQL 통합 테스트는 조회가 자동 시작한 transaction 안에서 다시 `session.begin()`을 호출해 실패했다.
+- 원인: 로컬 서버 실행 권한이 없었고, SQLAlchemy Session의 autobegin 동작을 테스트 정리 코드가 고려하지 않았다.
+- 해결: 허용된 환경에서 Collector를 실행하고 통합 테스트의 저장·조회·정리를 별도 Session으로 분리했다. 테스트 전후 `integration-test` 판매처 행을 자동 정리한다.
+- 저장 정책: 같은 `merchant + externalId`는 기존 상품 연결을 갱신하고, 가격·재고와 근거는 재수집마다 새로운 snapshot·evidence로 추가한다. 가격이 없는 상품은 상품과 근거만 저장한다.
+- 남은 위험: 검색 결과만 저장하며 리뷰, 실측값, 배송 snapshot, 조사 세션과 verification snapshot은 아직 저장하지 않는다.
+- 검증:
+  - `uv run pytest`: 12 passed, 실제 PostgreSQL opt-in 1 skipped
+  - `RUN_POSTGRES_INTEGRATION=1 ... pytest tests/integration/test_postgres_search_result.py`: 1 passed
+  - ABC마트 `구두` 2개 실제 적재: snapshot 2개, option 12개, evidence 2개
+  - 29CM `구두` 2개 실제 적재: snapshot 2개, evidence 2개
+  - ABC마트 동일 검색 재적재: 상품·판매처 상품은 총 4개 유지, snapshot·evidence는 총 6개로 증가
 
 ## 작업 기록 템플릿
 

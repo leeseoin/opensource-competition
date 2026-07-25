@@ -1,1 +1,1 @@
-"""Developer commands for controlled crawl and fixture capture."""
+"""제한된 실제 수집과 DB 저장을 실행하는 개발자 명령을 제공한다."""

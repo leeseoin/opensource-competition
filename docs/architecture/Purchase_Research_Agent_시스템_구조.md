@@ -80,10 +80,10 @@ Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같
 |---|---|---|
 | Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색 및 opt-in smoke test가 동작하고, 무신사는 검색 PoC만 유지함 |
 | Contracts | 초안 작성 | 검색 요청, 수집 결과, 재검증 결과 JSON Schema와 예제가 있음 |
-| Python Research Backend | 부분 구현 | SQLAlchemy 모델과 Alembic migration 기반이 있으며 Collector 연결·실제 저장·MCP는 미구현 |
+| Python Research Backend | 부분 구현 | Collector 검색 호출·Pydantic 검증·PostgreSQL 저장이 동작하며 조사 세션·리뷰 분석·MCP는 미구현 |
 | Codex Plugin | 뼈대만 있음 | manifest, MCP 설정, 구매 조사 skill 초안이 있음 |
 | Next.js Web | 미구현 | 역할을 설명하는 README만 있음 |
-| PostgreSQL | 기반 구현 | Docker Compose와 첫 상품 수집 테이블 migration을 실제 PostgreSQL에서 검증함 |
+| PostgreSQL | 부분 구현 | ABC마트·29CM 실제 상품, 가격 snapshot, 옵션과 근거 저장을 검증했으며 리뷰·조사 세션 저장은 미구현 |
 
 ## 4. 언어별 책임
 
