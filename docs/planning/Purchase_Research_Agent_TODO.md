@@ -81,7 +81,11 @@
 - [ ] Python package와 설정 재정비
 - [ ] Go Collector client
 - [ ] Pydantic transport schema validation
-- [ ] PostgreSQL compose와 migration 도구
+- [x] 루트 Docker Compose의 PostgreSQL·영구 volume·health check 구성
+- [x] SQLAlchemy 2 모델과 Alembic migration 기반 구성
+- [x] 첫 상품 수집 테이블 migration 작성
+- [x] Docker Compose에서 migration 실제 적용·재적용 검증
+- [ ] 개발·테스트·배포 환경별 Compose 설정과 비밀값 주입 정책 **(부분 구현: 로컬 `.env.example`과 Compose 기본값·덮어쓰기 구성 완료)**
 - [ ] product/offer/option/snapshot/evidence repository
 - [ ] 중복 수집과 transaction 정책
 - [ ] 조사 세션과 작업 상태

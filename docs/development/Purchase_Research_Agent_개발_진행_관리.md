@@ -151,7 +151,7 @@
 - [x] `src` layout 패키지 골격 생성
 - [x] `pyproject.toml`과 MCP script entrypoint 초안 작성
 - [x] 미구현 MCP 실행을 명시적으로 차단하는 placeholder 작성
-- [ ] `uv.lock`과 서비스 내부 `.venv` 기반 의존성 고정
+- [x] `uv.lock`과 서비스 내부 `.venv` 기반 DB 의존성 고정
 - [ ] 환경설정 model과 `.env.example` 정비
 - [ ] Collector transport Pydantic model 구현
 - [ ] Collector 응답 schema validation 구현
@@ -159,8 +159,10 @@
 - [ ] Collector 오류·상태의 application 오류 매핑
 - [ ] 공통 product/offer/option/review domain model 구현
 - [ ] transport DTO에서 domain model 정규화
-- [ ] PostgreSQL local compose 구성
-- [ ] migration 도구와 첫 migration 작성
+- [x] PostgreSQL local compose 구성 (`compose.yaml`: PostgreSQL 16, volume, health check)
+- [x] SQLAlchemy 2 모델과 Alembic 첫 migration 작성 (`services/research-backend/migrations/versions/20260721_0001_initial_collection_tables.py`)
+- [x] Docker Compose에서 migration 실제 적용·재적용 검증 (PostgreSQL 16에서 두 번 실행 후 5개 테이블 확인)
+- [x] 루트 `.env.example`로 PostgreSQL 포트·DB 이름·사용자·비밀번호 Compose 덮어쓰기 구성
 - [ ] research session repository 구현
 - [ ] product/offer/option repository 구현
 - [ ] snapshot/evidence repository 구현
