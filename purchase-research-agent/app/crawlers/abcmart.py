@@ -1,13 +1,27 @@
 import asyncio
 import re
 import traceback
+from datetime import datetime
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
-_SEARCH_URL = "https://www.abcmart.co.kr/abcmart/search/totalSearch.do?q={keyword}&pageIdx={page}"
+_SEARCH_URL = (
+    "https://abcmart.a-rt.com/display/search-word/result"
+    "?channel=10001&searchWord={keyword}&smartSearchCheck=false"
+    "&page={page}&perPage=30&pageColumn=3&sort=point"
+    "&dfltChnnlMv=&tabGubun=total&searchPageGubun=product&track=W0010"
+)
 _CATEGORY_URL = "https://abcmart.a-rt.com/display/category/main?genderGbnCode={gender}&ctgrNo={ctgrNo}&page={page}"
-_PRODUCT_BASE = "https://www.abcmart.co.kr/product?prdtNo="
+_PRODUCT_BASE = "https://abcmart.a-rt.com/product?prdtNo="
+_HTML_DIR = Path("output/raw_html")
+
+
+def _save_html(html: str, label: str, page: int, ts_file: str) -> None:
+    _HTML_DIR.mkdir(parents=True, exist_ok=True)
+    out = _HTML_DIR / f"abcmart_{label}_{ts_file}_page{page}.html"
+    out.write_text(html, encoding="utf-8")
 
 # 카테고리명 -> (ctgrNo, genderGbnCode)
 CATEGORIES: dict[str, tuple[str, str]] = {
@@ -58,6 +72,7 @@ class AbcMartCrawler:
         seen_prdt_nos: set[str] = set()
         browser_cfg = BrowserConfig(ignore_https_errors=True)
         page = 1
+        ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         async with AsyncWebCrawler(config=browser_cfg, verbose=False) as crawler:
             while len(all_products) < max_items:
@@ -70,6 +85,7 @@ class AbcMartCrawler:
                         errors.append(f"page {page} 로드 실패")
                         break
 
+                    _save_html(result.html, keyword, page, ts_file)
                     soup = BeautifulSoup(result.html, "html.parser")
                     page_items = self._parse(soup)
                     new = self._dedup(page_items, seen_prdt_nos)
@@ -110,6 +126,7 @@ class AbcMartCrawler:
         browser_cfg = BrowserConfig(ignore_https_errors=True)
         page = 1
         tag = label or f"ctgrNo={ctgrNo}/gender={gender}"
+        ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         async with AsyncWebCrawler(config=browser_cfg, verbose=False) as crawler:
             while len(all_products) < max_items:
@@ -122,6 +139,7 @@ class AbcMartCrawler:
                         errors.append(f"[{tag}] page {page} 로드 실패")
                         break
 
+                    _save_html(result.html, tag, page, ts_file)
                     soup = BeautifulSoup(result.html, "html.parser")
                     page_items = self._parse(soup)
                     new = self._dedup(page_items, seen_prdt_nos)
@@ -163,7 +181,11 @@ class AbcMartCrawler:
             title_el = item.select_one(".prod-name")
             brand_el = item.select_one(".prod-brand")
             cost_el = item.select_one(".price-cost") or item.select_one(".price-normal-cost")
+            normal_cost_el = item.select_one(".price-normal-cost")
             unit_el = item.select_one(".price-unit")
+            discount_el = item.select_one(".price-sale-percent")
+            img_el = item.select_one(".img-wrap img")
+            prod_link_el = item.select_one("a.prod-link")
 
             if not title_el or not cost_el:
                 continue
@@ -178,11 +200,20 @@ class AbcMartCrawler:
             cost = cost_el.get_text(strip=True)
             unit = unit_el.get_text(strip=True) if unit_el else "원"
             brand = brand_el.get_text(strip=True) if brand_el else ""
+            normal_cost = normal_cost_el.get_text(strip=True) if normal_cost_el else ""
+
+            discount_text = discount_el.get_text(strip=True) if discount_el else ""
+            discount_match = re.search(r"\d+", discount_text)
+            discount_percent = int(discount_match.group()) if discount_match else None
+
+            image_url = img_el.get("src", "") if img_el else ""
+            color = prod_link_el.get("data-prdt-color-info", "") if prod_link_el else ""
+            style_code = prod_link_el.get("data-style-info", "") if prod_link_el else ""
 
             if prdtno:
                 link = f"{_PRODUCT_BASE}{prdtno}"
             else:
-                link_el = item.select_one("a[href*='prdtNo']") or item.select_one("a[href^='/product']")
+                link_el = prod_link_el or item.select_one("a[href*='prdtNo']") or item.select_one("a[href^='/product']")
                 href = link_el.get("href", "") if link_el else ""
                 pno = _extract_prdtno(href)
                 link = f"{_PRODUCT_BASE}{pno}" if pno else f"https://www.abcmart.co.kr{href}"
@@ -191,6 +222,11 @@ class AbcMartCrawler:
                 "title": title,
                 "brand": brand,
                 "price": f"{cost}{unit}",
+                "price_original": f"{normal_cost}{unit}" if normal_cost else "",
+                "discount_percent": discount_percent,
+                "image_url": image_url,
+                "color": color,
+                "style_code": style_code,
                 "link": link,
                 "site": "abcmart",
             })
