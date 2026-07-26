@@ -7,7 +7,7 @@ import org.springframework.web.client.RestClient;
 
 /**
  * purchase-research-agent(FastAPI) 크롤링 서비스를 호출하기 위한 RestClient.
- * 실제 프록시/집계 엔드포인트는 아직 구현 전이며, 이 빈을 주입받아 사용한다.
+ * CrawlTriggerService에서 주입받아 /api/v1/search를 pull로 호출한다.
  */
 @Configuration
 @EnableConfigurationProperties(CrawlerServiceProperties.class)
