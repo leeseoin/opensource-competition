@@ -7,6 +7,9 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
+from ..base import SiteCrawler
+from .detail_fetcher import DetailFetcher
+
 _SEARCH_URL = (
     "https://abcmart.a-rt.com/display/search-word/result"
     "?channel=10001&searchWord={keyword}&smartSearchCheck=false"
@@ -61,7 +64,9 @@ def _extract_prdtno(url: str) -> str | None:
     return m.group(1) if m else None
 
 
-class AbcMartCrawler:
+class AbcMartCrawler(SiteCrawler):
+
+    site_id = "abcmart"
 
     async def crawl(
         self, keyword: str, max_items: int
@@ -160,6 +165,12 @@ class AbcMartCrawler:
         print(f"[ABCMART:category] {tag} 최종 {len(all_products)}개")
         return all_products[:max_items], errors
 
+    async def attach_details(
+        self, products: list[dict], limit: int
+    ) -> tuple[list[dict], list[str]]:
+        """상위 limit개 상품에 리뷰/옵션을 덧붙인다 (ABC마트 내부 API 사용)."""
+        return await DetailFetcher().attach(products, limit=limit)
+
     def _dedup(self, items: list[dict], seen: set[str]) -> list[dict]:
         new = []
         for prod in items:
@@ -218,7 +229,10 @@ class AbcMartCrawler:
                 pno = _extract_prdtno(href)
                 link = f"{_PRODUCT_BASE}{pno}" if pno else f"https://www.abcmart.co.kr{href}"
 
+            source_product_id = prdtno or _extract_prdtno(link) or ""
+
             products.append({
+                "source_product_id": source_product_id,
                 "title": title,
                 "brand": brand,
                 "price": f"{cost}{unit}",

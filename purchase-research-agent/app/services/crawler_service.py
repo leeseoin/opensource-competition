@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
 
-from app.crawlers import AbcMartCrawler, DetailFetcher
+from app.crawlers import SITE_CRAWLERS
 from app.crawlers.abcmart import CATEGORIES
 
-SUPPORTED_SITES = ["abcmart"]
+SUPPORTED_SITES = list(SITE_CRAWLERS.keys())
 SUPPORTED_CATEGORIES = list(CATEGORIES.keys())
 
 
@@ -16,15 +16,11 @@ class CrawlerService:
         site: str,
         max_items: int = 500,
     ) -> tuple[list[dict], list[str]]:
-        if site not in SUPPORTED_SITES:
+        if site not in SITE_CRAWLERS:
             raise ValueError(f"지원하지 않는 사이트: {site}. 지원 목록: {SUPPORTED_SITES}")
 
-        if site == "abcmart":
-            products, errors = await AbcMartCrawler().crawl(keyword, max_items)
-        else:
-            products, errors = [], []
-
-        return products, errors
+        crawler = SITE_CRAWLERS[site]()
+        return await crawler.crawl(keyword, max_items)
 
     async def search_by_category(
         self,
@@ -32,11 +28,17 @@ class CrawlerService:
         max_items: int = 500,
         detail_limit: int = 10,
     ) -> tuple[list[dict], list[str]]:
-        """ABC마트 카테고리 기반 수집 + 상위 detail_limit개 상품 리뷰/옵션 수집"""
-        products, errors = await AbcMartCrawler().crawl_category(category, max_items)
+        """카테고리 기반 수집 + 상위 detail_limit개 상품 리뷰/옵션 수집.
+
+        카테고리 수집은 현재 ABC마트만 지원한다(CATEGORIES가 ABC마트 카테고리 체계라서).
+        다른 사이트도 카테고리 수집을 지원하게 되면 site 파라미터를 받아 SITE_CRAWLERS에서
+        선택하도록 확장한다.
+        """
+        crawler = SITE_CRAWLERS["abcmart"]()
+        products, errors = await crawler.crawl_category(category, max_items)
 
         if detail_limit > 0 and products:
-            products, detail_errors = await DetailFetcher().attach(products, limit=detail_limit)
+            products, detail_errors = await crawler.attach_details(products, limit=detail_limit)
             errors.extend(detail_errors)
 
         return products, errors

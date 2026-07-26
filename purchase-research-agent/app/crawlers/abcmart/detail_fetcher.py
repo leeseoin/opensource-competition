@@ -17,6 +17,23 @@ def _prdtno(link: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _overall_score(evlts: list[dict]) -> float | None:
+    """productReviewEvlts는 "상품은 어떠셨나요?"/"사이즈"/"발볼" 등 여러 항목별 평점 리스트다.
+    prdtRvwCode == '10000'이 전체 만족도(종합 평점)에 해당한다."""
+    overall = next((e for e in evlts if e.get("prdtRvwCode") == "10000"), None)
+    return overall.get("evltScore") if overall else None
+
+
+def _parse_review(rv: dict) -> dict:
+    return {
+        "review_source_id": str(rv.get("prdtRvwSeq")) if rv.get("prdtRvwSeq") is not None else None,
+        "content": rv.get("rvwContText", "")[:200],
+        "score": _overall_score(rv.get("productReviewEvlts", [])),
+        "date": rv.get("writeDtm", "")[:10],
+        "size": rv.get("prdtOptnNm") or rv.get("optnName", ""),
+    }
+
+
 class DetailFetcher:
 
     async def attach(
@@ -50,15 +67,7 @@ class DetailFetcher:
                     )
                     data = r.json()
                     product["review_count"] = data.get("totalCount", 0)
-                    product["reviews"] = [
-                        {
-                            "content": rv.get("rvwContText", "")[:200],
-                            "score": rv.get("evltScore") or rv.get("starScore") or rv.get("totalScore"),
-                            "date": rv.get("writeDtm", "")[:10],
-                            "size": rv.get("prdtOptnNm") or rv.get("optnName", ""),
-                        }
-                        for rv in data.get("content", [])
-                    ]
+                    product["reviews"] = [_parse_review(rv) for rv in data.get("content", [])]
                 except Exception as e:
                     errors.append(f"리뷰 오류 prdtNo={pno}: {e}")
                     product["reviews"] = []
