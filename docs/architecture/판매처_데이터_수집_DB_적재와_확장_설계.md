@@ -1,6 +1,7 @@
 # 판매처 데이터 수집, DB 적재와 확장 설계
 
 - 작성일: 2026-07-19
+- 최종 갱신일: 2026-07-26
 - 문서 상태: 현재 구현과 다음 개발 계획
 - 대상: 프로젝트 개발자와 협업자
 
@@ -8,7 +9,7 @@
 
 이 문서는 다음 질문을 쉽게 설명하기 위해 작성했다.
 
-1. ABC마트와 무신사에서 현재 데이터를 어떻게 가져오는가?
+1. ABC마트와 29CM에서 현재 데이터를 어떻게 가져오는가?
 2. 실제 Go 코드에서는 어떤 순서로 처리하는가?
 3. 지금 가져올 수 있는 데이터와 아직 못 가져오는 데이터는 무엇인가?
 4. 데이터 양을 늘리려면 무엇을 늘려야 하는가?
@@ -24,36 +25,44 @@ Go Collector는 쇼핑몰에서 받은 HTML이나 JSON을 우리 프로젝트의
 Python Research Backend는 번역된 결과를 검사하고 PostgreSQL에 저장한다.
 
 ```text
-사용자가 "구두 찾아줘"라고 요청
+정기·초기 수집 작업 생성
         ↓
-Python Research Backend가 조사 작업을 만듦
+RabbitMQ가 판매처·검색어·페이지 작업을 보관
         ↓
-Go Collector에 "ABC마트와 무신사에서 구두 검색" 요청
+Go Collector Worker가 ABC마트와 29CM의 공개 JSON을 읽음
         ↓
-Go Collector가 각 쇼핑몰의 HTML 또는 JSON을 읽음
+판매처별 결과를 같은 Product 형식으로 변환
         ↓
-두 쇼핑몰 결과를 같은 Product 형식으로 변환
+Python Worker가 결과 계약을 검사하고 중복을 정리
         ↓
-Python이 데이터 형식을 검사하고 중복을 정리
+PostgreSQL에 상품, 가격, 옵션과 출처를 저장
+
+사용자 질문
         ↓
-PostgreSQL에 상품, 가격, 옵션, 리뷰, 출처를 저장
+Codex 또는 Claude Code가 MCP search_products 호출
         ↓
-Python이 조건에 맞는 상품을 비교
+Python이 PostgreSQL에서 기존 상품 검색
+        ↓
+최종 후보만 RabbitMQ 재검증 작업으로 최신 가격·재고 확인
 ```
 
 쉽게 비유하면 다음과 같다.
 
 ```text
-ABC마트·무신사     = 서로 다른 언어를 사용하는 판매처
+ABC마트·29CM       = 서로 다른 언어를 사용하는 판매처
 Go Collector       = 판매처별 통역사
 Contracts          = 통역 결과를 적는 공통 양식
 Python Backend     = 조사 관리자
 PostgreSQL         = 조사 기록 보관소
+RabbitMQ           = 해야 할 수집 작업 전달함
+Redis              = 속도 제한과 짧은 진행 상태 보관소
 ```
 
-## 3. 사용자가 검색했을 때 코드가 움직이는 순서
+## 3. 현재 단건 검색 코드가 움직이는 순서
 
-사용자는 Collector에 직접 요청하지 않는다. 장기 구조에서는 Python Backend가 Collector를 호출한다. 현재는 개발 테스트를 위해 `curl`로 Collector를 직접 호출할 수 있다.
+현재 구현된 단건 개발 경로에서는 Python Backend 또는 개발용 `curl`이 Collector
+HTTP API를 호출한다. 사용자 채팅은 이 API를 직접 호출하지 않고 PostgreSQL을
+검색하며, 백그라운드 batch 수집은 RabbitMQ Worker로 확장할 예정이다.
 
 ```text
 POST /internal/v1/collect/search
@@ -62,7 +71,7 @@ searchHandler가 JSON 요청 검사
         ↓
 SearchRegistry가 merchant 확인
         ├── merchant=abcmart → ABC마트 Searcher
-        └── merchant=musinsa → 무신사 Searcher
+        └── merchant=29cm → 29CM Searcher
         ↓
 판매처별 HTML 또는 JSON 수집
         ↓
@@ -78,9 +87,8 @@ SearchRegistry가 merchant 확인
 | ABC마트 요청 | `services/collector/internal/merchants/abcmart/search.go:79` | ABC마트 검색 페이지를 요청한다. |
 | ABC마트 JSON 해석 | `services/collector/internal/merchants/abcmart/search.go` `Searcher.Search` | `result-total/list`의 상품과 페이지 정보를 읽는다. |
 | ABC마트 공통 변환 | `services/collector/internal/merchants/abcmart/search.go` `toProduct` | ABC마트 상품을 공통 `Product`로 바꾼다. |
-| 무신사 요청 | `services/collector/internal/merchants/musinsa/search.go:93` | 무신사 검색 페이지를 요청한다. |
-| 무신사 JSON 해석 | `services/collector/internal/merchants/musinsa/search.go:220` | HTML의 `__NEXT_DATA__` JSON을 읽는다. |
-| 무신사 공통 변환 | `services/collector/internal/merchants/musinsa/search.go:250` | 무신사 상품을 공통 `Product`로 바꾼다. |
+| 29CM 요청·해석 | `services/collector/internal/merchants/twentyninecm/search.go` `Searcher.Search` | 29CM 공개 검색 상품 JSON을 읽는다. |
+| 29CM 공통 변환 | `services/collector/internal/merchants/twentyninecm/search.go` `toProduct` | 29CM 상품을 공통 `Product`로 바꾼다. |
 
 줄 번호는 2026-07-19 기준이며 코드가 추가되면 달라질 수 있다. 함수 이름을 함께 기록하는 이유는 줄 번호가 바뀌어도 위치를 찾기 위해서다.
 
@@ -169,7 +177,11 @@ ABC마트 검색 요청 1회
 최종 3개, 10개 또는 최대 50개 반환
 ```
 
-## 5. 무신사 데이터 수집 방식
+## 5. 무신사 데이터 수집 PoC 기록(운영 보류)
+
+> 이 절은 2026-07-19에 확인한 과거 PoC 기록이다. 2026-07-26 현재 운영 수집
+> 대상은 ABC마트와 29CM이며, 무신사는 공식 API·MCP·제휴 Feed 또는 별도 허가가
+> 확보되기 전까지 자동 batch 수집 대상에서 제외한다.
 
 ### 5.1 한 문장 설명
 
@@ -293,20 +305,20 @@ GET https://goods.musinsa.com/api2/review/v1/view/list
 
 ## 6. 현재 상태를 한눈에 보기
 
-| 기능 | ABC마트 | 무신사 |
+| 기능 | ABC마트 | 29CM |
 |---|---|---|
 | 검색어로 상품 찾기 | 완료 | 완료 |
 | 상품명·브랜드 | 완료 | 완료 |
 | 가격 | 완료 | 완료 |
 | 대표 이미지 URL | 완료 | 완료 |
 | 검색 단계 품절 여부 | 완료 | 완료 |
-| 사이즈·옵션 | 검색 JSON 범위에서 부분 완료 | 미구현 |
-| 옵션별 재고 | 검색 JSON 범위에서 부분 완료 | 미구현 |
+| 사이즈·옵션 | 검색 JSON 범위에서 부분 완료 | 검색 응답 범위에서 부분 완료 |
+| 옵션별 재고 | 검색 JSON 범위에서 부분 완료 | 상세 수집 미구현 |
 | 평점·리뷰 수 | 리뷰 수 완료, 평점 미구현 | 검색 결과에서 완료 |
-| 리뷰 본문 | 미구현 | 응답 구조만 확인 |
+| 리뷰 본문 | 미구현 | 미구현 |
 | 상품 상세 | 미구현 | 미구현 |
-| 고루틴 Worker Pool | 미구현 | 미구현 |
-| PostgreSQL 적재 | 미구현 | 미구현 |
+| RabbitMQ Worker | 실행 기반만 완료 | 실행 기반만 완료 |
+| PostgreSQL 적재 | 실제 검색 결과 검증 완료 | 실제 검색 결과 검증 완료 |
 | opt-in 실제 검색 테스트 | 완료 | 완료 |
 
 ## 7. 데이터 양을 늘리는 방법
@@ -375,29 +387,28 @@ robots.txt는 일반적으로 어떤 URL 경로에 자동 클라이언트가 접
 
 즉, `worker=2`라고 해서 자동으로 robots 정책을 지키는 것도 아니고 위반하는 것도 아니다. 먼저 접근 경로 정책을 확인하고, 그 다음 서버 부담을 줄이는 요청 속도를 별도로 정해야 한다.
 
-### 8.2 2026-07-19 확인 결과
+### 8.2 현재 운영 대상
 
 - [ABC마트 robots.txt](https://abcmart.a-rt.com/robots.txt): `User-agent: *`, `Allow: /`
-- [무신사 robots.txt](https://www.musinsa.com/robots.txt): 지정된 Agent 외 wildcard 그룹은 `Disallow: /`
+- 29CM: 공개 검색·상품 경로를 사용하고 로그인·마이페이지·주문 경로는 수집하지 않는다.
+- 무신사: 공식 운영 경로가 확정될 때까지 자동 batch 수집을 보류한다.
 
-따라서 ABC마트와 무신사에 같은 운영 설정을 적용하면 안 된다.
-
-현재 무신사 구현은 일반 User-agent를 사용하는 검색 구조 확인·소량 PoC다. 장기적으로 기본 활성화해 계속 수집할지, 공식 MCP·API·제휴·별도 허가로 전환할지는 별도 운영 결정이 필요하다.
+판매처마다 접근 경로, Worker 수, 요청 간격과 요청 예산을 독립 설정한다.
 
 ### 8.3 제안하는 초기 설정
 
 아래 숫자는 판매처가 공식적으로 보장한 허용량이 아니라, 개발 단계에서 과도한 요청을 막기 위한 보수적인 초안이다.
 
-| 설정 | ABC마트 제안 | 무신사 PoC 제안 |
+| 설정 | ABC마트 제안 | 29CM 제안 |
 |---|---:|---:|
 | 사용자가 명시한 검색 요청 | 지원 | 지원 |
-| 자동 배치 기본 활성화 | 운영 설정 후 결정 | 비활성·opt-in 제안 |
+| 자동 배치 기본 활성화 | 작은 예산부터 opt-in | 작은 예산부터 opt-in |
 | 검색 worker | 1 | 1 |
-| 상세·리뷰 worker | 최대 2 | 공식 운영 경로 확정 전 1 |
-| 판매처 전체 최소 요청 간격 | 1초 | 최소 1초, PoC만 |
+| 상세·리뷰 worker | 최대 2 | 최대 2 |
+| 판매처 전체 최소 요청 간격 | 1초 | 최소 1초 |
 | 요청 timeout | 10~15초 | 10~15초 |
 | retry | 일시 오류에 최대 1회 | 일시 오류에 최대 1회 |
-| 작업당 최대 요청 | 30회 | PoC는 더 작은 예산부터 시작 |
+| 작업당 최대 요청 | 30회 | 30회보다 작은 예산부터 시작 |
 | 429 응답 | 즉시 중단·긴 backoff | 즉시 중단·긴 backoff |
 
 ### 8.4 고루틴 구조
@@ -405,13 +416,13 @@ robots.txt는 일반적으로 어떤 URL 경로에 자동 클라이언트가 접
 worker가 여러 개여도 판매처 전체 rate limiter는 하나를 공유해야 한다.
 
 ```text
-리뷰 작업 큐
+RabbitMQ 수집 작업 Queue
   ├── 상품 A, 리뷰 1페이지
   ├── 상품 B, 리뷰 1페이지
   └── 상품 C, 리뷰 1페이지
           ↓
 Worker 1 ─┐
-Worker 2 ─┼→ 판매처 공통 Rate Limiter → 실제 HTTP 요청
+Worker 2 ─┼→ Redis 판매처 공통 Rate Limiter → 실제 HTTP 요청
           └→ 최소 1초 간격
 ```
 
@@ -438,22 +449,23 @@ worker가 필요한 이유는 HTTP 요청 외에도 JSON 해석, 결과 정리, 
 
 Go HTTP handler에서 단순히 `go func()`를 실행하고 바로 끝내면 서버 재시작 시 작업과 결과를 잃을 수 있다.
 
-따라서 백그라운드 작업 상태는 Python Backend가 소유하는 것이 좋다.
+따라서 작업 전달은 RabbitMQ, 장기 작업 상태와 DB transaction은 Python
+Backend, 짧은 진행 상태와 중복 방지는 Redis가 담당한다.
 
 ```text
-Python이 collection_job 생성
+Python이 collection_job 생성·queued 저장
         ↓
-상태를 queued로 DB 저장
+RabbitMQ에 검색 페이지·상세 URL 작업 발행
         ↓
-Go Collector에 제한된 batch 요청
+Go Collector Worker가 ACK 가능한 작업만 처리
         ↓
-Go 내부 Worker Pool이 상품 단위로 처리
+Redis 공통 limiter를 통과해 판매처 요청
         ↓
-Python이 결과를 받음
+Go가 CollectorResult를 결과 Queue에 발행
         ↓
-검증 후 DB 저장
+Python Worker가 계약 검증·DB transaction
         ↓
-job 상태를 completed 또는 partial로 변경
+Redis 진행 상태 갱신 + PostgreSQL 최종 상태 보존
 ```
 
 Go는 실제 판매처 요청과 파싱을 담당하고, Python은 장기 작업 상태와 DB transaction을 담당한다.
@@ -477,7 +489,7 @@ Python Research Backend
 이렇게 나누는 이유:
 
 - Go 파서가 실패해도 DB가 반쯤 저장되는 것을 막는다.
-- ABC마트와 무신사의 서로 다른 데이터를 Python에서 같은 기준으로 정리한다.
+- ABC마트와 29CM의 서로 다른 데이터를 Python에서 같은 기준으로 정리한다.
 - 수집 결과 Contract를 통과한 데이터만 저장한다.
 - 추천 로직과 실제 크롤링 코드를 분리한다.
 
@@ -486,7 +498,8 @@ Python Research Backend
 | 테이블 | 저장 내용 |
 |---|---|
 | `research_sessions` | 사용자의 질문과 정리된 구매 조건 |
-| `collection_jobs` | 수집 작업 상태, 진행 개수, 실패 개수 |
+| `collection_jobs` | 수집 작업 상태, 진행 개수, 실패 개수(planned) |
+| `collection_tasks` | 검색 페이지·상품 상세·리뷰·재검증 단위 작업(planned) |
 | `products` | 판매처와 무관하게 정리한 상품 기본정보 |
 | `merchant_products` | 판매처 상품번호, 상품 URL, 판매처 이름 |
 | `offer_snapshots` | 특정 시각의 가격·배송·재고 상태 |
@@ -520,10 +533,10 @@ merchant + externalId
 
 ```text
 abcmart + 1010110882
-musinsa + 5877464
+29cm + 123456
 ```
 
-같은 실제 상품이 ABC마트와 무신사에 동시에 있어도 처음부터 하나로 합치지 않는다. 브랜드, 모델 번호, 상품명 등을 이용한 판매처 간 상품 연결은 Python의 별도 정규화 단계에서 수행한다.
+같은 실제 상품이 ABC마트와 29CM에 동시에 있어도 처음부터 하나로 합치지 않는다. 브랜드, 모델 번호, 상품명 등을 이용한 판매처 간 상품 연결은 Python의 별도 정규화 단계에서 수행한다.
 
 ### 9.5 저장 순서
 
@@ -578,7 +591,7 @@ services/collector/internal/merchants/newshop/
 ```go
 registry := collector.NewSearchRegistry(map[string]collector.Searcher{
     "abcmart": abcmart.NewSearcher(searchTimeout),
-    "musinsa": musinsa.NewSearcher(searchTimeout),
+    "29cm": twentyninecm.NewSearcher(searchTimeout),
     "newshop": newshop.NewSearcher(searchTimeout),
 })
 ```
@@ -602,7 +615,7 @@ registry := collector.NewSearchRegistry(map[string]collector.Searcher{
         ↓
 parser가 상품 목록을 찾지 못함
         ↓
-MUSINSA_PAGE_CHANGED 또는 ABCMART_PAGE_CHANGED
+TWENTYNINECM_PAGE_CHANGED 또는 ABCMART_PAGE_CHANGED
         ↓
 빈 정상 결과로 저장하지 않음
         ↓
@@ -630,7 +643,7 @@ fixture regression test 통과 후 배포
 ### 1단계: 현재 검색 안정화
 
 - [x] ABC마트 검색
-- [x] 무신사 검색
+- [x] 29CM 검색
 - [x] 판매처 Registry
 - [x] 요청 사이 최소 1초 간격
 - [x] 실제 검색 opt-in smoke test
@@ -644,17 +657,21 @@ fixture regression test 통과 후 배포
 
 - [ ] 상품 상세 요청 계약
 - [ ] ABC마트 상세·배송·전체 옵션
-- [ ] 무신사 상세·옵션 구조 확인
+- [ ] 29CM 상세·옵션 구조 확인
 - [ ] 리뷰 요청 계약
-- [ ] 무신사 리뷰 JSON을 공통 `Review`로 변환
+- [ ] ABC마트·29CM 리뷰를 공통 `Review`로 변환
 - [ ] 리뷰 작성자 식별정보 제거 테스트
 - [ ] 리뷰 이미지 다운로드 금지와 `hasImage` 변환 테스트
 
 완료 기준: 선택한 상품의 구매 판단에 필요한 가격·옵션·리뷰 근거를 반환한다.
 
-### 3단계: 제한된 Worker Pool
+### 3단계: Redis·RabbitMQ 기반 Worker
 
-- [ ] 상품 작업 큐
+- [x] Redis·RabbitMQ Docker Compose와 health check
+- [ ] RabbitMQ 작업·결과 Queue와 Dead Letter Queue
+- [ ] Redis 판매처별 rate limiter와 중복 방지
+- [ ] Go 작업 consumer와 결과 publisher
+- [ ] Python 작업 producer와 결과 consumer
 - [ ] 판매처별 worker 상한
 - [ ] worker가 공유하는 판매처 전체 rate limiter
 - [ ] 작업당 최대 요청 예산
@@ -667,12 +684,12 @@ fixture regression test 통과 후 배포
 
 ### 4단계: Python과 PostgreSQL
 
-- [ ] Python Collector client
-- [ ] Pydantic Contract 검증
-- [ ] PostgreSQL 실행 환경과 migration 도구
+- [x] Python Collector client
+- [x] Pydantic Contract 검증
+- [x] PostgreSQL 실행 환경과 migration 도구
 - [ ] collection job repository
-- [ ] product와 merchant product repository
-- [ ] offer·option snapshot repository
+- [x] product와 merchant product repository
+- [x] offer·option snapshot repository
 - [ ] review·review signal repository
 - [ ] evidence repository
 - [ ] transaction과 중복 처리 테스트
@@ -688,28 +705,32 @@ fixture regression test 통과 후 배포
 - [ ] 새 판매처 Adapter 템플릿
 - [ ] 공식 API·MCP·Feed 우선 연결 정책
 
-완료 기준: 새 판매처 추가가 기존 ABC마트·무신사 코드를 수정하지 않고 Adapter 등록으로 가능하다.
+완료 기준: 새 판매처 추가가 기존 ABC마트·29CM 코드를 수정하지 않고 Adapter 등록으로 가능하다.
 
 ## 13. 지금 바로 다음에 할 작업
 
 가장 먼저 구현할 수직 흐름은 다음과 같다.
 
 ```text
-무신사에서 상품 5개 검색
+Python이 ABC마트 검색 작업을 RabbitMQ에 등록
         ↓
-상위 상품 2개 선택
+Go Worker가 작업을 소비하고 Redis limiter 확인
         ↓
-상품당 리뷰 첫 페이지 10개 수집
+ABC마트 검색 JSON을 공통 CollectorResult로 변환
         ↓
-개인정보 필드 제거
+결과 Queue에 발행하고 작업 ACK
         ↓
-공통 CollectorResult 반환
+Python Worker가 Pydantic Contract 검증
         ↓
-Python에서 Contract 검증
+PostgreSQL에 상품·snapshot·option·evidence 저장
         ↓
-PostgreSQL에 상품·snapshot·review 저장
+collection_job 성공·실패·저장 개수 기록
 ```
 
-첫 Worker Pool 코드는 worker 2개까지 지원하도록 만들되 판매처별 설정을 다르게 적용한다. ABC마트는 최대 2개, 무신사는 운영 경로가 확정되기 전 worker 1개와 작은 요청 예산을 사용한다. 두 경우 모두 worker가 판매처 전체 최소 요청 간격을 공유해야 한다. 자동 배치와 live smoke test는 opt-in으로 유지하고, 사용자가 명시한 검색 요청과 구분한다.
+첫 Worker는 검색 작업 하나를 안전하게 처리하는 것부터 시작한다. 이후 ABC마트와
+29CM 각각 최대 Worker 2개까지 설정할 수 있게 하되, 두 경우 모두 같은 판매처의
+Worker가 Redis의 판매처 전체 최소 요청 간격을 공유해야 한다. 자동 batch와 live
+smoke test는 opt-in으로 유지한다.
 
-이 흐름이 완성되면 상품 검색만 되는 데모가 아니라 실제로 검색 결과와 공개 리뷰 근거가 DB에 남는 첫 번째 완성된 세로 기능이 된다.
+이 흐름이 완성되면 Worker 수를 늘리거나 새 판매처 routing key를 추가해도 Python
+저장 계약과 PostgreSQL 구조를 유지할 수 있는 첫 번째 확장형 수집 기능이 된다.

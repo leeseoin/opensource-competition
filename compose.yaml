@@ -20,6 +20,46 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  redis:
+    image: redis:7.2-alpine
+    environment:
+      # 루트 .env의 비밀번호를 Redis 실행 명령과 health check가 함께 사용한다.
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-purchase_research}
+    ports:
+      - "${REDIS_PORT:-36379}:6379"
+    volumes:
+      - purchase_research_redis_data:/data
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.2-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-purchase_research}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-purchase_research}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-purchase_research}
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-35672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-35673}:15672"
+    volumes:
+      - purchase_research_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
   migrate:
     build:
       context: ./services/research-backend
@@ -35,3 +75,5 @@ services:
 
 volumes:
   purchase_research_postgres_data:
+  purchase_research_redis_data:
+  purchase_research_rabbitmq_data:

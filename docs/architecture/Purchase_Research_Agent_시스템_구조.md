@@ -1,7 +1,7 @@
 # Purchase Research Agent 시스템 구조
 
 작성일: 2026-07-13
-최종 수정일: 2026-07-19
+최종 수정일: 2026-07-26
 상태: in progress
 
 이 문서는 개발을 시작하기 전에 전체 구조와 각 폴더의 책임을 확인하는 기준 문서다. 앞으로 구조가 바뀌면 날짜별 보고서보다 이 문서를 먼저 갱신한다.
@@ -26,7 +26,7 @@
 ### 1차 PoC 포함
 
 - Next.js 챗봇과 Codex Gateway를 통한 구매 조건 구체화
-- 실제 판매처 한 곳의 검색·상세·옵션·공개 리뷰 수집
+- ABC마트·29CM의 공개 검색과 선택 상품의 상세·옵션·공개 리뷰 수집
 - 상품·offer·review signal·evidence PostgreSQL 저장
 - 규칙 기반 필수 조건 필터와 설명 가능한 점수
 - 공식 정보, 리뷰 집계, Agent 추론 구분
@@ -49,19 +49,22 @@
   ↓
 Next.js 챗봇
   ↓ Next.js server route
-Codex Gateway
-  ↓ Codex process/app-server
-Codex + Purchase Research Plugin
+Agent Gateway
+  ├── Codex CLI + Purchase Research Plugin
+  └── Claude Code CLI + 공통 MCP 설정
   ↓ MCP
 Python Research Backend
                     - 조사 세션과 상태
-                    - Go Collector client
+                    - RabbitMQ 작업 생성·결과 소비
                     - 정규화·중복 제거
                     - 리뷰 신호 추출
                     - 비교·근거·재검증
                     - PostgreSQL repository
-  ↓ internal HTTP
-Go Collector
+       ├── PostgreSQL: 상품·snapshot·근거
+       ├── Redis: 진행 상태·중복 방지·속도 제한
+       └── RabbitMQ: 수집 작업·결과
+                      ↓
+                Go Collector Worker
                     - 판매처별 검색·상세
                     - 옵션·리뷰 parsing
                     - rate limit·timeout
@@ -80,10 +83,12 @@ Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같
 |---|---|---|
 | Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색 및 opt-in smoke test가 동작하고, 무신사는 검색 PoC만 유지함 |
 | Contracts | 초안 작성 | 검색 요청, 수집 결과, 재검증 결과 JSON Schema와 예제가 있음 |
-| Python Research Backend | 부분 구현 | Collector 검색 호출·Pydantic 검증·PostgreSQL 저장이 동작하며 조사 세션·리뷰 분석·MCP는 미구현 |
+| Python Research Backend | 부분 구현 | Collector 검색 호출·Pydantic 검증·PostgreSQL 저장이 동작하며 RabbitMQ consumer·Redis adapter·조사 세션·MCP는 미구현 |
 | Codex Plugin | 뼈대만 있음 | manifest, MCP 설정, 구매 조사 skill 초안이 있음 |
-| Next.js Web | 미구현 | 역할을 설명하는 README만 있음 |
+| Next.js Web | 초기화 | `apps/purchase-web` Next.js scaffold가 생성됐으며 Astryx 화면과 API 연결은 미구현 |
 | PostgreSQL | 부분 구현 | ABC마트·29CM 실제 상품, 가격 snapshot, 옵션과 근거 저장을 검증했으며 리뷰·조사 세션 저장은 미구현 |
+| RabbitMQ | 실행 기반 완료 | Docker Compose, 영구 volume, health check, AMQP와 management 포트를 검증했으며 작업 Queue 계약과 producer/consumer는 미구현 |
+| Redis | 실행 기반 완료 | Docker Compose, 비밀번호, AOF volume, health check를 검증했으며 rate limiter·중복 방지·진행 상태 adapter는 미구현 |
 
 ## 4. 언어별 책임
 
@@ -92,7 +97,8 @@ Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같
 - 판매처 검색 결과와 공개 JSON/HTML 요청
 - 상품 상세, 가격, 배송, 옵션, 재고, 사이즈표 parsing
 - 공개 리뷰 페이지네이션과 최소 리뷰 필드 parsing
-- 제한된 병렬 처리, 판매처별 rate limit, timeout, retry 상한
+- RabbitMQ 작업 소비와 결과 발행
+- 제한된 병렬 처리, Redis 기반 판매처별 공통 rate limit, timeout, retry 상한
 - JavaScript가 필요한 경우에만 browser adapter 사용
 - 로그인·CAPTCHA·접근 제한을 `blocked`로 반환
 - `sourceUrl`, `collectedAt`, `collectorVersion`, warning을 포함한 `CollectorResult` 반환
@@ -140,7 +146,8 @@ HTTP handler가 `if merchant == "abcmart"`처럼 판매처를 직접 판단하�
 - Codex가 호출할 MCP server 제공
 - Next.js와 장기 서비스 Agent용 FastAPI/SSE 제공
 - 조사 세션과 장기 작업 상태 관리
-- Go Collector 내부 HTTP client
+- RabbitMQ 수집 작업 발행과 CollectorResult 소비
+- 기존 단건 개발 경로용 Go Collector 내부 HTTP client
 - CollectorResult schema 검증과 공통 domain model 정규화
 - 상품 중복 처리와 PostgreSQL transaction
 - 리뷰에서 사이즈·발볼·착화감·수축 등 `ReviewSignal` 추출
@@ -161,10 +168,12 @@ Python만 최종 DB 쓰기를 소유한다.
 ### Next.js Web
 
 - 구매 조건 대화와 조건 직접 수정
-- 판매처별 수집 진행 상태 표시
+- `/chat`에서 Codex 또는 Claude Code 기반 구매 질문과 응답 표시
 - 상품 비교, 점수 구성, 주의사항 표시
 - 주장별 출처와 수집 시각 표시
 - 선택 상품 재검증 전후 차이 표시
+- `/admin/collections`에서 판매처별 수집 작업 생성·중단·진행 상태 표시
+- RabbitMQ Queue, 실패 작업, Redis·Worker 상태의 운영용 요약 표시
 
 ## 5. Repository 구조
 
@@ -177,6 +186,7 @@ services/
 │   │   │   └── registry.go            # 판매처 이름과 Searcher 연결
 │   │   ├── config/                    # 실행 설정
 │   │   ├── merchants/abcmart/         # ABC마트 구현
+│   │   ├── merchants/twentyninecm/    # 29CM 구현
 │   │   ├── merchants/musinsa/         # 무신사 공개 검색 Adapter
 │   │   └── transport/http/            # Python용 internal API
 │   ├── testdata/abcmart/               # 저장 HTML fixture
@@ -195,9 +205,10 @@ services/
     ├── migrations/
     └── tests/
 
-apps/purchase-web/                     # Next.js + React(planned)
+apps/purchase-web/                     # Next.js + React scaffold
 plugins/purchase-research-agent/       # PoC Codex workflow
 contracts/collector/v1/                # Go ↔ Python JSON Schema와 예제
+compose.yaml                            # PostgreSQL·Redis·RabbitMQ 로컬 인프라
 docs/
 ├── architecture/                      # 최신 시스템 구조와 확장 설계
 ├── planning/                          # 구현 TODO와 제출 전 체크리스트
@@ -209,10 +220,10 @@ docs/
 
 | 폴더 | 쉬운 설명 | 현재 상태 |
 |---|---|---|
-| `apps/` | 최종 사용자가 보는 화면 | Next.js 개발 예정 |
+| `apps/` | 사용자 채팅과 관리자 수집 화면 | Next.js scaffold 생성, Astryx 화면 미적용 |
 | `plugins/` | Codex가 구매 조사 기능을 사용하는 방법 | Plugin 뼈대만 있음 |
 | `contracts/` | Go와 Python이 주고받는 데이터 규격 | v1 Schema 초안 있음 |
-| `services/` | 실제 수집·분석·저장을 실행하는 서버 | Go 검색만 부분 구현 |
+| `services/` | 실제 수집·분석·저장을 실행하는 서버 | Go 검색과 Python DB 적재 구현, Queue Worker 미구현 |
 | `docs/` | 구조, 할 일, 구현 기록과 제출 전 확인사항을 관리하는 문서 | 계속 갱신 |
 
 ## 6. Go → Python 수집 계약
@@ -308,11 +319,11 @@ POST /api/v1/products/{id}/verify
 
 | Tool | Python 책임 | Go 호출 |
 |---|---|---|
-| `search_products` | 세션 생성, 조건 검증, 후보 저장 | 검색·기본 상세 수집 |
-| `collect_product` | 정규화, snapshot 저장 | 상세·옵션 수집 |
-| `collect_reviews` | review signal 추출·저장 | 공개 리뷰 수집 |
-| `compare_products` | 필터·점수·evidence 연결 | 없음 |
-| `verify_offer` | 과거 snapshot과 최신 값 비교 | 상품·옵션 재수집 |
+| `search_products` | PostgreSQL의 기존 상품을 조건 검색 | 없음 |
+| `get_product` | 상품·판매처·최신 가격·옵션 조회 | 없음 |
+| `compare_products` | 후보의 공통 비교 데이터와 evidence 연결 | 없음 |
+| `verify_offer` | RabbitMQ에 우선순위 재검증 작업 등록 | Worker가 비동기로 상품·옵션 재수집 |
+| `get_verification_status` | Redis 또는 DB에서 재검증 상태 반환 | 없음 |
 | `get_evidence` | DB에서 주장 근거 반환 | 없음 |
 
 MCP 응답은 최종 홍보 문장이 아니라 구조화된 사실·근거·불확실성을 제공한다.
@@ -329,6 +340,8 @@ MCP 응답은 최종 홍보 문장이 아니라 구조화된 사실·근거·불
 - `evidence`: 출처 URL, 근거 유형, 수집 시각, parser/model 버전
 - `recommendations`: 조건과 가중치, 점수 구성, evidence 연결
 - `verification_results`: 추천 snapshot과 최신 snapshot 차이
+- `collection_jobs`: 수집 작업의 목표·상태·성공·실패 집계(planned)
+- `collection_tasks`: 검색 페이지·상품 상세·리뷰·재검증 단위 작업(planned)
 
 리뷰 작성자 식별정보와 이미지 원본은 저장하지 않는다.
 
@@ -356,7 +369,8 @@ MCP 응답은 최종 홍보 문장이 아니라 구조화된 사실·근거·불
 ## 12. 주요 결정
 
 - Go는 외부 수집만, Python은 DB와 application 상태만 소유한다.
-- Go와 Python은 1차 PoC에서 내부 HTTP JSON으로 통신한다.
-- 메시지 큐와 gRPC는 초기 범위에서 제외한다.
-- 첫 판매처 하나를 end-to-end로 완성한 뒤 Adapter를 확장한다.
+- 단건 개발 경로는 내부 HTTP JSON을 유지하고, 백그라운드 대량 수집은 RabbitMQ로 분리한다.
+- RabbitMQ는 내구성 있는 수집 작업과 결과 전달, Redis는 속도 제한·중복 방지·짧은 진행 상태에 사용한다.
+- Redis를 두 번째 작업 Queue로 사용하지 않는다.
+- ABC마트와 29CM Adapter는 같은 공통 계약과 Python 저장 경로를 사용한다.
 - PoC의 Codex MCP 경로와 장기 서비스 Agent API는 동일한 Python application use case를 공유한다.

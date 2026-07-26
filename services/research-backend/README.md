@@ -8,6 +8,8 @@ Python 기반 구매 조사 application 서비스다.
 - Next.js와 Codex Gateway용 FastAPI와 SSE
 - 장기 서비스 전환 시 OpenAI API Agent orchestration
 - Go Collector client
+- RabbitMQ 수집 작업 발행과 CollectorResult 소비
+- Redis 기반 진행 상태·중복 방지 연동
 - 수집 결과 검증·정규화
 - PostgreSQL 적재
 - 리뷰 신호 추출
@@ -24,7 +26,9 @@ Python 기반 구매 조사 application 서비스다.
 - 판매처 상품 upsert, 가격·재고 snapshot, 옵션과 근거 transaction 저장
 - 실제 검색·저장 개발용 CLI
 
-조사 세션, 리뷰 저장·분석, MCP와 FastAPI API는 아직 구현 전이다.
+Redis·RabbitMQ 컨테이너 실행 기반은 루트 Compose에 구성되어 있다. 실제
+producer/consumer와 Redis application adapter, 조사 세션, 리뷰 저장·분석, MCP와
+FastAPI API는 아직 구현 전이다.
 
 ## 로컬 DB 실행
 
@@ -37,10 +41,10 @@ cp .env.example .env
 `compose.yaml`은 `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD` 값을 루트 `.env`에서 읽는다. 실제 `.env`는 커밋하지 않는다.
 
-저장소 루트에서 PostgreSQL을 실행하고 migration을 적용한다.
+저장소 루트에서 PostgreSQL, Redis, RabbitMQ를 실행하고 migration을 적용한다.
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres redis rabbitmq
 docker compose run --rm migrate
 ```
 
@@ -52,7 +56,7 @@ docker compose run --rm migrate
 
 ```bash
 docker compose ps
-docker compose logs postgres
+docker compose logs postgres redis rabbitmq
 ```
 
 DB를 중지할 때는 `docker compose down`을 사용한다. 데이터 volume까지 삭제하는

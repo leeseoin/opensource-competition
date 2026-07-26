@@ -4,20 +4,22 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: Go/Python 역할 분리와 공통 계약 설계 완료, ABC마트·29CM 검색 Collector 구현, 무신사 확장은 보류, Python DB 적재와 실제 구매 조사 기능은 planned
-- 핵심 기술: Go, Python, MCP, FastAPI, Next.js, React, PostgreSQL
+- 현재 상태: ABC마트·29CM 검색 Collector와 Python PostgreSQL 적재 구현, Redis·RabbitMQ 로컬 인프라 구성 완료, 작업 Queue·MCP·Web 연결은 planned
+- 핵심 기술: Go, Python, MCP, FastAPI, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
 
 - `services/collector`: Go. 외부 판매처 접근, 검색·상세·옵션·리뷰 parsing, rate limit, timeout, retry, 차단 감지
-- `services/research-backend`: Python. MCP, FastAPI, 작업 orchestration, 데이터 검증·정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교·재검증
-- `apps/purchase-web`: Next.js + React. 최종 사용자 챗봇, Codex Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
+- `services/research-backend`: Python. MCP, FastAPI, RabbitMQ 작업 orchestration과 결과 소비, 데이터 검증·정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교·재검증
+- `apps/purchase-web`: Next.js + React. `/chat` 사용자 챗봇과 `/admin/collections` 수집 관리 화면, Agent Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
 - `plugins/purchase-research-agent`: Codex plugin. PoC에서 구매 질문과 MCP tool 호출 workflow를 담당
 
 ## 핵심 경계
 
 - 외부 판매처에는 Go Collector만 접근한다.
 - PostgreSQL의 최종 쓰기는 Python Backend만 수행한다.
+- RabbitMQ는 수집 작업·결과 전달에 사용하고 Redis를 두 번째 작업 Queue로 사용하지 않는다.
+- Redis는 판매처별 속도 제한, 중복 방지, 짧은 진행 상태와 캐시에 사용한다.
 - browser의 Next.js UI와 Codex Plugin은 크롤러나 DB를 직접 호출하지 않는다.
 - PoC에서 최종 사용자 질문은 Next.js server의 Codex Gateway를 거쳐 Codex로 전달한다.
 - Codex 실행 권한과 인증정보는 browser에 노출하지 않고 server에서만 관리한다.
@@ -67,7 +69,9 @@
 
 ## 실행과 검증
 
-아직 실제 서비스 의존성과 실행 entrypoint는 구현 전이다.
+PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 실제
+RabbitMQ producer/consumer, Redis application adapter, MCP와 Agent Gateway는 구현
+전이다.
 
 예정 검증 계층:
 

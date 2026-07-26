@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-07-19
+최종 갱신일: 2026-07-26
 
 ## 목적
 
@@ -37,11 +37,12 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 첫 판매처와 요청 계약 확정, Go/Python DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Python Backend와 DB | 부분 구현 | 패키지 골격과 미구현 MCP entrypoint | Collector 검증·정규화·저장 수직 흐름 |
+| Python Backend와 DB | 부분 구현 | Collector HTTP·Pydantic 검증과 PostgreSQL 상품·snapshot·옵션·근거 저장 | 작업 상태, 리뷰, MCP·FastAPI |
+| Redis·RabbitMQ 수집 기반 | 부분 구현 | Compose, 인증 설정, 영구 volume, health check와 관리 화면 검증 | 작업 계약, producer/consumer, retry·DLQ와 Redis adapter |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | Plugin manifest와 workflow 초안 | 실제 MCP tool과 application use case 연결 |
-| Next.js Web | 미착수 | PoC Codex Gateway 경계와 README만 정리 | Codex 응답 stream 기반 핵심 사용자 흐름 |
-| 공통 품질·운영 | 부분 구현 | Go 단위 테스트 일부만 존재 | 자동화된 전체 검증과 개발 실행 환경 |
+| Next.js Web | 부분 구현 | `apps/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
+| 공통 품질·운영 | 부분 구현 | 루트 Makefile, Go·Python 테스트와 PostgreSQL·Redis·RabbitMQ 로컬 실행 기반 | Queue 통합 테스트와 E2E |
 
 ## 영역별 상세 체크리스트
 
@@ -174,6 +175,43 @@
 
 완료 조건: fixture Collector 결과가 Python에서 검증·정규화되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
 
+### 3-A. Redis·RabbitMQ 수집 실행 기반
+
+상태: **부분 구현**
+
+- [x] Docker Compose Redis 서비스 추가
+- [x] Redis 비밀번호, AOF 영구 volume, health check 구성
+- [x] Docker Compose RabbitMQ management 서비스 추가
+- [x] RabbitMQ 전용 사용자·비밀번호·virtual host 구성
+- [x] RabbitMQ AMQP·관리 화면 포트와 영구 volume 구성
+- [x] Redis·RabbitMQ 환경 변수 예제 작성
+- [x] Redis 인증 ping 실제 검증
+- [x] RabbitMQ broker 실행 상태와 관리 화면 HTTP 응답 실제 검증
+- [ ] `CollectionJob`, `CollectionTask` 작업 계약
+- [ ] RabbitMQ exchange, queue, routing key, retry·DLQ topology
+- [ ] Go consumer·result publisher
+- [ ] Python producer·result consumer
+- [ ] Redis rate limiter·중복 방지·진행 상태 adapter
+
+완료 조건: Python이 등록한 수집 작업을 Go Worker가 안전하게 소비하고 결과를 다시
+Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업 상태를 일관되게
+관리해야 한다.
+
+### 3-B. 루트 개발 명령
+
+상태: **기본 구현 완료**
+
+- [x] `make help` 명령 목록과 수집 예시 제공
+- [x] `.env` 준비, 로컬 인프라 실행·중지·상태·로그 명령 제공
+- [x] Alembic migration과 PostgreSQL 접속 명령 제공
+- [x] Go Collector 실행·테스트 명령 제공
+- [x] Python 의존성 준비·테스트·실제 검색 저장 명령 제공
+- [x] Next.js 설치·실행·lint·build 명령 제공
+- [x] 전체 기본 검증 `make test`, 전체 검증 `make check` 제공
+
+완료 조건: 개발자가 저장소 루트에서 `make help`를 보고 Go, Python, Next.js와
+로컬 인프라의 기본 실행·검증 명령을 찾을 수 있어야 한다.
+
 ### 4. 리뷰 분석과 상품 비교
 
 상태: **미착수**
@@ -197,24 +235,25 @@
 
 완료 조건: 후보 3개를 필수 조건, 점수 구성, 출처, 수집 시각, 주의사항과 함께 비교하고 동일 입력으로 결과를 재현할 수 있어야 한다.
 
-### 5. Next.js Codex Gateway, MCP와 Codex Plugin
+### 5. MCP, Agent Gateway와 Plugin
 
 상태: **부분 구현**
 
 - [x] Plugin manifest 작성
 - [x] Plugin MCP 실행 설정 초안 작성
 - [x] 구매 질문·근거·재검증 skill workflow 초안 작성
-- [ ] Next.js server 전용 Codex Gateway
-- [ ] Codex process/app-server 실행과 JSON event stream 중계
+- [ ] Next.js 뒤에서 동작하는 공통 Agent Gateway
+- [ ] Codex CLI adapter와 JSON event stream 중계
+- [ ] Claude Code CLI adapter와 stream 중계
 - [ ] 대화 session, timeout, 취소와 동시 요청 상한
 - [ ] 장기 서비스용 OpenAI API Agent 교체 경계
 - [ ] Python MCP SDK 의존성 추가
 - [ ] stdout protocol과 stderr log 분리
 - [ ] `search_products` 구현과 테스트
-- [ ] `collect_product` 구현과 테스트
-- [ ] `collect_reviews` 구현과 테스트
+- [ ] `get_product` 구현과 테스트
 - [ ] `compare_products` 구현과 테스트
 - [ ] `verify_offer` 구현과 테스트
+- [ ] `get_verification_status` 구현과 테스트
 - [ ] `get_evidence` 구현과 테스트
 - [ ] 공식 사실·리뷰 신호·Agent 추론 응답 구분
 - [ ] stale, blocked, partial 상태 사용자 설명 검증
@@ -222,14 +261,20 @@
 - [ ] Plugin validation과 로컬 설치 검증
 - [ ] Codex E2E: 질문 구체화부터 재검증까지
 
-완료 조건: Codex에서 구매 조건 질문, 실제 후보 조사, 근거 비교, 선택 offer 재검증을 끊김 없이 수행해야 한다.
+완료 조건: Codex 또는 Claude Code에서 구매 조건 질문, DB 후보 검색, 근거 비교,
+선택 offer 재검증을 같은 MCP 도구로 수행해야 한다.
 
 ### 6. Next.js Web
 
-상태: **미착수**
+상태: **부분 구현**
 
 - [x] Next.js Web의 예정 책임과 최종 사용자 경로 README 작성
-- [ ] Next.js, React, TypeScript project 구성
+- [x] Next.js, React, TypeScript project scaffold 생성
+- [x] Astryx AI Chat Conversation 템플릿과 MIT 라이선스 확인
+- [ ] Astryx 의존성·neutral theme 적용
+- [ ] `/chat` 사용자 구매 채팅 화면
+- [ ] `/admin/collections` 관리자 수집 화면
+- [ ] 공통 navigation과 관리자 접근 정책
 - [ ] 공통 API type과 client 구성
 - [ ] 구매 조건 대화 UI
 - [ ] 구조화 조건 profile panel
@@ -452,6 +497,34 @@
   - ABC마트 `구두` 2개 실제 적재: snapshot 2개, option 12개, evidence 2개
   - 29CM `구두` 2개 실제 적재: snapshot 2개, evidence 2개
   - ABC마트 동일 검색 재적재: 상품·판매처 상품은 총 4개 유지, snapshot·evidence는 총 6개로 증가
+
+### 2026-07-26 Redis·RabbitMQ 로컬 수집 실행 기반
+
+- 진행상황: PostgreSQL과 함께 Redis와 RabbitMQ를 루트 Docker Compose에서
+  실행할 수 있도록 구성했다. Redis는 속도 제한·중복 방지·진행 상태용,
+  RabbitMQ는 수집 작업·결과 전달용으로 역할을 분리했다. 실제 작업
+  producer/consumer와 application adapter는 아직 구현하지 않았다.
+- 구현 위치:
+  - `compose.yaml:23` `redis`: 비밀번호 인증, AOF volume, health check와 호스트 포트
+  - `compose.yaml:44` `rabbitmq`: 전용 계정·virtual host, AMQP·관리 포트, volume과 health check
+  - `compose.yaml:76` `volumes`: PostgreSQL·Redis·RabbitMQ 영구 volume
+  - `.env.example:20` `REDIS_*`: Redis 로컬 포트와 비밀번호 예제
+  - `.env.example:26` `RABBITMQ_*`: AMQP·관리 포트와 계정·virtual host 예제
+- 발생 문제: 격리된 실행 환경에서 Docker daemon socket 접근이 거부됐다.
+- 원인: Docker Desktop socket이 workspace sandbox 밖에 있어 기본 권한으로
+  컨테이너 이미지를 확인하거나 실행할 수 없었다.
+- 해결: 사용자 승인을 받은 Docker Compose 명령으로 공식 Redis·RabbitMQ 이미지를
+  내려받고 컨테이너를 실행했다.
+- 남은 위험: 로컬 기본 비밀번호는 개발 편의를 위한 값이므로 운영에서는 반드시
+  변경해야 한다. Queue topology, retry·Dead Letter Queue, Redis key 정책과
+  producer/consumer는 다음 구현 범위다.
+- 검증:
+  - `docker compose config --quiet`: 통과
+  - `docker compose up -d redis rabbitmq`: 컨테이너·volume 생성 성공
+  - `docker compose ps`: PostgreSQL·Redis·RabbitMQ 모두 `healthy`
+  - Redis 인증 `PING`: `PONG`
+  - `rabbitmq-diagnostics -q check_running`: broker 정상 실행
+  - `http://localhost:35673/`: RabbitMQ 관리 화면 HTTP 200
 
 ## 작업 기록 템플릿
 
