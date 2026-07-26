@@ -1,0 +1,40 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: purchase-research-backend
+
+  output:
+    ansi:
+      enabled: always
+
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/purchase_research?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: purchase_research
+    password: purchase_research
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+
+# purchase-research-agent (FastAPI crawler service) 접속 정보 — Spring이 Python을 pull로 호출할 때 사용
+crawler:
+  service:
+    base-url: http://127.0.0.1:8000
+
+# 상품 배치 적재 API(POST /api/v1/products/batch) 인증 — Python이 이 값을 X-API-Key 헤더로 보낸다
+app:
+  security:
+    api-key: ${PRODUCT_INGEST_API_KEY:local-dev-key}
+
+logging:
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint}%clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
