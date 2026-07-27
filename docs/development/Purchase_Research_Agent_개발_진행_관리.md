@@ -38,7 +38,7 @@
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
 | Python Backend와 DB | 부분 구현 | Collector HTTP·Pydantic 검증과 PostgreSQL 상품·snapshot·옵션·근거 저장 | 작업 상태, 리뷰, MCP·FastAPI |
-| Redis·RabbitMQ 수집 기반 | 부분 구현 | Compose, 인증 설정, 영구 volume, health check와 관리 화면 검증 | 작업 계약, producer/consumer, retry·DLQ와 Redis adapter |
+| Redis·RabbitMQ 수집 기반 | 부분 구현 | 검색 작업·결과 계약, Python producer, Go Worker, Python DB 저장 consumer와 retry·DLQ | Redis limiter·중복 방지·진행 상태와 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | Plugin manifest와 workflow 초안 | 실제 MCP tool과 application use case 연결 |
 | Next.js Web | 부분 구현 | `apps/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
@@ -172,6 +172,7 @@
 - [ ] 추천 snapshot과 verification snapshot 분리 저장
 - [x] unit test: Pydantic 계약, HTTP 요청, 저장·중복 정책
 - [x] integration test: 실제 PostgreSQL 저장과 테스트 행 정리
+- [x] 현재 수집 데이터와 DB 저장·미저장 필드 입문 문서 작성
 
 완료 조건: fixture Collector 결과가 Python에서 검증·정규화되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
 
@@ -187,10 +188,12 @@
 - [x] Redis·RabbitMQ 환경 변수 예제 작성
 - [x] Redis 인증 ping 실제 검증
 - [x] RabbitMQ broker 실행 상태와 관리 화면 HTTP 응답 실제 검증
-- [ ] `CollectionJob`, `CollectionTask` 작업 계약
-- [ ] RabbitMQ exchange, queue, routing key, retry·DLQ topology
-- [ ] Go consumer·result publisher
-- [ ] Python producer·result consumer
+- [ ] `CollectionJob` 영구 상태 계약
+- [x] 검색 `CollectionTask`, `CollectionResult` JSON Schema와 Pydantic·Go 계약
+- [x] RabbitMQ exchange, queue, routing key, 5초 retry·DLQ topology
+- [x] Go consumer·result publisher와 작업 timeout
+- [x] Python producer·result consumer와 기존 PostgreSQL Repository 연결
+- [x] 실제 ABC마트 `구두` 3개 Queue 수집·DB 저장
 - [ ] Redis rate limiter·중복 방지·진행 상태 adapter
 
 완료 조건: Python이 등록한 수집 작업을 Go Worker가 안전하게 소비하고 결과를 다시
@@ -206,6 +209,7 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 - [x] Alembic migration과 PostgreSQL 접속 명령 제공
 - [x] Go Collector 실행·테스트 명령 제공
 - [x] Python 의존성 준비·테스트·실제 검색 저장 명령 제공
+- [x] RabbitMQ 작업 등록·Go Worker·Python 결과 Worker 명령 제공
 - [x] Next.js 설치·실행·lint·build 명령 제공
 - [x] 전체 기본 검증 `make test`, 전체 검증 `make check` 제공
 
@@ -333,6 +337,9 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
 | 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext` 선택 필드 추가; 성공·부분 성공 예제 `check-jsonschema` 통과 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
+| RabbitMQ 검색 작업 계약 | 완료 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask`; Python `infrastructure/messaging/contracts.py:50` `CollectionTask` | 성공·실패 Schema 예제와 Go·Python 계약 테스트 통과 |
+| Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
+| Python RabbitMQ 작업·결과 Worker | 검색 수직 흐름 완료 | `services/research-backend/src/research_backend/infrastructure/messaging/rabbitmq.py:39` `RabbitMQBroker`; `interfaces/cli/enqueue_search.py:42` `run`; `interfaces/cli/consume_results.py:42` `run` | Python 17개 테스트, 실제 상품 3개·snapshot 3개·option 17개·evidence 3개 저장 |
 | MCP entrypoint | placeholder | `services/research-backend/src/research_backend/interfaces/mcp/server.py:8` `main` | import 가능, 실행 시 미구현 오류 반환 |
 
 ## 문제 기록
@@ -353,6 +360,9 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 | 2026-07-19 | 무신사 데이터 접근 | 무신사 검색 페이지는 사용자 브라우저에서 열리지만 자체 Go Collector로 자동 수집할 수 없음 | 지정된 Agent만 허용하고 일반 User-agent는 전체 경로를 차단하는 robots 정책 | User-agent 위장은 제외하고 정책 Adapter로 `blocked` 반환. 공식 상품 API·MCP·제휴 Feed 또는 별도 허가 확보를 후속 작업으로 등록 | 부분 해결 |
 | 2026-07-19 | 무신사 소량 검색 PoC | 리뷰뿐 아니라 검색어 기반 상품 후보가 필요함 | 검색 페이지가 SPA이지만 초기 상품은 HTML의 `__NEXT_DATA__`에 서버 렌더링됨 | 일반 User-agent와 최소 1초 간격을 사용하는 Searcher 구현, 실제 `구두` 상품 3개 smoke test 통과 | PoC 해결 |
 | 2026-07-20 | ABC마트 검색 원본 선택 | 상품 전체 수와 다음 페이지 여부를 HTML 파서로 정확히 알 수 없음 | 기존 구현이 화면용 HTML 조각만 해석함 | 공개 검색 화면의 `result-total/list` JSON으로 전환하고 `SEARCH_COUNT`, `PAGE.finalPageNo`를 공통 결과에 매핑 | 해결 |
+| 2026-07-26 | Queue 통합 검증 | 먼저 실행한 Python 결과 Worker가 결과 도착 직전에 30초 timeout으로 종료 | 권한 승인과 최초 Go Worker 빌드가 결과 Worker 대기 시간보다 오래 걸림 | RabbitMQ에 남아 있던 persistent 결과를 Worker 재실행으로 정상 저장; 상시 Worker에서는 계속 대기하도록 구성 | 해결 |
+| 2026-07-26 | Queue JSON 계약 | 실제 Python 작업 JSON에 선택 가격 필드가 `null`로 포함됐지만 Schema는 정수 또는 필드 생략만 허용 | Pydantic JSON 직렬화가 기본적으로 `None`을 포함 | RabbitMQ 발행과 멱등성 canonical JSON에 `exclude_none=True` 적용, 성공·실패 Schema 예제 재검증 | 해결 |
+| 2026-07-26 | 로컬 명령 보안 | Make가 AMQP URL을 포함한 Worker 실행 명령을 터미널에 그대로 출력 | Make recipe의 기본 echo 동작 | Queue recipe에 `@`를 적용해 비밀번호 포함 URL을 숨기고 루트 `.env` 값을 읽도록 구성 | 해결 |
 
 ### 2026-07-16 Go Collector 기본 골격 테스트와 한국어 주석 정비
 
@@ -502,8 +512,7 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 
 - 진행상황: PostgreSQL과 함께 Redis와 RabbitMQ를 루트 Docker Compose에서
   실행할 수 있도록 구성했다. Redis는 속도 제한·중복 방지·진행 상태용,
-  RabbitMQ는 수집 작업·결과 전달용으로 역할을 분리했다. 실제 작업
-  producer/consumer와 application adapter는 아직 구현하지 않았다.
+  RabbitMQ는 수집 작업·결과 전달용으로 역할을 분리했다.
 - 구현 위치:
   - `compose.yaml:23` `redis`: 비밀번호 인증, AOF volume, health check와 호스트 포트
   - `compose.yaml:44` `rabbitmq`: 전용 계정·virtual host, AMQP·관리 포트, volume과 health check
@@ -516,8 +525,41 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 - 해결: 사용자 승인을 받은 Docker Compose 명령으로 공식 Redis·RabbitMQ 이미지를
   내려받고 컨테이너를 실행했다.
 - 남은 위험: 로컬 기본 비밀번호는 개발 편의를 위한 값이므로 운영에서는 반드시
-  변경해야 한다. Queue topology, retry·Dead Letter Queue, Redis key 정책과
-  producer/consumer는 다음 구현 범위다.
+  변경해야 한다. Redis key 정책과 application adapter는 다음 구현 범위다.
+
+### 2026-07-26 RabbitMQ 검색 작업 수직 흐름
+
+- 진행상황: Python이 ABC마트 검색 작업을 RabbitMQ에 등록하고, Go Worker가 기존
+  Searcher로 공개 검색을 실행한 뒤, Python 결과 Worker가 계약을 검증해
+  PostgreSQL에 저장하는 첫 Queue 수직 흐름을 구현했다.
+- 구현 위치:
+  - `contracts/collection/v1/collection-task.schema.json:1`: 검색 작업 JSON Schema
+  - `contracts/collection/v1/collection-result.schema.json:1`: 성공·부분·실패 결과 봉투
+  - `services/collector/internal/messaging/contracts.go:31` `CollectionTask`: Go 작업 DTO와 검증
+  - `services/collector/internal/messaging/processor.go:29` `Processor.Process`: timeout이 있는 기존 Searcher 연결
+  - `services/collector/internal/messaging/rabbitmq.go:55` `RabbitWorker.Run`: prefetch 1 작업 소비
+  - 같은 파일 `:110` `handleDelivery`: publisher confirm 후 ACK, retry·DLQ 분기
+  - `services/collector/cmd/worker/main.go:25` `run`: Worker process 진입점
+  - `services/research-backend/src/research_backend/infrastructure/messaging/contracts.py:50` `CollectionTask`: Python 작업 계약
+  - `services/research-backend/src/research_backend/infrastructure/messaging/rabbitmq.py:39` `RabbitMQBroker`: topology, 발행, 결과 수신과 ACK
+  - `services/research-backend/src/research_backend/interfaces/cli/enqueue_search.py:42` `run`: 작업 등록 CLI
+  - `services/research-backend/src/research_backend/interfaces/cli/consume_results.py:42` `run`: 결과 검증·DB 저장 Worker
+  - `services/research-backend/src/research_backend/application/use_cases/store_search_result.py:14` `StoreCollectedSearchResult`: HTTP·Queue 공용 저장 transaction
+- 실제 결과: ABC마트 `구두`, 1페이지, 최대 3개 작업을 처리해 상품 3개,
+  가격 snapshot 3개, 옵션 17개, evidence 3개를 저장했다. 판매처 전체 결과는
+  `totalCount=1650`, `hasNext=true`였다.
+- 발생 문제: 최초 결과 Worker의 30초 대기 중 권한 승인과 Go 최초 빌드가 길어져
+  Worker가 먼저 종료됐다. 결과는 durable Queue에 남아 있었고 Worker를 다시
+  실행해 손실 없이 저장했다. 또한 선택 필드 `null`을 Schema에 맞게 생략하도록
+  직렬화를 수정했다.
+- 남은 위험: 검색은 1페이지만 지원한다. Redis 멱등성 차단, 작업 상태 DB,
+  판매처 전체 rate limiter, retry·DLQ 장애 통합 테스트와 여러 Worker 검증은
+  아직 구현 전이다.
+- 검증:
+  - `services/collector`에서 `GOCACHE=/private/tmp/purchase-research-go-cache go test ./...`: 통과
+  - `services/research-backend`에서 `uv run pytest`: 17 passed, PostgreSQL opt-in 1 skipped
+  - `uvx check-jsonschema`: CollectionTask와 성공·실패 CollectionResult 예제 통과
+  - `make enqueue`, `make collector-worker-once`, `make result-worker-once`: 실제 수직 흐름 통과
 - 검증:
   - `docker compose config --quiet`: 통과
   - `docker compose up -d redis rabbitmq`: 컨테이너·volume 생성 성공

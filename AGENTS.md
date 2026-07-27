@@ -4,7 +4,7 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트·29CM 검색 Collector와 Python PostgreSQL 적재 구현, Redis·RabbitMQ 로컬 인프라 구성 완료, 작업 Queue·MCP·Web 연결은 planned
+- 현재 상태: ABC마트·29CM 검색 Collector, RabbitMQ 검색 작업·결과 Worker와 Python PostgreSQL 적재 구현, Redis adapter·MCP·Web 연결은 planned
 - 핵심 기술: Go, Python, MCP, FastAPI, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
@@ -31,6 +31,8 @@
 
 - 기존 사용자 변경을 되돌리지 않는다.
 - 구현된 기능과 planned 기능을 문서에서 구분한다.
+- 한국어 문서와 사용자 설명에서는 가운데점 문장 부호를 사용하지 않는다.
+- 항목을 나란히 표현할 때는 `/`를 사용하고, 문장을 연결할 때는 `및`, `과`, `와`처럼 문맥에 맞는 표현을 사용한다.
 - 로그인, CAPTCHA, robots 제한, 접근 통제를 우회하지 않는다.
 - 공개적으로 접근 가능한 상품 정보만 수집한다.
 - 판매처별 동시성·요청 빈도·timeout·재시도 상한을 둔다.
@@ -69,8 +71,9 @@
 
 ## 실행과 검증
 
-PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 실제
-RabbitMQ producer/consumer, Redis application adapter, MCP와 Agent Gateway는 구현
+PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
+RabbitMQ producer, Go consumer·result publisher, Python result consumer는
+구현됐다. Redis application adapter, 작업 상태 DB, MCP와 Agent Gateway는 구현
 전이다.
 
 예정 검증 계층:

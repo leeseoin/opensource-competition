@@ -3,11 +3,12 @@
 ## 문서 읽는 순서
 
 1. [시스템 구조](architecture/Purchase_Research_Agent_시스템_구조.md): 개발 전 전체 구성, 데이터 흐름, 폴더별 책임을 확인하는 기준 문서
-2. [Go Collector 데이터 변환 동작 설명](architecture/Go_Collector_데이터_변환_동작_설명.md): HTTP 요청부터 판매처 JSON 해석, 정규화, 공통 Product 변환, Contract 검사까지 실제 코드 실행 순서
-3. [판매처 데이터 수집, DB 적재와 확장 설계](architecture/판매처_데이터_수집_DB_적재와_확장_설계.md): ABC마트·29CM 수집 방식, RabbitMQ 작업 Queue, Redis 상태·속도 제한, PostgreSQL 적재와 새 판매처 추가 방법
-4. [판매처 공통 수집 데이터 명세](architecture/판매처_공통_수집_데이터_명세.md): ABC마트·29CM 데이터를 같은 형식으로 바꾸기 위한 검색·상품·가격·옵션·배송·리뷰 공통 필드 기준
-5. [구현 TODO](planning/Purchase_Research_Agent_TODO.md): 앞으로 구현할 작업과 완료 조건을 확인하는 체크리스트
-6. [개발 진행 관리](development/Purchase_Research_Agent_개발_진행_관리.md): 실제 구현 위치, 검증 결과, 발생한 문제와 해결 방법을 기록하는 문서
+2. [현재 수집 데이터와 DB 저장 흐름](architecture/현재_수집_데이터와_DB_저장_흐름.md): 지금 실제로 가져오는 필드, 저장하는 테이블, 아직 DB에 저장하지 않는 데이터를 처음 보는 사람 기준으로 설명
+3. [Go Collector 데이터 변환 동작 설명](architecture/Go_Collector_데이터_변환_동작_설명.md): HTTP 요청부터 판매처 JSON 해석, 정규화, 공통 Product 변환, Contract 검사까지 실제 코드 실행 순서
+4. [판매처 데이터 수집, DB 적재와 확장 설계](architecture/판매처_데이터_수집_DB_적재와_확장_설계.md): ABC마트·29CM 수집 방식, RabbitMQ 작업 Queue, Redis 상태·속도 제한, PostgreSQL 적재와 새 판매처 추가 방법
+5. [판매처 공통 수집 데이터 명세](architecture/판매처_공통_수집_데이터_명세.md): ABC마트·29CM 데이터를 같은 형식으로 바꾸기 위한 검색·상품·가격·옵션·배송·리뷰 공통 필드 기준
+6. [구현 TODO](planning/Purchase_Research_Agent_TODO.md): 앞으로 구현할 작업과 완료 조건을 확인하는 체크리스트
+7. [개발 진행 관리](development/Purchase_Research_Agent_개발_진행_관리.md): 실제 구현 위치, 검증 결과, 발생한 문제와 해결 방법을 기록하는 문서
 
 ## 제출 준비 문서
 

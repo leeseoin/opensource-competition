@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "taskId": "task-20260726-001",
+  "jobId": "job-20260726-001",
+  "status": "success",
+  "startedAt": "2026-07-26T16:00:01+09:00",
+  "completedAt": "2026-07-26T16:00:02+09:00",
+  "durationMs": 1000,
+  "collectorResult": {
+    "requestId": "task-20260726-001",
+    "operation": "search",
+    "status": "success",
+    "merchant": "abcmart",
+    "totalCount": 0,
+    "hasNext": false,
+    "collectedAt": "2026-07-26T16:00:02+09:00",
+    "collectorVersion": "abcmart-search-v2",
+    "products": [],
+    "warnings": [],
+    "errors": []
+  },
+  "error": null
+}

@@ -25,10 +25,12 @@ Python 기반 구매 조사 application 서비스다.
 - Go Collector 검색 HTTP client와 Pydantic v1 응답 검증
 - 판매처 상품 upsert, 가격·재고 snapshot, 옵션과 근거 transaction 저장
 - 실제 검색·저장 개발용 CLI
+- RabbitMQ 검색 작업 발행 CLI
+- RabbitMQ 결과 계약 검증과 PostgreSQL 저장 Worker
 
-Redis·RabbitMQ 컨테이너 실행 기반은 루트 Compose에 구성되어 있다. 실제
-producer/consumer와 Redis application adapter, 조사 세션, 리뷰 저장·분석, MCP와
-FastAPI API는 아직 구현 전이다.
+Redis·RabbitMQ 컨테이너 실행 기반과 검색 작업의 producer/consumer는 구현되어
+있다. Redis application adapter, 작업 상태 테이블, 조사 세션, 리뷰 저장·분석,
+MCP와 FastAPI API는 아직 구현 전이다.
 
 ## 로컬 DB 실행
 
@@ -124,3 +126,20 @@ docker compose exec postgres sh -lc \
 ```bash
 RUN_POSTGRES_INTEGRATION=1 uv run pytest tests/integration/test_postgres_search_result.py
 ```
+
+## RabbitMQ 백그라운드 검색
+
+루트에서 인프라와 migration을 준비하고 아래 명령을 서로 다른 터미널에서 실행한다.
+
+```text
+터미널 1: make result-worker
+터미널 2: make collector-worker
+터미널 3: make enqueue MERCHANT=abcmart QUERY=구두 LIMIT=3
+```
+
+Python은 검색 조건을 `CollectionTask`로 등록하며 판매처 URL을 직접 지정하지 않는다.
+Go 판매처 Adapter가 공개 검색 URL을 만들고 결과를 Queue로 반환한다. Python 결과
+Worker는 Pydantic 계약을 통과한 `success`·`partial` 결과만 PostgreSQL에 저장한다.
+
+현재 구현은 검색 1페이지와 Worker 1개를 사용한다. Redis 멱등성 차단과 작업 진행
+상태, 여러 페이지 분할은 다음 단계다.

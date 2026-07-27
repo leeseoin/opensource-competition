@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collection/v1/collection-task.schema.json",
+  "title": "Collection Task v1",
+  "description": "Python Research Backend가 RabbitMQ를 통해 Go Collector Worker에 전달하는 검색 작업이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "jobId",
+    "merchant",
+    "operation",
+    "priority",
+    "attempt",
+    "maxAttempts",
+    "requestedAt",
+    "idempotencyKey",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1"
+    },
+    "taskId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "jobId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "merchant": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "operation": {
+      "const": "search"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "maxAttempts": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^collection:v1:[a-f0-9]{64}$"
+    },
+    "payload": {
+      "$ref": "#/$defs/searchPayload"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "nonEmptyStringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "uniqueItems": true,
+      "maxItems": 50
+    },
+    "searchFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priceMin": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priceMax": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categories": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "sizes": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "colors": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "inStockOnly": {
+          "type": "boolean"
+        },
+        "attributes": {
+          "type": "object",
+          "maxProperties": 30,
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string", "maxLength": 200 },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "$ref": "#/$defs/nonEmptyStringList" }
+            ]
+          }
+        }
+      }
+    },
+    "searchPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query", "page", "limit", "locale", "currency", "filters"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^[a-z]{2}-[A-Z]{2}$"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "filters": {
+          "$ref": "#/$defs/searchFilters"
+        }
+      }
+    }
+  }
+}

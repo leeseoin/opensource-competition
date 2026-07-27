@@ -2,7 +2,7 @@
 
 사용자의 자연어 구매 요청을 구체화하고, 실제 판매처의 공개 상품·리뷰 정보를 수집해 근거 기반으로 비교한 뒤 선택 상품을 다시 검증하는 구매 조사 Agent PoC이다.
 
-현재 상태는 **ABC마트·29CM 상품 검색 Collector와 PostgreSQL 적재 구현 완료, Redis·RabbitMQ 로컬 실행 기반 구성 완료, 실제 작업 Queue·MCP·Web 기능 개발 예정**이다.
+현재 상태는 **ABC마트·29CM 상품 검색, RabbitMQ 검색 작업 Worker와 PostgreSQL 적재까지 구현 완료, Redis application adapter·MCP·Web 기능 개발 예정**이다.
 
 ## 핵심 구성
 
@@ -127,6 +127,19 @@ Collector 서버가 실행 중일 때 실제 검색 결과를 PostgreSQL에 저�
 make collect MERCHANT=abcmart QUERY=구두 LIMIT=3
 make collect MERCHANT=29cm QUERY=가방 LIMIT=5
 ```
+
+RabbitMQ 백그라운드 수집은 터미널 세 개에서 실행한다. 이 방식은 Go HTTP 서버를
+별도로 켜지 않아도 Collector Worker가 기존 판매처 Adapter를 직접 사용한다.
+
+```text
+터미널 1: make result-worker
+터미널 2: make collector-worker
+터미널 3: make enqueue MERCHANT=abcmart QUERY=구두 LIMIT=3
+```
+
+한 건만 직접 확인하려면 `make result-worker-once`,
+`make collector-worker-once`를 사용할 수 있다. 현재 Queue 검색은 1페이지만
+지원하며 일시 오류는 5초 뒤 한 번 재시도한다.
 
 커밋 전 기본 검증은 `make test`, Compose 설정과 production build를 포함한 전체
 검증은 `make check`를 사용한다.

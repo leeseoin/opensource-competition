@@ -89,6 +89,7 @@
 - [x] product/merchant-product/offer-snapshot/option/evidence 검색 결과 repository
 - [x] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
 - [x] ABC마트·29CM 실제 검색 결과 PostgreSQL 적재 검증
+- [x] 현재 수집 필드·DB 저장 필드·미저장 필드 입문 문서 작성
 - [ ] 조사 세션과 작업 상태
 
 완료 기준: Go 수집 결과가 검증·정규화되어 PostgreSQL에 재현 가능하게 저장된다.
@@ -101,22 +102,23 @@
 - [x] Docker Compose에 Redis 추가
 - [x] RabbitMQ·Redis health check와 영구 volume 구성
 - [x] `.env.example`에 RabbitMQ·Redis 접속 설정과 로컬 기본값 추가
-- [ ] 서비스가 환경 변수로 RabbitMQ·Redis 접속 정보를 주입받도록 구성 **(부분 구현: 인프라 컨테이너 설정 완료, Go·Python 접속 설정 미구현)**
+- [ ] 서비스가 환경 변수로 RabbitMQ·Redis 접속 정보를 주입받도록 구성 **(부분 구현: Go·Python RabbitMQ URL 완료, Redis 접속 설정 미구현)**
 
 ### 4.2 작업 계약과 상태
 
 - [ ] `CollectionJob` 공통 계약 정의
-- [ ] 검색 페이지·상품 상세·리뷰·재검증을 구분하는 `CollectionTask` 계약 정의
-- [ ] `taskId`, `merchant`, `operation`, `targetUrl`, `priority`, `attempt`, `requestedAt` 필드 확정
-- [ ] 같은 판매처·작업·URL의 중복 등록을 막는 idempotency key 규칙 정의
-- [ ] RabbitMQ exchange, queue, routing key 이름과 version 정책 정의
-- [ ] retry 가능 오류와 즉시 실패 오류 구분
-- [ ] 최대 재시도 횟수와 Dead Letter Queue 이동 규칙 정의
+- [x] 검색 `CollectionTask`와 `CollectionResult` Queue 계약 정의
+- [x] `taskId`, `jobId`, `merchant`, `operation`, `priority`, `attempt`, `requestedAt`, `payload` 필드 확정
+- [x] 임의 `targetUrl`을 받지 않고 Go Adapter가 URL을 만드는 경계 확정
+- [ ] 같은 판매처·작업·검색 조건의 중복 등록 차단 **(키 규칙 완료, Redis 차단 미구현)**
+- [x] RabbitMQ exchange, queue, routing key 이름과 version 정책 정의
+- [x] retry 가능 오류와 즉시 실패 오류 구분
+- [x] 최초 실행 포함 최대 2회와 Dead Letter Queue 이동 규칙 정의
 - [ ] `pending`, `running`, `success`, `partial`, `failed`, `cancelled` 상태 전이 정의
 
 ### 4.3 수집 작업 생성
 
-- [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가
+- [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(부분 구현: page 필드 추가, 현재 page=1만 허용)**
 - [ ] `maxPages`, `maxProducts`, `requestBudget` 상한 추가
 - [ ] 여러 검색어와 판매처를 입력받는 batch collection use case 구현
 - [ ] 검색 결과에서 발견한 상품 URL을 상세 작업으로 등록
@@ -125,20 +127,20 @@
 
 ### 4.4 Go Collector Worker
 
-- [ ] RabbitMQ 작업을 소비하는 Go Worker entrypoint 추가
-- [ ] `TaskQueue` port와 RabbitMQ adapter 분리
+- [x] RabbitMQ 작업을 소비하는 Go Worker entrypoint 추가
+- [ ] `TaskQueue` port와 RabbitMQ adapter 분리 **(부분 구현: Processor와 RabbitMQ lifecycle 분리)**
 - [ ] 판매처별 최대 Worker 수 설정
 - [ ] Redis 기반 판매처별 전체 요청 간격 제한
-- [ ] 작업 timeout과 context 취소 처리
-- [ ] 수집 성공 시 공통 `CollectorResult` 발행
-- [ ] 실패 시 retry 또는 Dead Letter Queue 처리
+- [x] 작업 timeout과 context 취소 처리
+- [x] 수집 성공 시 공통 `CollectorResult` 발행
+- [x] 실패 시 5초 retry 또는 Dead Letter Queue 처리
 - [ ] Worker 재시작 시 처리 중이던 미확인 작업 복구 검증
 
 ### 4.5 Python 저장 Worker와 진행 상태
 
-- [ ] RabbitMQ의 `CollectorResult`를 소비하는 Python Worker 구현
-- [ ] Pydantic 계약 검증 실패 결과를 DB에 저장하지 않는 처리
-- [ ] 검증된 결과를 기존 repository transaction으로 저장
+- [x] RabbitMQ의 `CollectorResult`를 소비하는 Python Worker 구현
+- [x] Pydantic 계약 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
+- [x] 검증된 결과를 기존 repository transaction으로 저장
 - [ ] `collection_jobs`, `collection_tasks` SQLAlchemy model 작성
 - [ ] `collection_jobs`, `collection_tasks` Alembic migration 작성
 - [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록
@@ -147,9 +149,10 @@
 
 ### 4.6 검증
 
-- [ ] RabbitMQ 없이 실행하는 fixture 기반 Worker 단위 테스트
+- [x] RabbitMQ 없이 실행하는 fixture 기반 Go Processor·Python 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
 - [ ] RabbitMQ retry·ACK·Dead Letter Queue 통합 테스트
+- [x] ABC마트 검색 작업 1건 RabbitMQ→Go→Python→PostgreSQL 실제 수직 흐름 검증
 - [ ] ABC마트 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 동일 상품 재수집 시 상품 중복 없이 snapshot만 증가하는 DB 검증

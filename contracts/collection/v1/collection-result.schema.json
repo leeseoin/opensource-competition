@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collection/v1/collection-result.schema.json",
+  "title": "Collection Result Envelope v1",
+  "description": "Go Collector Worker가 RabbitMQ를 통해 Python Research Backend에 전달하는 작업 실행 결과다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "jobId",
+    "status",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "collectorResult",
+    "error"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1"
+    },
+    "taskId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "jobId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial", "failed"]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "collectorResult": {
+      "oneOf": [
+        {
+          "$ref": "../../collector/v1/collector-result.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/taskError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["success", "partial"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "collectorResult": {
+            "$ref": "../../collector/v1/collector-result.schema.json"
+          },
+          "error": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "$ref": "#/$defs/taskError"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "taskError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

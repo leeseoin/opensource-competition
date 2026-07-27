@@ -83,11 +83,11 @@ Next.js → Codex / Claude Code / Ollama / llama.cpp / GPU 모델 서버 → 같
 |---|---|---|
 | Go Collector | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색 및 opt-in smoke test가 동작하고, 무신사는 검색 PoC만 유지함 |
 | Contracts | 초안 작성 | 검색 요청, 수집 결과, 재검증 결과 JSON Schema와 예제가 있음 |
-| Python Research Backend | 부분 구현 | Collector 검색 호출·Pydantic 검증·PostgreSQL 저장이 동작하며 RabbitMQ consumer·Redis adapter·조사 세션·MCP는 미구현 |
+| Python Research Backend | 부분 구현 | HTTP·RabbitMQ 검색 요청, Pydantic 검증과 PostgreSQL 저장이 동작하며 Redis adapter·조사 세션·MCP는 미구현 |
 | Codex Plugin | 뼈대만 있음 | manifest, MCP 설정, 구매 조사 skill 초안이 있음 |
 | Next.js Web | 초기화 | `apps/purchase-web` Next.js scaffold가 생성됐으며 Astryx 화면과 API 연결은 미구현 |
 | PostgreSQL | 부분 구현 | ABC마트·29CM 실제 상품, 가격 snapshot, 옵션과 근거 저장을 검증했으며 리뷰·조사 세션 저장은 미구현 |
-| RabbitMQ | 실행 기반 완료 | Docker Compose, 영구 volume, health check, AMQP와 management 포트를 검증했으며 작업 Queue 계약과 producer/consumer는 미구현 |
+| RabbitMQ | 검색 수직 흐름 구현 | durable 작업·결과 Queue, 5초 retry, DLQ와 Python producer·Go consumer·Python 저장 consumer를 ABC마트 실제 검색으로 검증 |
 | Redis | 실행 기반 완료 | Docker Compose, 비밀번호, AOF volume, health check를 검증했으며 rate limiter·중복 방지·진행 상태 adapter는 미구현 |
 
 ## 4. 언어별 책임
@@ -223,7 +223,7 @@ docs/
 | `apps/` | 사용자 채팅과 관리자 수집 화면 | Next.js scaffold 생성, Astryx 화면 미적용 |
 | `plugins/` | Codex가 구매 조사 기능을 사용하는 방법 | Plugin 뼈대만 있음 |
 | `contracts/` | Go와 Python이 주고받는 데이터 규격 | v1 Schema 초안 있음 |
-| `services/` | 실제 수집·분석·저장을 실행하는 서버 | Go 검색과 Python DB 적재 구현, Queue Worker 미구현 |
+| `services/` | 실제 수집·분석·저장을 실행하는 서버 | Go 검색·Queue Worker와 Python HTTP·Queue DB 적재 구현 |
 | `docs/` | 구조, 할 일, 구현 기록과 제출 전 확인사항을 관리하는 문서 | 계속 갱신 |
 
 ## 6. Go → Python 수집 계약

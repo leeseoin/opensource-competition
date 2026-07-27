@@ -10,6 +10,8 @@ Go 기반 판매처 데이터 수집 서비스다.
 - ABC마트·29CM 검색 결과의 `totalCount`, `hasNext` 수집
 - `POST /internal/v1/collect/search`
 - `GET /internal/v1/health`
+- RabbitMQ `CollectionTask` 검색 작업 consumer와 `CollectionResult` publisher
+- 5초 retry Queue와 재시도 소진·계약 오류 Dead Letter Queue
 - 판매처 Registry와 지원하지 않는 판매처 상태 반환
 - 29CM 공개 검색 화면의 상품 응답에서 상품 기본정보 수집
 - 무신사 공개 검색 HTML의 `__NEXT_DATA__`에서 상품 기본정보 수집
@@ -29,7 +31,7 @@ Go 기반 판매처 데이터 수집 서비스다.
 - 상품 상세 페이지의 가격·배송 수집
 - 상품 상세 페이지의 전체 옵션·재고·사이즈표 수집
 - 공개 리뷰 수집
-- 동시성 상한과 retry 통제
+- 판매처별 동시성 상한과 Redis 전체 rate limit
 - 로그인·CAPTCHA·접근 제한 감지
 - Python Research Backend의 Collector API 호출
 
@@ -40,10 +42,13 @@ DB에 쓰거나 상품 추천을 수행하지 않는다.
 ```text
 collector/
 ├── cmd/server/                 # Collector 실행
+├── cmd/worker/                 # RabbitMQ 검색 작업 Worker 실행
 ├── internal/
+│   ├── app/                    # HTTP·Worker가 공유하는 판매처 Registry 조립
 │   ├── collector/              # 공통 요청·결과 형식
 │   │   ├── registry.go         # 판매처 이름과 Searcher 연결
 │   ├── config/                 # 실행 설정
+│   ├── messaging/              # Queue 계약, retry·DLQ와 결과 발행
 │   ├── merchants/abcmart/      # ABC마트 수집기
 │   ├── merchants/twentyninecm/ # 29CM 공개 검색 Adapter
 │   ├── merchants/musinsa/      # 무신사 검색 PoC
@@ -70,6 +75,19 @@ go vet ./...
 - `tests/integration/`: 실제 외부 서비스에 접속하는 통합 테스트
 
 `internal/`에는 실행에 사용되는 실제 코드만 둔다.
+
+## RabbitMQ Worker 실행
+
+저장소 루트에서 RabbitMQ를 실행한 뒤 Worker를 시작한다.
+
+```bash
+make infra-up
+make collector-worker
+```
+
+이 Worker는 HTTP 서버를 거치지 않고 `CollectionTask`를 기존 판매처 Searcher에
+전달한다. 현재 검색 1페이지만 지원하고 prefetch와 동시 처리 개수는 1이며,
+일시 오류는 5초 뒤 한 번 재시도한다.
 
 실제 ABC마트 공개 검색 결과 확인은 아래 명령을 명시적으로 실행한 경우에만 동작한다.
 
