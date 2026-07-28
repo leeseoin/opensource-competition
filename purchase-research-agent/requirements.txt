@@ -6,3 +6,4 @@ python-dotenv>=1.0.0
 beautifulsoup4>=4.12.0
 crawl4ai>=0.4.0
 playwright>=1.44.0
+jsonschema>=4.20.0

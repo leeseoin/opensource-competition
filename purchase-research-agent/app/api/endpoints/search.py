@@ -157,6 +157,7 @@ async def search_products(
     keyword: str,
     site: str = "musinsa",
     max_items: int = 500,
+    detail_limit: int = 5,
 ):
     """
     상품 검색 크롤링 + 분석 리포트 생성
@@ -164,6 +165,9 @@ async def search_products(
     - **keyword**: 검색 키워드
     - **site**: `musinsa` 또는 `abcmart`
     - **max_items**: 최대 수집 개수 (기본 500)
+    - **detail_limit**: 리뷰/옵션을 붙일 상위 상품 수 (기본 5, 0이면 미수집).
+      Spring의 crawl-trigger가 이 엔드포인트를 호출하는 유일한 실제 운영 경로라서,
+      기본값을 0으로 두면 리뷰/옵션이 항상 유실된다.
     """
     if site not in SUPPORTED_SITES:
         return {"status": "error", "message": f"지원 사이트: {SUPPORTED_SITES}"}
@@ -175,7 +179,7 @@ async def search_products(
     try:
         crawler = CrawlerService()
         products, errors = await crawler.search_items(
-            keyword, site, max_items=max_items,
+            keyword, site, max_items=max_items, detail_limit=detail_limit,
         )
     except Exception:
         tb = traceback.format_exc()
