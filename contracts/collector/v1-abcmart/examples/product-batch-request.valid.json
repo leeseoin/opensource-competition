@@ -1,0 +1,32 @@
+{
+  "site": "abcmart",
+  "keyword": "구두_남성",
+  "collectedAt": "2026-07-28T21:00:00+09:00",
+  "products": [
+    {
+      "sourceProductId": "10098765",
+      "title": "이지 워커 남성 캐주얼 구두",
+      "brand": "ABC MART",
+      "price": 89000,
+      "priceOriginal": 109000,
+      "discountPercent": 18,
+      "imageUrl": "https://image.abc-mart.co.kr/goods/10098765/main.jpg",
+      "styleCode": "AB1234",
+      "link": "https://abcmart.a-rt.com/product?prdtNo=10098765",
+      "reviewCount": 12,
+      "options": {
+        "colors": ["블랙", "브라운"],
+        "sizes": ["260", "265", "270", "275"]
+      },
+      "reviews": [
+        {
+          "reviewSourceId": "998877",
+          "content": "발볼이 편하고 재질도 좋습니다.",
+          "score": 4.5,
+          "reviewDate": "2026-07-20",
+          "size": "270"
+        }
+      ]
+    }
+  ]
+}
