@@ -24,6 +24,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-mysql'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+	implementation 'com.networknt:json-schema-validator:1.5.4'
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.mysql:mysql-connector-j'
@@ -37,4 +39,17 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// contracts/ 디렉토리가 이 파이프라인이 실제로 지키는 JSON Schema의 단일 소스다.
+// 빌드 시점에 classpath(/contracts/...)로 복사해서 AbcmartBatchSchemaValidator가
+// 런타임에 읽도록 한다. 원본을 고치면 다음 빌드에 자동 반영된다.
+tasks.register('copyContractSchema', Copy) {
+	from '../contracts/collector/v1-abcmart'
+	include 'product-batch-request.schema.json'
+	into layout.buildDirectory.dir('resources/main/contracts')
+}
+
+tasks.named('processResources') {
+	dependsOn('copyContractSchema')
 }

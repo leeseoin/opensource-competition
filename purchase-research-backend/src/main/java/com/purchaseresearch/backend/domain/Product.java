@@ -18,7 +18,7 @@ import lombok.Setter;
 @Entity
 @Table(
 		name = "product",
-		uniqueConstraints = @UniqueConstraint(name = "uk_product_site_source_id", columnNames = { "site", "source_product_id" })
+		uniqueConstraints = @UniqueConstraint(name = "uk_product_site_type_source_id", columnNames = { "site_type", "source_product_id" })
 )
 @Getter
 @Setter
@@ -29,8 +29,8 @@ public class Product {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	@Column(nullable = false, length = 20)
-	private String site;
+	@Column(name = "site_type", nullable = false)
+	private SiteType siteType;
 
 	@Column(name = "source_product_id", nullable = false, length = 50)
 	private String sourceProductId;

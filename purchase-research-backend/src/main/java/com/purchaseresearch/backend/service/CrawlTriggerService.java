@@ -1,16 +1,22 @@
 package com.purchaseresearch.backend.service;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import com.purchaseresearch.backend.dto.FastApiOptionsItem;
 import com.purchaseresearch.backend.dto.FastApiProductItem;
+import com.purchaseresearch.backend.dto.FastApiReviewItem;
 import com.purchaseresearch.backend.dto.FastApiSearchResponse;
+import com.purchaseresearch.backend.dto.OptionsPayload;
 import com.purchaseresearch.backend.dto.ProductBatchRequest;
 import com.purchaseresearch.backend.dto.ProductBatchResponse;
 import com.purchaseresearch.backend.dto.ProductPayload;
+import com.purchaseresearch.backend.dto.ReviewPayload;
 
 import lombok.RequiredArgsConstructor;
 
@@ -64,9 +70,9 @@ public class CrawlTriggerService {
 				item.imageUrl(),
 				item.styleCode(),
 				item.link(),
-				0,
-				null,
-				null
+				item.reviewCount() != null ? item.reviewCount() : 0,
+				toOptionsPayload(item.options()),
+				toReviewPayloads(item.reviews())
 		);
 	}
 
@@ -76,5 +82,32 @@ public class CrawlTriggerService {
 		}
 		String digits = priceStr.replaceAll("[^0-9]", "");
 		return digits.isEmpty() ? null : Integer.parseInt(digits);
+	}
+
+	private OptionsPayload toOptionsPayload(FastApiOptionsItem options) {
+		if (options == null) {
+			return null;
+		}
+		return new OptionsPayload(options.colors(), options.sizes());
+	}
+
+	private List<ReviewPayload> toReviewPayloads(List<FastApiReviewItem> reviews) {
+		if (reviews == null) {
+			return null;
+		}
+		return reviews.stream()
+				.map(r -> new ReviewPayload(r.reviewSourceId(), r.content(), r.score(), parseDate(r.date()), r.size()))
+				.toList();
+	}
+
+	private LocalDate parseDate(String date) {
+		if (date == null || date.isBlank()) {
+			return null;
+		}
+		try {
+			return LocalDate.parse(date);
+		} catch (DateTimeParseException e) {
+			return null;
+		}
 	}
 }

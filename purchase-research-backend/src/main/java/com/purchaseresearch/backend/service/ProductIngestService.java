@@ -11,6 +11,7 @@ import com.purchaseresearch.backend.domain.PriceHistory;
 import com.purchaseresearch.backend.domain.Product;
 import com.purchaseresearch.backend.domain.ProductOption;
 import com.purchaseresearch.backend.domain.ProductReview;
+import com.purchaseresearch.backend.domain.SiteType;
 import com.purchaseresearch.backend.dto.OptionsPayload;
 import com.purchaseresearch.backend.dto.ProductBatchRequest;
 import com.purchaseresearch.backend.dto.ProductBatchResponse;
@@ -20,6 +21,7 @@ import com.purchaseresearch.backend.repository.PriceHistoryRepository;
 import com.purchaseresearch.backend.repository.ProductOptionRepository;
 import com.purchaseresearch.backend.repository.ProductRepository;
 import com.purchaseresearch.backend.repository.ProductReviewRepository;
+import com.purchaseresearch.backend.validation.AbcmartBatchSchemaValidator;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,6 +45,7 @@ public class ProductIngestService {
 	private final PriceHistoryRepository priceHistoryRepository;
 	private final ProductOptionRepository productOptionRepository;
 	private final ProductReviewRepository productReviewRepository;
+	private final AbcmartBatchSchemaValidator schemaValidator;
 
 	@Transactional
 	public ProductBatchResponse ingest(ProductBatchRequest request) {
@@ -52,9 +55,25 @@ public class ProductIngestService {
 				? request.collectedAt().toLocalDateTime()
 				: LocalDateTime.now();
 
+		SiteType siteType;
+		try {
+			siteType = SiteType.fromKey(request.site());
+		} catch (IllegalArgumentException e) {
+			for (ProductPayload payload : request.products()) {
+				failures.add(new ProductBatchResponse.FailureItem(payload.sourceProductId(), e.getMessage()));
+			}
+			return new ProductBatchResponse(request.products().size(), 0, failures.size(), failures);
+		}
+
 		for (ProductPayload payload : request.products()) {
+			List<String> schemaErrors = schemaValidator.validate(request.site(), payload);
+			if (!schemaErrors.isEmpty()) {
+				failures.add(new ProductBatchResponse.FailureItem(
+						payload.sourceProductId(), "contract 위반: " + String.join("; ", schemaErrors)));
+				continue;
+			}
 			try {
-				ingestOne(request.site(), payload, collectedAt);
+				ingestOne(siteType, payload, collectedAt);
 				successCount++;
 			} catch (Exception e) {
 				failures.add(new ProductBatchResponse.FailureItem(payload.sourceProductId(), e.getMessage()));
@@ -65,11 +84,11 @@ public class ProductIngestService {
 		return new ProductBatchResponse(total, successCount, failures.size(), failures);
 	}
 
-	private void ingestOne(String site, ProductPayload payload, LocalDateTime collectedAt) {
-		Product product = productRepository.findBySiteAndSourceProductId(site, payload.sourceProductId())
+	private void ingestOne(SiteType siteType, ProductPayload payload, LocalDateTime collectedAt) {
+		Product product = productRepository.findBySiteTypeAndSourceProductId(siteType, payload.sourceProductId())
 				.orElseGet(Product::new);
 
-		product.setSite(site);
+		product.setSiteType(siteType);
 		product.setSourceProductId(payload.sourceProductId());
 		product.setTitle(payload.title());
 		product.setBrand(payload.brand());
