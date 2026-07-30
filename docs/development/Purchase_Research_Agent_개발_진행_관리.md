@@ -598,6 +598,47 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `docker compose config --quiet`: 통과
   - `git diff --check`: 통과
 
+### 2026-07-30 대회 규정 근거 공개와 문서 동기화 검사
+
+- 진행상황: 운영규정이 특정 문서 파일명을 요구하지 않는다는 점과 프로젝트가
+  공개 근거를 남기기 위해 선택한 관리 방식이라는 점을 구분했다. 현재 직접
+  사용하는 외부 구성요소와 AI 개발 보조 범위를 각각 공개하고, 관련 manifest와
+  AI integration 변경에 문서 갱신이 빠지면 실패하는 로컬/CI 검사를 추가했다.
+- 구현 위치:
+  - `THIRD_PARTY_NOTICES.md:5` `이 문서를 공개하는 이유`: 운영규정 5쪽 제8조
+    제5항과 6쪽 제8조 제6항의 근거 및 파일 형식은 프로젝트 선택이라는 설명
+  - `THIRD_PARTY_NOTICES.md:16` `현재 직접 사용하는 구성요소`: Go, Spring Boot,
+    Next.js 및 container image의 현재 version/출처/license
+  - `AI_USAGE.md:5` `이 문서를 공개하는 이유`: 운영규정 7쪽 제9조 제4항과
+    제5항의 직접 의무 및 자발적 공개 문서 구분
+  - `AI_USAGE.md:22` `사람의 검토 원칙`: AI 작성 결과의 diff/test/설명 책임
+  - `AGENTS.md:86` `규정과 공개 문서 동기화`: 의존성/model/AI 변경 시 같은
+    작업과 commit에서 공개 문서를 갱신하는 규칙
+  - `scripts/check-document-sync.sh:4` `문서 동기화 검사`: 변경 파일을 분석해
+    `THIRD_PARTY_NOTICES.md`와 `AI_USAGE.md` 갱신 누락 차단
+  - `.github/workflows/document-sync.yml:1` `Document Sync`: PR과
+    `develop`/`main` push에서 동기화 검사 실행
+  - `Makefile:94` `docs-check`: 루트에서 실행하는 문서 동기화 검사 명령
+- 발생 문제: `AGENTS.md` 규칙만으로는 사람이 직접 manifest를 바꾼 경우의 문서
+  누락을 자동으로 막을 수 없고, 자동 검사가 license 내용의 정확성이나 일반
+  source code의 AI 사용 여부까지 판별할 수 없다.
+- 원인: 지침 파일은 작업자와 에이전트의 행동 규칙이며 Git 변경 자체를 강제하지
+  않는다. 또한 license 해석과 AI 사용 여부에는 사람의 판단 및 외부 근거가 필요하다.
+- 해결: 규칙과 함께 변경 파일 기반 검사 스크립트 및 GitHub Actions를 추가했다.
+  자동 검사는 갱신 누락을 차단하고, 공식 출처 확인과 AI 사용 기록은 사람의
+  책임으로 명시했다.
+- 남은 위험: Spring Boot 간접 의존성과 container image 내부 package 전체
+  license audit는 제출 시점에 다시 수행해야 한다. 저장소 자체 `LICENSE`도 팀
+  협의 후 추가해야 한다.
+- 검증:
+  - `make docs-check`: 현재 변경 범위 통과
+  - `bash -n scripts/check-document-sync.sh`: shell 문법 검사 통과
+  - `DOC_SYNC_CHANGED_FILES='services/collector/go.mod' ./scripts/check-document-sync.sh`:
+    공개 문서 누락을 의도대로 실패 처리
+  - `DOC_SYNC_CHANGED_FILES=$'services/collector/go.mod\nTHIRD_PARTY_NOTICES.md' ./scripts/check-document-sync.sh`:
+    공개 문서 동반 변경을 통과 처리
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

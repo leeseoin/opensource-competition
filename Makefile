@@ -16,7 +16,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
 	product-backend-run product-backend-test \
-	web-install web-dev web-lint web-build test check
+	web-install web-dev web-lint web-build docs-check test check
 
 help: ## 사용할 수 있는 명령을 보여준다.
 	@printf '%s\n' \
@@ -33,6 +33,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make web-dev         Next.js 개발 서버 실행' \
+		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
 		'  make test            Go, Spring Boot, Next.js lint 일괄 검증' \
 		'  make check           Compose 설정과 전체 코드 검증' \
 		'' \
@@ -90,9 +91,12 @@ web-lint: ## Next.js ESLint 검사를 실행한다.
 web-build: ## Next.js production build를 실행한다.
 	cd $(WEB_DIR) && npm run build
 
+docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
+	./scripts/check-document-sync.sh
+
 test: collector-test product-backend-test web-lint ## Go, Spring Boot, Next.js를 검증한다.
 
-check: ## Compose 설정, 테스트, Next.js production build를 모두 검증한다.
+check: docs-check ## 문서 동기화, Compose 설정, 테스트, Next.js production build를 모두 검증한다.
 	docker compose config --quiet
 	$(MAKE) test
 	$(MAKE) web-build

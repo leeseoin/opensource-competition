@@ -75,6 +75,8 @@ docs/
 
 개발 전에는 [시스템 구조](docs/architecture/Purchase_Research_Agent_시스템_구조.md)를 먼저 보고, 다음 작업은 [구현 TODO](docs/planning/Purchase_Research_Agent_TODO.md)에서 확인한다. 개인 실험과 협업 코드를 분리하는 방법은 [Git 브랜치 작업 방식](docs/development/Git_브랜치_작업_방식.md)을 따른다.
 
+외부 라이브러리와 container image의 출처 및 license는 [Third-Party Notices](THIRD_PARTY_NOTICES.md), Codex/Claude Code 사용 범위와 사람의 검토 방법은 [AI Usage](AI_USAGE.md)에 공개한다. 대회 운영규정이 이 파일명을 직접 요구한 것은 아니며, 저장소에서 관련 근거를 지속적으로 공개하기 위해 프로젝트가 선택한 관리 방식이다.
+
 ## 로컬 인프라 실행
 
 루트 환경변수 예제를 복사하고 PostgreSQL, Redis, RabbitMQ를 실행한다.

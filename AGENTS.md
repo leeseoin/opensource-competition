@@ -83,6 +83,16 @@
 - 개발 중 문제가 발생하면 증상, 원인, 해결 방법, 재발 방지 또는 남은 위험을 문제 기록에 남긴다.
 - 에이전트의 최종 작업 보고에는 진행상황, 발생 문제와 해결, 변경 파일과 핵심 시작 줄, 실행한 검증과 결과를 포함한다.
 
+## 규정과 공개 문서 동기화
+
+- 대회 운영규정은 `THIRD_PARTY_NOTICES.md`와 `AI_USAGE.md`라는 파일명을 직접 요구하지 않는다. 이 저장소는 외부 구성요소와 AI 사용 내역을 공개하는 증거 문서로 두 파일을 사용한다.
+- 라이브러리, 프레임워크, Gradle plugin, Node package, Go module, container image, 외부 코드, Plugin, MCP SDK 및 AI model을 추가/삭제하거나 version을 변경하면 같은 작업과 commit에서 `THIRD_PARTY_NOTICES.md`를 갱신한다.
+- Codex, Claude Code 또는 다른 AI가 중요한 코드/설계/문서를 생성하거나 수정하면 같은 작업의 commit, PR 또는 개발 진행 관리 문서에 사용 범위와 사람의 검토 결과를 남기고 필요하면 `AI_USAGE.md`를 갱신한다.
+- Plugin, MCP Server, Agent Gateway, model adapter, runtime AI model, provider 및 실행 방식을 추가/삭제/변경하면 같은 작업과 commit에서 `AI_USAGE.md`를 갱신한다.
+- runtime AI model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 `THIRD_PARTY_NOTICES.md`, `AI_USAGE.md` 및 대회 규정 대응 체크리스트에 기록한다.
+- manifest 또는 AI integration 관련 파일을 변경한 뒤 `make docs-check`를 실행한다. 검사가 통과해도 출처와 license의 정확성은 작성자가 공식 자료로 직접 확인한다.
+- 규정 근거가 특정 파일 형식을 요구하는 직접 의무인지, 프로젝트가 증거를 남기기 위해 선택한 운영 방식인지 문서에서 구분한다.
+
 ## 실행과 검증
 
 PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
@@ -106,4 +116,6 @@ Gateway는 구현 전이다.
 - 개발 진행·구현 근거·문제 기록: `docs/development/Purchase_Research_Agent_개발_진행_관리.md`
 - Git 브랜치 작업 방식: `docs/development/Git_브랜치_작업_방식.md`
 - 대회 제출 전 규정 확인: `docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md`
+- 외부 구성요소 공개: `THIRD_PARTY_NOTICES.md`
+- AI 사용 공개: `AI_USAGE.md`
 - 날짜는 `YYYY-MM-DD` 형식을 사용한다.
