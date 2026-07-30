@@ -42,7 +42,7 @@ type Searcher interface {
 	Search(ctx context.Context, request SearchRequest) SearchResult
 }
 
-// SearchRequest는 Python Backend가 Collector에 전달하는 상품 검색 조건이다.
+// SearchRequest는 Product Backend 또는 내부 호출자가 Collector에 전달하는 상품 검색 조건이다.
 type SearchRequest struct {
 	RequestID   string        `json:"requestId"`
 	Merchant    string        `json:"merchant"`

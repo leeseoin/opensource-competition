@@ -60,19 +60,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  migrate:
-    build:
-      context: ./services/research-backend
-    environment:
-      # PostgreSQL과 같은 .env 값을 사용해 Alembic 접속 주소를 조합한다.
-      PURCHASE_RESEARCH_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-purchase_research}:${POSTGRES_PASSWORD:-purchase_research}@postgres:5432/${POSTGRES_DB:-purchase_research}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["alembic", "upgrade", "head"]
-    profiles: ["tools"]
-    restart: "no"
-
 volumes:
   purchase_research_postgres_data:
   purchase_research_redis_data:

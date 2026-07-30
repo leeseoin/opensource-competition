@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://purchase-research-agent.local/contracts/collector/v1/search-request.schema.json",
   "title": "Collector Search Request v1",
-  "description": "Python Research Backend가 Go Collector에 전달하는 판매처 상품 검색 요청이다.",
+  "description": "Spring Boot Product Backend가 Go Collector에 전달하는 판매처 상품 검색 요청이다.",
   "type": "object",
   "additionalProperties": false,
   "required": ["requestId", "merchant", "query", "requestedAt"],

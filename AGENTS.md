@@ -4,27 +4,29 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트·29CM 검색 Collector, RabbitMQ 검색 작업·결과 Worker와 Python PostgreSQL 적재 구현, Redis adapter·MCP·Web 연결은 planned
-- 핵심 기술: Go, Python, MCP, FastAPI, Next.js, React, PostgreSQL, RabbitMQ, Redis
+- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ 검색 작업/결과 Worker 구현, Spring Boot Product Backend 초기화, MCP/Web/DB 적재 재구현은 planned
+- 핵심 기술: Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
 
 - `services/collector`: Go. 외부 판매처 접근, 검색·상세·옵션·리뷰 parsing, rate limit, timeout, retry, 차단 감지
-- `services/research-backend`: Python. MCP, FastAPI, RabbitMQ 작업 orchestration과 결과 소비, 데이터 검증·정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교·재검증
-- `apps/purchase-web`: Next.js + React. `/chat` 사용자 챗봇과 `/admin/collections` 수집 관리 화면, Agent Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
+- `services/product-backend`: Java/Spring Boot. 상품 조회 API, RabbitMQ 작업 orchestration과 결과 소비, 데이터 검증/정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교/재검증
+- `services/mcp-server`: MCP. Codex/Claude Code가 사용할 도구를 제공하고 Product Backend REST API를 호출하는 얇은 연결 계층
+- `frontend/purchase-web`: Next.js + React. `/chat` 사용자 챗봇과 `/admin/collections` 수집 관리 화면, Agent Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
 - `plugins/purchase-research-agent`: Codex plugin. PoC에서 구매 질문과 MCP tool 호출 workflow를 담당
 
 ## 핵심 경계
 
 - 외부 판매처에는 Go Collector만 접근한다.
-- PostgreSQL의 최종 쓰기는 Python Backend만 수행한다.
+- PostgreSQL의 최종 쓰기는 Spring Boot Product Backend만 수행한다.
+- MCP Server는 판매처, PostgreSQL, RabbitMQ에 직접 접근하지 않고 Product Backend REST API만 호출한다.
 - RabbitMQ는 수집 작업·결과 전달에 사용하고 Redis를 두 번째 작업 Queue로 사용하지 않는다.
 - Redis는 판매처별 속도 제한, 중복 방지, 짧은 진행 상태와 캐시에 사용한다.
 - browser의 Next.js UI와 Codex Plugin은 크롤러나 DB를 직접 호출하지 않는다.
 - PoC에서 최종 사용자 질문은 Next.js server의 Codex Gateway를 거쳐 Codex로 전달한다.
 - Codex 실행 권한과 인증정보는 browser에 노출하지 않고 server에서만 관리한다.
 - Go는 판매처별 `CollectorResult`를 반환하고 최종 추천을 판단하지 않는다.
-- Python은 Collector가 제공하지 않은 판매처 사실을 생성하지 않는다.
+- Product Backend는 Collector가 제공하지 않은 판매처 사실을 생성하지 않는다.
 - Codex는 구조화된 근거를 설명하며 상품 사실을 추측하지 않는다.
 
 ## 작업 원칙
@@ -42,13 +44,25 @@
 - 리뷰 이미지는 내려받지 않고 사진 존재 여부와 공개 출처 참조만 저장한다.
 - LLM 추출값은 `derived`와 confidence를 기록하고 공식 정보와 구분한다.
 - API key, cookie, session, 개인 정보는 커밋하지 않는다.
-- Python은 `uv`와 서비스 내부 `.venv`를 사용한다.
+- Java는 Java 21과 서비스 내부 Gradle Wrapper를 사용한다.
+
+## Git 브랜치 규칙
+
+- 전체 작업 방식은 `docs/development/Git_브랜치_작업_방식.md`를 따른다.
+- `sandbox/ls`는 서인의 개인 실험 브랜치이며 `develop`으로 직접 PR을 만들지 않는다.
+- `sandbox/ls`에서 검증한 작업은 필요한 커밋만 `dev-ls`로 옮긴다.
+- `dev-ls`와 `dev-jw`는 개인별 검토 가능 작업 브랜치이며 PR의 base는 `develop`으로 지정한다.
+- `develop`은 협업 통합 및 테스트 브랜치이며 직접 기능 개발과 직접 push를 피한다.
+- `main`은 안정 브랜치이며 검증된 `develop` PR만 반영한다.
+- 공유 브랜치에서 강제 push가 필요한 rebase보다 `origin/develop` 일반 merge를 우선한다.
+- 브랜치를 전환하기 전에 `git status --short`로 커밋되지 않은 사용자 변경을 확인한다.
 
 ## 코드 주석 규칙
 
 - 새로 만들거나 수정하는 class, struct, interface, type, function, method에는 한국어 주석을 작성한다.
 - Go의 exported symbol 주석은 해당 심볼 이름으로 시작하고 책임, 주요 입력·출력, 실패 조건을 설명한다.
 - Python은 class/function/method에 한국어 docstring을 작성하고 책임, 인자, 반환값, 발생 가능한 예외를 설명한다.
+- Java는 class/interface/method에 한국어 Javadoc을 작성하고 책임, 주요 인자, 반환값, 발생 가능한 예외를 설명한다.
 - TypeScript/React는 component, hook, class, named function에 한국어 TSDoc 또는 바로 위 주석을 작성한다.
 - 테스트 함수에도 검증 목적을 설명하는 한국어 주석을 작성한다.
 - Go의 모든 `*_test.go`는 `services/collector/tests/unit` 또는 `services/collector/tests/integration` 아래에 둔다.
@@ -72,14 +86,16 @@
 ## 실행과 검증
 
 PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
-RabbitMQ producer, Go consumer·result publisher, Python result consumer는
-구현됐다. Redis application adapter, 작업 상태 DB, MCP와 Agent Gateway는 구현
-전이다.
+Go consumer와 result publisher는 구현됐다. 기존 Python producer/result consumer와
+DB 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot producer/result
+consumer, Flyway migration, Redis application adapter, 작업 상태 DB, MCP와 Agent
+Gateway는 구현 전이다.
 
 예정 검증 계층:
 
 - Go unit/contract test: parser, rate limit, 저장된 HTML fixture
-- Python unit/integration test: 정규화, DB 적재, review signal, MCP/API 계약
+- Java unit/integration test: 정규화, DB 적재, review signal, REST API와 Queue 계약
+- MCP contract test: 도구 입력/출력과 Product Backend API 연결
 - E2E: 구매 질문 → 실제 수집 → 근거 비교 → 재검증
 - 실제 판매처 smoke test는 기본 CI에서 제외하고 opt-in으로 실행
 
@@ -88,5 +104,6 @@ RabbitMQ producer, Go consumer·result publisher, Python result consumer는
 - 시스템 구조: `docs/architecture/Purchase_Research_Agent_시스템_구조.md`
 - 구현 계획: `docs/planning/Purchase_Research_Agent_TODO.md`
 - 개발 진행·구현 근거·문제 기록: `docs/development/Purchase_Research_Agent_개발_진행_관리.md`
+- Git 브랜치 작업 방식: `docs/development/Git_브랜치_작업_방식.md`
 - 대회 제출 전 규정 확인: `docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md`
 - 날짜는 `YYYY-MM-DD` 형식을 사용한다.

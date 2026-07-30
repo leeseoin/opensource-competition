@@ -33,7 +33,7 @@ Go Collector Worker가 ABC마트와 29CM의 공개 JSON을 읽음
         ↓
 판매처별 결과를 같은 Product 형식으로 변환
         ↓
-Python Worker가 결과 계약을 검사하고 중복을 정리
+Spring Boot Worker가 결과 계약을 검사하고 중복을 정리
         ↓
 PostgreSQL에 상품, 가격, 옵션과 출처를 저장
 
@@ -41,7 +41,7 @@ PostgreSQL에 상품, 가격, 옵션과 출처를 저장
         ↓
 Codex 또는 Claude Code가 MCP search_products 호출
         ↓
-Python이 PostgreSQL에서 기존 상품 검색
+Product Backend가 PostgreSQL에서 기존 상품 검색
         ↓
 최종 후보만 RabbitMQ 재검증 작업으로 최신 가격·재고 확인
 ```
@@ -52,7 +52,7 @@ Python이 PostgreSQL에서 기존 상품 검색
 ABC마트·29CM       = 서로 다른 언어를 사용하는 판매처
 Go Collector       = 판매처별 통역사
 Contracts          = 통역 결과를 적는 공통 양식
-Python Backend     = 조사 관리자
+Product Backend    = 조사 관리자
 PostgreSQL         = 조사 기록 보관소
 RabbitMQ           = 해야 할 수집 작업 전달함
 Redis              = 속도 제한과 짧은 진행 상태 보관소
@@ -60,7 +60,7 @@ Redis              = 속도 제한과 짧은 진행 상태 보관소
 
 ## 3. 현재 단건 검색 코드가 움직이는 순서
 
-현재 구현된 단건 개발 경로에서는 Python Backend 또는 개발용 `curl`이 Collector
+단건 개발 경로에서는 Product Backend 또는 개발용 `curl`이 Collector
 HTTP API를 호출한다. 사용자 채팅은 이 API를 직접 호출하지 않고 PostgreSQL을
 검색하며, 백그라운드 batch 수집은 RabbitMQ Worker로 확장할 예정이다.
 
@@ -453,7 +453,7 @@ Go HTTP handler에서 단순히 `go func()`를 실행하고 바로 끝내면 서
 Backend, 짧은 진행 상태와 중복 방지는 Redis가 담당한다.
 
 ```text
-Python이 collection_job 생성·queued 저장
+Product Backend가 collection_job을 생성하고 queued 상태로 저장
         ↓
 RabbitMQ에 검색 페이지·상세 URL 작업 발행
         ↓
@@ -463,7 +463,7 @@ Redis 공통 limiter를 통과해 판매처 요청
         ↓
 Go가 CollectorResult를 결과 Queue에 발행
         ↓
-Python Worker가 계약 검증·DB transaction
+Spring Boot Worker가 계약을 검증하고 DB transaction 실행
         ↓
 Redis 진행 상태 갱신 + PostgreSQL 최종 상태 보존
 ```
@@ -712,7 +712,7 @@ fixture regression test 통과 후 배포
 가장 먼저 구현할 수직 흐름은 다음과 같다.
 
 ```text
-Python이 ABC마트 검색 작업을 RabbitMQ에 등록
+Product Backend가 ABC마트 검색 작업을 RabbitMQ에 등록
         ↓
 Go Worker가 작업을 소비하고 Redis limiter 확인
         ↓
@@ -720,7 +720,7 @@ ABC마트 검색 JSON을 공통 CollectorResult로 변환
         ↓
 결과 Queue에 발행하고 작업 ACK
         ↓
-Python Worker가 Pydantic Contract 검증
+Spring Boot Worker가 Java Contract 검증
         ↓
 PostgreSQL에 상품·snapshot·option·evidence 저장
         ↓

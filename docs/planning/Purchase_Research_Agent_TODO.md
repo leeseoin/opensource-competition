@@ -1,6 +1,7 @@
 # Purchase Research Agent 구현 계획
 
 작성일: 2026-07-13
+최종 수정일: 2026-07-30
 상태: in progress
 
 ## 체크박스 관리 규칙
@@ -13,7 +14,7 @@
 ## Phase 0: 구조와 계약
 
 - [x] 이전 프로젝트 구성요소 제거
-- [x] Go Collector / Python Backend / Codex Plugin / Next.js 책임 분리
+- [x] Go Collector / Spring Boot Product Backend / MCP Server / Codex Plugin / Next.js 책임 분리
 - [x] 하이브리드 아키텍처 문서 작성
 - [x] 저장소 기본 디렉토리 구조 반영
 - [x] 1차 운영 대상 판매처를 ABC마트와 29CM로 확정하고 무신사는 보류
@@ -29,12 +30,12 @@
 - [ ] 재검증 요청 Schema 작성
 - [ ] 저장된 예제를 이용한 JSON Schema 자동 검증 명령 추가
 - [ ] Go 응답이 `collector-result.schema.json`을 통과하는 contract test 추가
-- [ ] Python domain model과 Go transport DTO 매핑 확정
-- [ ] Python Pydantic model이 같은 정상·무효 예제를 검증하는 contract test 추가
-- [ ] Schema, Go DTO, Python model 변경을 함께 검사하는 CI 추가
+- [ ] Java domain model과 Go transport DTO 매핑 확정
+- [ ] Java DTO가 같은 정상/무효 예제를 검증하는 contract test 추가
+- [ ] Schema, Go DTO, Java DTO 변경을 함께 검사하는 CI 추가
 - [ ] v1 필수 필드, 실패 상태, 호환성 정책 최종 검토
 
-완료 기준: 실제 Go 응답과 Python model이 같은 v1 Schema 및 예제로 검증되고, 두 서비스의 책임과 실패 상태를 설명할 수 있다.
+완료 기준: 실제 Go 응답과 Java DTO가 같은 v1 Schema 및 예제로 검증되고, 두 서비스의 책임과 실패 상태를 설명할 수 있다.
 
 ## Phase 1: Go Collector 기반
 
@@ -76,23 +77,29 @@
 
 완료 기준: 실제 공개 상품 후보를 찾아 출처와 수집 시각을 포함한 결과를 반환한다.
 
-## Phase 3: Python Backend와 DB
+## Phase 3: Spring Boot Product Backend와 DB
 
-- [ ] Python package와 설정 재정비 **(부분 구현: uv package, SQLAlchemy, Alembic, Collector client 구성 완료)**
-- [x] Go Collector 검색 HTTP client
-- [x] Pydantic Collector v1 검색 요청·응답 검증
+- [x] Spring Boot 4.1.0 / Java 21 / Gradle Wrapper 기본 프로젝트 생성
+- [x] Web MVC / Validation / JPA / Flyway / PostgreSQL / AMQP / Actuator / Testcontainers 의존성 추가
+- [ ] local/test/production profile과 환경변수 설정
+- [ ] health check와 기본 오류 응답
+- [ ] Collector v1 검색 요청/응답 Java DTO
+- [ ] JSON Schema 기반 Java contract test
+- [ ] Go Collector 검색 HTTP client
 - [x] 루트 Docker Compose의 PostgreSQL·영구 volume·health check 구성
-- [x] SQLAlchemy 2 모델과 Alembic migration 기반 구성
-- [x] 첫 상품 수집 테이블 migration 작성
-- [x] Docker Compose에서 migration 실제 적용·재적용 검증
+- [ ] JPA entity와 repository 기반 구성
+- [ ] Flyway 첫 상품 수집 schema 작성
+- [ ] Flyway migration 실제 적용/재적용 검증
 - [ ] 개발·테스트·배포 환경별 Compose 설정과 비밀값 주입 정책 **(부분 구현: 로컬 `.env.example`과 Compose 기본값·덮어쓰기 구성 완료)**
-- [x] product/merchant-product/offer-snapshot/option/evidence 검색 결과 repository
-- [x] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
-- [x] ABC마트·29CM 실제 검색 결과 PostgreSQL 적재 검증
+- [ ] product/merchant-product/offer-snapshot/option/evidence repository
+- [ ] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
+- [ ] ABC마트/29CM 실제 검색 결과 PostgreSQL 적재 검증
 - [x] 현재 수집 필드·DB 저장 필드·미저장 필드 입문 문서 작성
 - [ ] 조사 세션과 작업 상태
 
-완료 기준: Go 수집 결과가 검증·정규화되어 PostgreSQL에 재현 가능하게 저장된다.
+참고: 이전 Python/SQLAlchemy/Alembic 적재 구현은 Spring Boot 전환 전에 검증한 과거 작업이다. 현재 브랜치에서는 제거됐으며 위 Java/Flyway/JPA 항목을 완료해야 DB 적재를 다시 사용할 수 있다.
+
+완료 기준: Go 수집 결과가 Java Contract로 검증되고 정규화되어 PostgreSQL에 재현 가능하게 저장된다.
 
 ## Phase 4: Redis·RabbitMQ 기반 수집 확장
 
@@ -102,7 +109,7 @@
 - [x] Docker Compose에 Redis 추가
 - [x] RabbitMQ·Redis health check와 영구 volume 구성
 - [x] `.env.example`에 RabbitMQ·Redis 접속 설정과 로컬 기본값 추가
-- [ ] 서비스가 환경 변수로 RabbitMQ·Redis 접속 정보를 주입받도록 구성 **(부분 구현: Go·Python RabbitMQ URL 완료, Redis 접속 설정 미구현)**
+- [ ] 서비스가 환경 변수로 RabbitMQ/Redis 접속 정보를 주입받도록 구성 **(부분 구현: Go RabbitMQ URL 완료, Spring Boot와 Redis 접속 설정 미구현)**
 
 ### 4.2 작업 계약과 상태
 
@@ -136,36 +143,38 @@
 - [x] 실패 시 5초 retry 또는 Dead Letter Queue 처리
 - [ ] Worker 재시작 시 처리 중이던 미확인 작업 복구 검증
 
-### 4.5 Python 저장 Worker와 진행 상태
+### 4.5 Spring Boot 저장 Worker와 진행 상태
 
-- [x] RabbitMQ의 `CollectorResult`를 소비하는 Python Worker 구현
-- [x] Pydantic 계약 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
-- [x] 검증된 결과를 기존 repository transaction으로 저장
-- [ ] `collection_jobs`, `collection_tasks` SQLAlchemy model 작성
-- [ ] `collection_jobs`, `collection_tasks` Alembic migration 작성
+- [ ] RabbitMQ의 `CollectorResult`를 소비하는 Spring Boot Worker 구현
+- [ ] Contract 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
+- [ ] 검증된 결과를 JPA transaction으로 저장
+- [ ] `collection_jobs`, `collection_tasks` JPA entity 작성
+- [ ] `collection_jobs`, `collection_tasks` Flyway migration 작성
 - [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록
 - [ ] Redis에 짧은 수집 진행 상태를 저장하고 PostgreSQL에 최종 상태 보존
 - [ ] Worker 또는 Backend 장애 후 작업 상태 복구 정책 구현
 
 ### 4.6 검증
 
-- [x] RabbitMQ 없이 실행하는 fixture 기반 Go Processor·Python 계약 단위 테스트
+- [ ] RabbitMQ 없이 실행하는 fixture 기반 Go Processor/Java 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
 - [ ] RabbitMQ retry·ACK·Dead Letter Queue 통합 테스트
-- [x] ABC마트 검색 작업 1건 RabbitMQ→Go→Python→PostgreSQL 실제 수직 흐름 검증
+- [ ] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
 - [ ] ABC마트 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 동일 상품 재수집 시 상품 중복 없이 snapshot만 증가하는 DB 검증
 - [ ] 판매처별 요청 상한을 넘지 않는지 검증
 - [ ] 수집량, 신규 상품, 갱신 상품, 실패 작업, 소요시간 결과 보고
 
-완료 기준: ABC마트와 29CM의 여러 검색어·페이지 작업이 RabbitMQ를 통해 제한된 Worker에 분배되고, Redis가 속도 제한과 진행 상태를 관리하며, Python Backend가 결과를 PostgreSQL에 안정적으로 저장한다.
+완료 기준: ABC마트와 29CM의 여러 검색어와 페이지 작업이 RabbitMQ를 통해 제한된 Worker에 분배되고, Redis가 속도 제한과 진행 상태를 관리하며, Product Backend가 결과를 PostgreSQL에 안정적으로 저장한다.
 
 ## Phase 5: MCP와 AI Runtime Gateway
 
 ### 5.1 공통 MCP Server
 
-- [ ] Python MCP SDK 의존성과 stdio server 구성
+- [x] `services/mcp-server` 디렉토리와 책임 문서 생성
+- [ ] 구현 언어와 MCP SDK 확정
+- [ ] stdio server 구성
 - [ ] MCP 도구 공통 오류·응답·근거 계약 정의
 - [ ] `search_products`: PostgreSQL 조건 검색
 - [ ] `get_product`: 상품·판매처·최신 가격·옵션·근거 조회
@@ -194,7 +203,7 @@
 
 ### 6.1 공통 기반
 
-- [ ] Next.js + React + TypeScript 구조 **(부분 구현: `apps/purchase-web` 기본 scaffold 생성)**
+- [ ] Next.js + React + TypeScript 구조 **(부분 구현: `frontend/purchase-web` 기본 scaffold 생성)**
 - [x] Astryx MIT 라이선스와 Next.js 지원 여부 확인
 - [x] Astryx `AI Chat Conversation` 템플릿을 채팅 화면 기준 UI로 선정
 - [ ] Astryx core, neutral theme, CLI 의존성 추가
@@ -222,14 +231,14 @@
 - [ ] 수집 작업 생성·중단 UI
 - [ ] 작업별 진행률과 성공·실패·대기 개수 표시
 - [ ] RabbitMQ Queue와 Dead Letter Queue 요약 표시
-- [ ] Redis·RabbitMQ·Go Worker·Python Worker 상태 표시
+- [ ] Redis/RabbitMQ/Go Worker/Spring Boot Worker 상태 표시
 - [ ] 실패 작업 원인과 재시도 이력 표시
 - [ ] 판매처별 마지막 수집 시각과 수집 상품 수 표시
 - [ ] 일반 사용자에게 관리자 화면을 노출하지 않는 접근 정책
 
 ### 6.4 API와 검증
 
-- [ ] FastAPI research session API
+- [ ] Spring Boot research session REST API
 - [ ] Agent Gateway API
 - [ ] 수집 작업 생성·조회·취소 API
 - [ ] SSE 또는 stream 기반 Agent 응답 전달
@@ -293,8 +302,8 @@
 계약
 → Go fixture collector
 → ABC마트·29CM 실제 판매처 Adapter
-→ Python DB 적재
-→ Redis·RabbitMQ 기반 batch 수집
+→ Spring Boot Contract와 Flyway/JPA DB 적재
+→ Redis/RabbitMQ 기반 batch 수집
 → PostgreSQL 상품 데이터 확보
 → MCP 상품 검색
 → Codex·Claude Code Agent Gateway

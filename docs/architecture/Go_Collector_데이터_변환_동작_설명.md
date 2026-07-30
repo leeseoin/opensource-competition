@@ -36,7 +36,7 @@ collector.Product 공통 struct로 변환
     ↓
 HTTP Handler가 공통 struct를 JSON으로 출력
     ↓
-Python Backend가 Contract 기준으로 검사·저장할 예정
+Product Backend가 Contract 기준으로 검사하고 저장할 예정
 ```
 
 ## 2. 각 구성요소의 역할
@@ -48,7 +48,7 @@ Python Backend가 Contract 기준으로 검사·저장할 예정
 | 판매처 Searcher | 원본 응답 요청·해석·정규화·공통 변환 | 예 |
 | `collector.Product` | 모든 판매처가 사용하는 공통 Go DTO | 변환 결과를 담음 |
 | `contracts/*.schema.json` | 최종 JSON의 필드와 자료형 규칙 | 아니오 |
-| Python Backend | Contract 검사, 정규화 보완, DB 저장 | 구현 예정 |
+| Product Backend | Contract 검사, 정규화 보완, DB 저장 | Spring Boot로 구현 예정 |
 
 Spring Boot에 비유하면 다음과 같다.
 
@@ -446,4 +446,3 @@ kkst의 shoe_prices → kkst 코드에서 해석 → 공통 price.amount
 7. `contracts/collector/v1/collector-result.schema.json`
 
 이 순서로 보면 요청이 어디로 들어오고, 어느 판매처 코드가 선택되고, 최종 JSON이 어떻게 만들어지는지 한 방향으로 따라갈 수 있다.
-

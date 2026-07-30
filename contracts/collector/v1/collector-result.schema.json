@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://purchase-research-agent.local/contracts/collector/v1/collector-result.schema.json",
   "title": "Collector Result v1",
-  "description": "Go Collector가 Python Research Backend에 반환하는 판매처 수집 결과다.",
+  "description": "Go Collector가 Spring Boot Product Backend에 반환하는 판매처 수집 결과다.",
   "type": "object",
   "additionalProperties": false,
   "required": [

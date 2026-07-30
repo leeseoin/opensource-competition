@@ -24,9 +24,9 @@ const (
 	SearchRetryQueue = "purchase-research.collection.search.retry.v1"
 	// SearchDeadLetterQueue는 재시도 불가 또는 소진 작업을 보관하는 Queue다.
 	SearchDeadLetterQueue = "purchase-research.collection.search.dlq.v1"
-	// ResultQueue는 Collector 실행 결과를 Python Worker에 전달하는 Queue다.
+	// ResultQueue는 Collector 실행 결과를 Product Backend Worker에 전달하는 Queue다.
 	ResultQueue = "purchase-research.collection.result.v1"
-	// ResultDeadLetterQueue는 Python이 검증할 수 없는 결과를 보관하는 Queue다.
+	// ResultDeadLetterQueue는 Product Backend가 검증할 수 없는 결과를 보관하는 Queue다.
 	ResultDeadLetterQueue = "purchase-research.collection.result.dlq.v1"
 
 	searchRoutingKey    = "collection.search"

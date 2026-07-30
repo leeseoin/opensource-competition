@@ -1,158 +1,136 @@
 # Purchase Research Agent
 
-사용자의 자연어 구매 요청을 구체화하고, 실제 판매처의 공개 상품·리뷰 정보를 수집해 근거 기반으로 비교한 뒤 선택 상품을 다시 검증하는 구매 조사 Agent PoC이다.
+사용자의 자연어 구매 요청을 구체화하고 실제 판매처의 공개 상품과 리뷰 정보를 수집해 근거 기반으로 비교한 뒤, 선택 상품을 다시 검증하는 구매 조사 Agent PoC다.
 
-현재 상태는 **ABC마트·29CM 상품 검색, RabbitMQ 검색 작업 Worker와 PostgreSQL 적재까지 구현 완료, Redis application adapter·MCP·Web 기능 개발 예정**이다.
+현재 ABC마트와 29CM 검색 Collector 및 RabbitMQ 검색 Worker가 구현되어 있다. Spring Boot Product Backend는 기본 프로젝트만 생성된 상태이며 DB 적재, MCP Server, Next.js 화면 연결은 앞으로 구현한다.
 
-## 핵심 구성
+## 한눈에 보는 구조
 
 ```text
-Next.js Web           최종 사용자가 보는 구매 조사 챗봇 화면
-Codex Plugin          구매 질문 처리 순서와 MCP 도구 사용 방법
-Go Collector          판매처 검색·상세·옵션·리뷰 수집과 접근 통제
-Python Backend        MCP·FastAPI·정규화·DB 적재·리뷰 분석·상품 비교
-Contracts             Go와 Python이 주고받는 JSON 데이터 규격
-PostgreSQL            상품·offer·review signal·snapshot·evidence 저장
-RabbitMQ              검색 페이지·상품 상세·리뷰·재검증 수집 작업 전달
-Redis                 판매처별 속도 제한·중복 방지·진행 상태·짧은 캐시
+사용자
+  ↓
+Next.js 화면
+  ↓
+Codex/Claude Code와 Purchase Research Plugin
+  ↓ MCP
+MCP Server
+  ↓ REST API
+Spring Boot Product Backend
+  ├── PostgreSQL: 상품과 수집 근거 저장
+  ├── RabbitMQ: 수집 작업과 결과 전달
+  └── Redis: 속도 제한, 중복 방지, 짧은 진행 상태
+              ↓
+        Go Collector Worker
+              ↓
+        ABC마트/29CM
 ```
+
+각 구성요소의 책임은 다음과 같다.
+
+| 구성요소 | 책임 | 현재 상태 |
+|---|---|---|
+| Next.js Web | 사용자 채팅과 관리자 수집 화면 | 기본 scaffold |
+| Codex Plugin | 구매 질문 처리 순서와 MCP 도구 사용 방법 | 기본 구조 |
+| MCP Server | AI 도구 요청을 Product Backend REST API로 연결 | 폴더와 설명 문서만 생성 |
+| Product Backend | 상품 API, 수집 작업 생성, 결과 검증, PostgreSQL 저장 | Spring Boot 4.1.0 기본 프로젝트 |
+| Go Collector | 판매처 검색, parsing, 접근 제한, RabbitMQ 작업 처리 | ABC마트/29CM 검색 구현 |
+| Contracts | 서비스 사이의 JSON 요청과 응답 규격 | v1 초안 |
+
+외부 판매처에는 Go Collector만 접근한다. PostgreSQL의 최종 쓰기는 Product Backend만 담당하며 MCP Server는 DB나 RabbitMQ에 직접 접근하지 않는다.
 
 ## 목표 흐름
 
 ```text
 백그라운드 수집:
-수집 작업 생성 → RabbitMQ → Go Collector Worker → Python 검증·PostgreSQL 저장
+Product Backend → RabbitMQ → Go Collector Worker → RabbitMQ → Product Backend → PostgreSQL
 
 사용자 질문:
-Next.js → Codex/Claude Code → MCP → PostgreSQL 검색 → 근거가 연결된 상품 비교
+Next.js → Codex/Claude Code → MCP Server → Product Backend → PostgreSQL 검색
+
+DB 정보가 부족한 질문:
+Product Backend → 제한된 추가 수집 요청 → 최신 결과 저장 → 근거가 있는 답변
 
 구매 전 재검증:
-MCP → 우선순위 재검증 작업 → RabbitMQ → Go Collector → 최신 snapshot 비교
+MCP Server → Product Backend → 우선순위 재검증 작업 → Go Collector → 최신 snapshot 비교
 ```
 
 ## Repository
 
 ```text
-apps/                             # Next.js 사용자 채팅·관리자 수집 화면 scaffold
-plugins/                          # Codex가 MCP 기능을 사용하는 방법
-contracts/                        # Go와 Python 사이의 JSON 요청·응답 규격
-services/                         # 실제 기능을 실행하는 Go·Python 서버
-docs/                             # 시스템 구조, 구현 계획, 개발 기록
-├── architecture/                 # 최신 시스템 구조와 데이터 수집 설계
-├── planning/                     # 구현 TODO와 제출 전 체크리스트
-├── development/                  # 구현 위치, 검증 결과, 문제 해결 기록
-└── reports/                      # 날짜별 협업·업무 기록
+frontend/
+└── purchase-web/                   # Next.js 사용자 채팅과 관리자 화면
+services/
+├── collector/                      # Go 판매처 Collector와 RabbitMQ Worker
+├── product-backend/                # Spring Boot 상품 및 수집 관리 서버
+└── mcp-server/                     # Codex/Claude Code용 MCP 연결 서버
+plugins/
+└── purchase-research-agent/        # Codex 구매 조사 workflow
+contracts/                          # 서비스 사이의 JSON 계약
+docs/
+├── architecture/                   # 최신 시스템 구조와 데이터 수집 설계
+├── planning/                       # 구현 TODO와 제출 전 체크리스트
+├── development/                    # 구현 위치, 검증 결과, 문제 해결 기록
+└── reports/                        # 날짜별 협업과 업무 기록
 ```
 
-개발 전에는 [시스템 구조](docs/architecture/Purchase_Research_Agent_시스템_구조.md)를 먼저 보고, 다음 작업은 [구현 TODO](docs/planning/Purchase_Research_Agent_TODO.md)에서 확인한다. 대회 라이선스와 제출 조건은 당장 개발을 막지 않고 [대회 규정 대응 체크리스트](docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md)에서 별도로 관리한다.
+개발 전에는 [시스템 구조](docs/architecture/Purchase_Research_Agent_시스템_구조.md)를 먼저 보고, 다음 작업은 [구현 TODO](docs/planning/Purchase_Research_Agent_TODO.md)에서 확인한다. 개인 실험과 협업 코드를 분리하는 방법은 [Git 브랜치 작업 방식](docs/development/Git_브랜치_작업_방식.md)을 따른다.
 
 ## 로컬 인프라 실행
 
-Docker Compose로 PostgreSQL, Redis, RabbitMQ를 실행하기 전에 루트 환경변수
-예제를 복사한다.
+루트 환경변수 예제를 복사하고 PostgreSQL, Redis, RabbitMQ를 실행한다.
 
 ```bash
 cp .env.example .env
-```
-
-`compose.yaml`은 루트 `.env`의 PostgreSQL, Redis, RabbitMQ 설정을 자동으로
-읽는다. `.env`가 없으면 `compose.yaml`에 적힌 로컬 개발 기본값을 사용한다.
-
-설정값이 적용된 최종 Compose 구성을 확인할 수 있다. 이 출력에는 비밀번호가
-포함될 수 있으므로 외부에 공유하지 않는다.
-
-```bash
-docker compose config
-```
-
-이후 로컬 인프라를 실행하고 Alembic migration을 적용한다.
-
-```bash
 docker compose up -d postgres redis rabbitmq
-docker compose run --rm migrate
+docker compose ps
 ```
 
 기본 로컬 접속 정보는 다음과 같다.
 
 | 서비스 | 호스트 주소 | 용도 |
 |---|---|---|
-| PostgreSQL | `localhost:35432` | 상품·snapshot·근거 영구 저장 |
-| Redis | `localhost:36379` | 속도 제한·중복 방지·진행 상태 |
+| PostgreSQL | `localhost:35432` | 상품, snapshot, 근거 영구 저장 |
+| Redis | `localhost:36379` | 속도 제한, 중복 방지, 진행 상태 |
 | RabbitMQ AMQP | `localhost:35672` | 수집 작업과 결과 전달 |
-| RabbitMQ 관리 화면 | `http://localhost:35673` | Queue·연결·처리 상태 확인 |
+| RabbitMQ 관리 화면 | `http://localhost:35673` | Queue와 처리 상태 확인 |
 
-컨테이너 사이에서는 각각 `postgres:5432`, `redis:6379`, `rabbitmq:5672`를
-사용한다. 기본 로컬 계정과 비밀번호는 `.env.example`에 있으며 운영 환경에서는
-반드시 변경한다.
+`compose.yaml`은 루트 `.env` 값을 읽고, 값이 없으면 `.env.example`과 같은 로컬 기본값을 사용한다. 운영 환경에서는 계정과 비밀번호를 반드시 변경한다.
 
-실행 상태는 다음 명령으로 확인한다.
-
-```bash
-docker compose ps
-```
+현재 Spring Boot용 Flyway migration은 아직 작성되지 않았다. 따라서 인프라 실행만으로 상품 테이블이 생성되지는 않는다.
 
 ## 루트 개발 명령
 
-자주 사용하는 명령은 루트 `Makefile`에 모아 두었다. 저장소 루트에서 다음 명령으로
-전체 목록을 볼 수 있다.
-
-```bash
-make help
-```
-
-처음 실행할 때는 환경변수 파일과 로컬 인프라를 준비하고 migration을 적용한다.
+저장소 루트에서 `make help`로 전체 명령을 확인할 수 있다.
 
 ```bash
 make env
 make infra-up
-make migrate
-```
-
-Go Collector와 Next.js 개발 서버는 각각 별도 터미널에서 실행한다.
-
-```bash
 make collector-run
+make product-backend-run
 make web-dev
 ```
 
-Next.js의 기본 포트는 `3000`이며 실행할 때 다른 포트를 지정할 수 있다.
+각 서버는 계속 실행되므로 별도 터미널에서 실행한다. Next.js 포트를 바꾸려면 다음처럼 지정한다.
 
 ```bash
 make web-dev WEB_PORT=2500
 ```
 
-Collector 서버가 실행 중일 때 실제 검색 결과를 PostgreSQL에 저장할 수 있다.
+Go Collector의 RabbitMQ Worker는 다음 명령으로 실행한다.
 
 ```bash
-make collect MERCHANT=abcmart QUERY=구두 LIMIT=3
-make collect MERCHANT=29cm QUERY=가방 LIMIT=5
+make collector-worker
 ```
 
-RabbitMQ 백그라운드 수집은 터미널 세 개에서 실행한다. 이 방식은 Go HTTP 서버를
-별도로 켜지 않아도 Collector Worker가 기존 판매처 Adapter를 직접 사용한다.
+현재 Product Backend의 RabbitMQ 작업 발행과 결과 저장 기능은 미구현이다. 따라서 이전 구조에서 가능했던 Queue 전체 흐름과 DB 적재는 Spring Boot로 다시 구현한 뒤 사용할 수 있다.
 
-```text
-터미널 1: make result-worker
-터미널 2: make collector-worker
-터미널 3: make enqueue MERCHANT=abcmart QUERY=구두 LIMIT=3
-```
-
-한 건만 직접 확인하려면 `make result-worker-once`,
-`make collector-worker-once`를 사용할 수 있다. 현재 Queue 검색은 1페이지만
-지원하며 일시 오류는 5초 뒤 한 번 재시도한다.
-
-커밋 전 기본 검증은 `make test`, Compose 설정과 production build를 포함한 전체
-검증은 `make check`를 사용한다.
+기본 검증은 다음 명령으로 실행한다.
 
 ```bash
 make test
 make check
 ```
 
-자세한 Python 실행 방법은
-[`services/research-backend/README.md`](services/research-backend/README.md)를
-참고한다.
+서비스별 설명은 [Go Collector](services/collector/README.md), [Product Backend](services/product-backend/README.md), [MCP Server](services/mcp-server/README.md)에서 확인한다.
 
-주의: PostgreSQL 공식 이미지는 DB를 처음 만드는 시점에만 DB 이름과 계정 정보를
-적용한다. 이미 생성된 Docker Volume을 유지한 채 `.env`의 사용자·비밀번호·DB 이름만
-바꾸면 기존 DB에는 자동 반영되지 않는다.
+주의: PostgreSQL 공식 이미지는 DB를 처음 만드는 시점에만 DB 이름과 계정 정보를 적용한다. 이미 생성된 Docker Volume을 유지한 채 `.env`의 사용자, 비밀번호, DB 이름만 바꾸면 기존 DB에는 자동 반영되지 않는다.

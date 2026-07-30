@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://purchase-research-agent.local/contracts/collection/v1/collection-result.schema.json",
   "title": "Collection Result Envelope v1",
-  "description": "Go Collector Worker가 RabbitMQ를 통해 Python Research Backend에 전달하는 작업 실행 결과다.",
+  "description": "Go Collector Worker가 RabbitMQ를 통해 Spring Boot Product Backend에 전달하는 작업 실행 결과다.",
   "type": "object",
   "additionalProperties": false,
   "required": [

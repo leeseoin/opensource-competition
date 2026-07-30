@@ -28,7 +28,7 @@ var (
 	idempotencyKeyPattern  = regexp.MustCompile(`^collection:v1:[a-f0-9]{64}$`)
 )
 
-// CollectionTask는 Python Backend가 RabbitMQ에 등록하는 검색 작업 봉투다.
+// CollectionTask는 Product Backend가 RabbitMQ에 등록하는 검색 작업 봉투다.
 type CollectionTask struct {
 	SchemaVersion  string        `json:"schemaVersion"`
 	TaskID         string        `json:"taskId"`
@@ -61,7 +61,7 @@ type TaskError struct {
 	Retryable bool   `json:"retryable"`
 }
 
-// CollectionResultEnvelope는 Go Worker가 Python 저장 Worker에 반환하는 실행 결과다.
+// CollectionResultEnvelope는 Go Worker가 Product Backend 저장 Worker에 반환하는 실행 결과다.
 type CollectionResultEnvelope struct {
 	SchemaVersion   string                  `json:"schemaVersion"`
 	TaskID          string                  `json:"taskId"`

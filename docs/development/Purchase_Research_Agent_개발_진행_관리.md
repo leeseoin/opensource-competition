@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-07-26
+최종 갱신일: 2026-07-30
 
 ## 목적
 
@@ -34,15 +34,15 @@
 
 | 구현 영역 | 상태 | 현재 범위 | 다음 완료 조건 |
 |---|---|---|---|
-| 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 첫 판매처와 요청 계약 확정, Go/Python DTO 매핑 |
+| 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Python Backend와 DB | 부분 구현 | Collector HTTP·Pydantic 검증과 PostgreSQL 상품·snapshot·옵션·근거 저장 | 작업 상태, 리뷰, MCP·FastAPI |
-| Redis·RabbitMQ 수집 기반 | 부분 구현 | 검색 작업·결과 계약, Python producer, Go Worker, Python DB 저장 consumer와 retry·DLQ | Redis limiter·중복 방지·진행 상태와 다중 페이지 |
+| Spring Boot Product Backend와 DB | 초기화 | Spring Boot 4.1.0, Java 21, JPA, Flyway, AMQP, Testcontainers 의존성 | 설정, Java Contract, Flyway schema, JPA 적재 |
+| Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Go Worker 및 retry/DLQ | Spring 작업 발행/결과 저장, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
-| MCP와 Codex Plugin | 부분 구현 | Plugin manifest와 workflow 초안 | 실제 MCP tool과 application use case 연결 |
-| Next.js Web | 부분 구현 | `apps/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
-| 공통 품질·운영 | 부분 구현 | 루트 Makefile, Go·Python 테스트와 PostgreSQL·Redis·RabbitMQ 로컬 실행 기반 | Queue 통합 테스트와 E2E |
+| MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
+| Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
+| 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
 
 ## 영역별 상세 체크리스트
 
@@ -50,7 +50,7 @@
 
 상태: **부분 구현**
 
-- [x] Go Collector, Python Backend, Codex Plugin, Next.js 책임 분리
+- [x] Go Collector, Spring Boot Product Backend, MCP Server, Codex Plugin, Next.js 책임 분리
 - [x] repository 기본 디렉토리 구조 작성
 - [x] 검색 요청 JSON Schema 초안 작성
 - [x] 수집 결과 JSON Schema 초안 작성
@@ -62,13 +62,13 @@
 - [ ] 리뷰 수집 요청과 pagination 계약 작성
 - [ ] 현재 offer 재수집 요청·응답 계약 작성
 - [ ] status별 products, warnings, errors 불변조건 확정
-- [ ] 재검증 책임 확정: Go 현재 상태 수집, Python snapshot 비교
-- [ ] Go transport DTO와 Python Pydantic model 매핑 확정
+- [ ] 재검증 책임 확정: Go 현재 상태 수집, Product Backend snapshot 비교
+- [ ] Go transport DTO와 Java DTO 매핑 확정
 - [ ] 유효 예제 자동 schema 검증
 - [ ] 무효 예제가 예상대로 실패하는 자동 검증
 - [ ] v1 호환성·변경 정책 최종 검토
 
-완료 조건: 요청과 응답 예제만으로 모든 operation, 실패 상태, Go/Python 책임을 설명할 수 있고 자동 계약 검증이 통과해야 한다.
+완료 조건: 요청과 응답 예제만으로 모든 operation, 실패 상태, Go/Java 책임을 설명할 수 있고 자동 계약 검증이 통과해야 한다.
 
 ### 1. Go Collector 기반
 
@@ -145,38 +145,26 @@
 
 완료 조건: 공개 정보만 사용해 실제 후보를 반환하고, 접근 제한을 우회하지 않으며, 모든 판매처 사실에 provenance가 연결되어야 한다.
 
-### 3. Python Backend와 PostgreSQL
+### 3. Spring Boot Product Backend와 PostgreSQL
 
-상태: **부분 구현**
+상태: **초기화**
 
-- [x] `src` layout 패키지 골격 생성
-- [x] `pyproject.toml`과 MCP script entrypoint 초안 작성
-- [x] 미구현 MCP 실행을 명시적으로 차단하는 placeholder 작성
-- [x] `uv.lock`과 서비스 내부 `.venv` 기반 DB 의존성 고정
-- [ ] 환경설정 model과 `.env.example` 정비
-- [x] Collector transport Pydantic model 구현
-- [x] Collector 응답 Pydantic 계약 검증 구현
-- [x] Collector HTTP client와 timeout 구현
-- [x] Collector 오류·상태의 application 오류 매핑
-- [ ] 공통 product/offer/option/review domain model 구현
-- [ ] transport DTO에서 domain model 정규화
-- [x] PostgreSQL local compose 구성 (`compose.yaml`: PostgreSQL 16, volume, health check)
-- [x] SQLAlchemy 2 모델과 Alembic 첫 migration 작성 (`services/research-backend/migrations/versions/20260721_0001_initial_collection_tables.py`)
-- [x] Docker Compose에서 migration 실제 적용·재적용 검증 (PostgreSQL 16에서 두 번 실행 후 5개 테이블 확인)
-- [x] 루트 `.env.example`로 PostgreSQL 포트·DB 이름·사용자·비밀번호 Compose 덮어쓰기 구성
-- [ ] research session repository 구현
-- [x] product/offer/option repository 구현
-- [x] snapshot/evidence repository 구현
-- [x] 중복 수집 식별과 upsert 정책 구현
-- [x] transaction·rollback 정책 구현
-- [ ] 추천 snapshot과 verification snapshot 분리 저장
-- [x] unit test: Pydantic 계약, HTTP 요청, 저장·중복 정책
-- [x] integration test: 실제 PostgreSQL 저장과 테스트 행 정리
-- [x] 현재 수집 데이터와 DB 저장·미저장 필드 입문 문서 작성
+- [x] Spring Boot 4.1.0과 Java 21 Gradle 프로젝트 생성
+- [x] Web MVC, Validation, JPA, Flyway, PostgreSQL, AMQP, Actuator 의존성 추가
+- [x] PostgreSQL과 RabbitMQ Testcontainers 의존성 추가
+- [ ] local/test/production profile과 환경변수 설정
+- [ ] health check와 공통 오류 응답
+- [ ] Collector 요청과 응답 Java DTO
+- [ ] Contract 예제 기반 Java 검증 테스트
+- [ ] Product, MerchantProduct, OfferSnapshot, Option, Evidence JPA entity
+- [ ] Flyway 초기 schema
+- [ ] 동일 판매처 상품 upsert와 snapshot 추가 transaction
+- [ ] 실제 ABC마트/29CM 결과 PostgreSQL 적재 검증
+- [ ] 조사 세션과 작업 상태
 
-완료 조건: fixture Collector 결과가 Python에서 검증·정규화되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
+완료 조건: fixture Collector 결과가 Java Contract로 검증되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
 
-### 3-A. Redis·RabbitMQ 수집 실행 기반
+### 3-A. Redis/RabbitMQ 수집 실행 기반
 
 상태: **부분 구현**
 
@@ -189,15 +177,15 @@
 - [x] Redis 인증 ping 실제 검증
 - [x] RabbitMQ broker 실행 상태와 관리 화면 HTTP 응답 실제 검증
 - [ ] `CollectionJob` 영구 상태 계약
-- [x] 검색 `CollectionTask`, `CollectionResult` JSON Schema와 Pydantic·Go 계약
+- [x] 검색 `CollectionTask`, `CollectionResult` JSON Schema와 Go 계약
 - [x] RabbitMQ exchange, queue, routing key, 5초 retry·DLQ topology
 - [x] Go consumer·result publisher와 작업 timeout
-- [x] Python producer·result consumer와 기존 PostgreSQL Repository 연결
-- [x] 실제 ABC마트 `구두` 3개 Queue 수집·DB 저장
+- [ ] Spring Boot producer와 result consumer
+- [ ] 실제 ABC마트 `구두` 3개 Queue 수집과 DB 저장 재검증
 - [ ] Redis rate limiter·중복 방지·진행 상태 adapter
 
-완료 조건: Python이 등록한 수집 작업을 Go Worker가 안전하게 소비하고 결과를 다시
-Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업 상태를 일관되게
+완료 조건: Product Backend가 등록한 수집 작업을 Go Worker가 안전하게 소비하고 결과를 다시
+Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업 상태를 일관되게
 관리해야 한다.
 
 ### 3-B. 루트 개발 명령
@@ -206,14 +194,14 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 
 - [x] `make help` 명령 목록과 수집 예시 제공
 - [x] `.env` 준비, 로컬 인프라 실행·중지·상태·로그 명령 제공
-- [x] Alembic migration과 PostgreSQL 접속 명령 제공
+- [x] PostgreSQL 접속 명령 제공
 - [x] Go Collector 실행·테스트 명령 제공
-- [x] Python 의존성 준비·테스트·실제 검색 저장 명령 제공
-- [x] RabbitMQ 작업 등록·Go Worker·Python 결과 Worker 명령 제공
+- [x] Spring Boot 실행과 테스트 명령 제공
+- [x] RabbitMQ Go Worker 명령 제공
 - [x] Next.js 설치·실행·lint·build 명령 제공
 - [x] 전체 기본 검증 `make test`, 전체 검증 `make check` 제공
 
-완료 조건: 개발자가 저장소 루트에서 `make help`를 보고 Go, Python, Next.js와
+완료 조건: 개발자가 저장소 루트에서 `make help`를 보고 Go, Spring Boot, Next.js와
 로컬 인프라의 기본 실행·검증 명령을 찾을 수 있어야 한다.
 
 ### 4. 리뷰 분석과 상품 비교
@@ -282,7 +270,7 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 - [ ] 공통 API type과 client 구성
 - [ ] 구매 조건 대화 UI
 - [ ] 구조화 조건 profile panel
-- [ ] research session FastAPI endpoint
+- [ ] Spring Boot research session REST endpoint
 - [ ] SSE 진행 상태 endpoint와 client
 - [ ] 판매처별 진행·부분 실패 표시
 - [ ] 상품 비교 UI와 점수 구성 표시
@@ -319,6 +307,10 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 
 ## 구현 근거
 
+아래 표와 날짜별 기록에는 Spring Boot 전환 전에 완료했던 Python 구현도 포함한다.
+`services/research-backend` 경로가 적힌 항목은 현재 실행 가능한 코드가 아니라
+이전 구조에서 검증한 과거 근거다.
+
 | 작업 | 상태 | 구현 위치 | 검증 |
 |---|---|---|---|
 | Go module 생성 | 완료 | `services/collector/go.mod:1` module 선언 | `go test ./...`, `go vet ./...` 통과 |
@@ -337,10 +329,11 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
 | 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext` 선택 필드 추가; 성공·부분 성공 예제 `check-jsonschema` 통과 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
-| RabbitMQ 검색 작업 계약 | 완료 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask`; Python `infrastructure/messaging/contracts.py:50` `CollectionTask` | 성공·실패 Schema 예제와 Go·Python 계약 테스트 통과 |
+| RabbitMQ 검색 작업 계약 | 부분 구현 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask` | 성공/실패 Schema 예제와 Go 계약 테스트 통과, Java 계약 미구현 |
 | Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
-| Python RabbitMQ 작업·결과 Worker | 검색 수직 흐름 완료 | `services/research-backend/src/research_backend/infrastructure/messaging/rabbitmq.py:39` `RabbitMQBroker`; `interfaces/cli/enqueue_search.py:42` `run`; `interfaces/cli/consume_results.py:42` `run` | Python 17개 테스트, 실제 상품 3개·snapshot 3개·option 17개·evidence 3개 저장 |
-| MCP entrypoint | placeholder | `services/research-backend/src/research_backend/interfaces/mcp/server.py:8` `main` | import 가능, 실행 시 미구현 오류 반환 |
+| Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
+| 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
+| Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
 
 ## 문제 기록
 
@@ -568,6 +561,43 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
   - `rabbitmq-diagnostics -q check_running`: broker 정상 실행
   - `http://localhost:35673/`: RabbitMQ 관리 화면 HTTP 200
 
+### 2026-07-30 Spring Boot Product Backend와 별도 MCP Server 구조 전환
+
+- 진행상황: 사용자 화면 폴더를 `apps`에서 `frontend`로 옮겼다. 기존 Python
+  Research Backend를 제거하고 Spring Boot Product Backend와 별도 MCP Server
+  경계로 문서, Contract 설명, 루트 실행 명령을 갱신했다. Product Backend는
+  기본 프로젝트와 의존성만 준비됐으며 Flyway schema, JPA 저장, RabbitMQ
+  producer/consumer는 미구현이다.
+- 구현 위치:
+  - `Makefile:6` `PRODUCT_BACKEND_DIR`, `MCP_SERVER_DIR`, `WEB_DIR`: 새 디렉토리와 실행 명령 연결
+  - `docs/architecture/Purchase_Research_Agent_시스템_구조.md:24` `전체 구조`: Next.js → MCP Server → Product Backend → Collector 경계
+  - `docs/architecture/Purchase_Research_Agent_시스템_구조.md:69` `사용자 질문과 백그라운드 수집`: DB 우선 조회와 제한된 추가 수집 흐름
+  - `services/product-backend/build.gradle:1` `plugins/dependencies`: Spring Boot 4.1.0, JPA, Flyway, AMQP, PostgreSQL, Testcontainers 구성
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication`: Product Backend 시작점
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductBackendApplicationTests.java:13` `ProductBackendApplicationTests`: PostgreSQL/RabbitMQ Testcontainers 문맥 검증
+  - `services/mcp-server/README.md:6` `현재 상태`: MCP Server의 책임과 금지 경계
+  - `plugins/purchase-research-agent/.mcp.json:2` `mcpServers`: MCP 구현 전 빈 실행 설정
+- 발생 문제: 기본 sandbox에서 Go는 사용자 Library build cache에 접근하지 못했고,
+  Gradle은 사용자 `.gradle` cache lock과 Docker Testcontainers에 접근하지 못했다.
+  Next.js production build는 Google Fonts 네트워크 접근이 차단돼 실패했다. 또한
+  Markdown 날짜 줄의 강제 줄바꿈 공백이 `git diff --check`에 걸렸다.
+- 원인: Go와 Gradle의 기본 cache 위치가 workspace 밖이었고 Spring 문맥 테스트가
+  Docker daemon을 사용한다. Markdown 줄 끝 공백은 Git whitespace 검사 대상이다.
+- 해결: Go는 `GOCACHE=/private/tmp/purchase-research-go-cache`로 검증했다. Spring
+  테스트는 승인된 Gradle/Docker 접근으로 실행했다. Next.js build는 승인된
+  네트워크 접근으로 외부 폰트를 받은 뒤 재실행했다. 문서의 줄 끝 공백을 제거했다.
+- 남은 위험: Spring Boot용 데이터베이스 환경설정, Flyway migration, JPA entity,
+  RabbitMQ producer/consumer가 없어 현재 DB 자동 적재는 동작하지 않는다. MCP
+  구현 언어와 실행 명령도 아직 결정하지 않았다.
+- 검증:
+  - `GOCACHE=/private/tmp/purchase-research-go-cache go test ./...`: 통과
+  - `GOCACHE=/private/tmp/purchase-research-go-cache go vet ./...`: 통과
+  - `services/product-backend`에서 `./gradlew test`: `BUILD SUCCESSFUL`
+  - `frontend/purchase-web`에서 `npm run lint`: 통과
+  - `frontend/purchase-web`에서 `npm run build`: production build 통과
+  - `docker compose config --quiet`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -589,6 +619,7 @@ Python에 전달하며, Redis가 판매처 전체 속도 제한과 짧은 작업
 
 ## 다음 갱신 대상
 
-- Collector 요청 계약과 재검증 책임 확정
-- Go transport DTO 및 contract test 위치 기록
-- fixture 기반 search/product/reviews/current-offer 구현 근거 추가
+- Product Backend 환경설정과 health check
+- Collector Contract Java DTO와 contract test
+- Flyway 초기 schema와 JPA repository
+- Spring Boot RabbitMQ 작업 발행과 결과 저장 Worker

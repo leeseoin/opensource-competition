@@ -33,7 +33,7 @@ Go 기반 판매처 데이터 수집 서비스다.
 - 공개 리뷰 수집
 - 판매처별 동시성 상한과 Redis 전체 rate limit
 - 로그인·CAPTCHA·접근 제한 감지
-- Python Research Backend의 Collector API 호출
+- Spring Boot Product Backend의 Collector API 호출
 
 DB에 쓰거나 상품 추천을 수행하지 않는다.
 
