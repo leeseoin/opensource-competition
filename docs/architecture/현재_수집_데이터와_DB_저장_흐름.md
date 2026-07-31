@@ -6,7 +6,9 @@
 
 ## 1. 먼저 알아야 할 현재 상태
 
-Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있다. 그러나 기존 Python DB 적재 코드는 Spring Boot 전환 과정에서 제거됐고, Spring Boot의 Flyway/JPA 적재는 아직 구현되지 않았다.
+Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있다. Spring Boot에는
+Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색 API가
+구현됐다. 현재 남은 연결은 RabbitMQ 결과 consumer와 실제 판매처 결과 적재다.
 
 ```text
 현재 가능:
@@ -83,7 +85,7 @@ PRDT_DC_PRICE / displayPrice        → price.amount
 
 Product Backend는 판매처 원본 필드 이름을 알 필요 없이 `CollectorResult`만 검증하고 저장하면 된다.
 
-## 4. 앞으로 구현할 DB 저장 흐름
+## 4. 현재 구현된 DB 저장 기반과 남은 연결
 
 ```text
 Product Backend가 CollectionTask 발행
@@ -94,12 +96,16 @@ Go Collector Worker
         ↓
 RabbitMQ 결과 Queue
         ↓
-Product Backend가 Java Contract 검증
+Product Backend가 Java DTO와 Bean Validation으로 Contract 검증
         ↓
 JPA transaction
         ↓
 PostgreSQL
 ```
+
+DTO 검증, JPA transaction과 PostgreSQL 저장은 fixture 기반 통합 테스트까지
+구현됐다. RabbitMQ 결과를 받아 이 저장 서비스를 호출하는 consumer는 다음
+작업이다.
 
 예정 테이블 관계는 다음과 같다.
 
@@ -121,17 +127,17 @@ products
 
 같은 판매처 상품을 다시 수집하면 상품 행을 무한히 복제하지 않고 기존 `merchant_products`를 연결한다. 가격과 재고는 과거 값을 덮어쓰지 않고 새 snapshot으로 추가한다.
 
-## 5. Spring Boot에서 구현해야 할 항목
+## 5. Spring Boot 구현 상태
 
-1. `application.yaml`에 PostgreSQL/RabbitMQ 환경변수 연결
-2. Collector와 Queue Contract를 표현하는 Java DTO
-3. 정상/무효 JSON 예제를 사용하는 contract test
-4. Flyway 초기 schema
-5. JPA entity와 repository
-6. `merchant + externalId` upsert와 snapshot 추가 transaction
-7. RabbitMQ `CollectionTask` producer
-8. `CollectionResult` consumer와 실패/DLQ 처리
-9. ABC마트와 29CM 실제 결과 적재 통합 테스트
+1. [완료] `application.yaml`에 PostgreSQL/RabbitMQ 환경변수 연결
+2. [부분 구현] CollectorResult Java DTO와 정상/무효 예제 검증
+3. [완료] Flyway 초기 schema
+4. [완료] 도메인별 JPA entity와 repository
+5. [완료] `merchant + externalId` upsert와 snapshot 추가 transaction
+6. [완료] 저장된 최신 상품 검색 REST API
+7. [예정] RabbitMQ `CollectionTask` producer
+8. [예정] `CollectionResult` consumer와 실패/DLQ 처리
+9. [예정] ABC마트와 29CM 실제 결과 적재 통합 테스트
 
 이 항목들이 완료되고 검증 명령이 통과한 뒤에만 “DB 적재 구현 완료”로 체크한다.
 
@@ -148,4 +154,6 @@ products
 
 ## 7. 다음 구현 순서
 
-가장 먼저 Product Backend의 환경설정과 Flyway 초기 schema를 만든다. 그다음 Java Contract와 JPA 저장을 연결하고, 마지막으로 RabbitMQ 결과 consumer를 붙인다.
+다음 작업은 RabbitMQ `CollectionResult` consumer가
+`CollectorResultStoreService`를 호출하도록 연결하는 것이다. 그다음 실제
+ABC마트와 29CM 결과를 저장하고 상품 검색 API에서 확인한다.

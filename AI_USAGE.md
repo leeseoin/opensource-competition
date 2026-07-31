@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-07-30
+최종 갱신일: 2026-07-31
 
 ## 이 문서를 공개하는 이유
 
@@ -52,3 +52,7 @@
 | 날짜 | 내용 | 검토 방법 |
 |---|---|---|
 | 2026-07-30 | 최초 AI 사용 공개 문서 작성 / Codex와 Claude Code 개발 보조 범위 및 runtime AI 미구현 상태 기록 | 저장소 구조, 현재 manifest, 운영규정 7쪽 제9조 제4항과 제5항 대조 |
+| 2026-07-30 | Codex를 사용해 Product Backend의 Flyway/JPA 저장과 조회 API를 구현하고 package-by-feature 구조로 수정 | 사용자가 package 구조를 결정하고 diff 검토 및 Testcontainers integration test 수행 |
+| 2026-07-31 | Codex를 사용해 기능 ID 목록, 코드트래커, 진행상황 점검 스킬과 문서 추적 절차를 구성 | 사용자가 제안한 문서 역할을 세 스킬로 분리하고 스킬 형식 검사, 문서 동기화 검사 및 diff 검토 |
+| 2026-07-31 | Codex를 사용해 Collector JSON 수동 적재 API와 정상/실패 통합 테스트를 구현 | 사용자가 수동 적재 경로를 결정하고 Testcontainers PostgreSQL 기반 전체 Spring Boot 테스트와 diff를 검토 |
+| 2026-07-31 | Codex를 사용해 Spring Boot 내부 API에 OpenAPI 문서와 Swagger UI를 추가 | 공식 springdoc-openapi 문서와 라이선스를 확인하고 Swagger/OpenAPI 통합 테스트 및 운영 profile 기본 비활성화를 검토 |

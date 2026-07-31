@@ -181,7 +181,7 @@ services/
 │   ├── internal/merchants/         # 판매처별 Adapter
 │   └── tests/                      # unit와 integration test
 ├── product-backend/                # Java와 Spring Boot
-│   ├── src/main/java/              # API, application, domain, infrastructure
+│   ├── src/main/java/              # collection, product, evidence 도메인별 package
 │   └── src/test/java/              # unit와 integration test
 └── mcp-server/                     # MCP 연결 서버
 
@@ -191,18 +191,29 @@ compose.yaml                        # PostgreSQL, Redis, RabbitMQ
 docs/                               # 구조, 계획, 진행 기록
 ```
 
-Product Backend는 기능이 늘어나면 다음 package 구조를 사용한다.
+Product Backend는 업무 도메인을 먼저 찾고 그 안에서 기술 역할을 찾는 package
+구조를 사용한다.
 
 ```text
 com.purchasesearch.product_backend
-├── domain/                         # 핵심 모델과 규칙
-├── application/                    # use case와 port
-├── infrastructure/
-│   ├── persistence/                # JPA와 Flyway 연동
-│   └── messaging/                  # RabbitMQ와 Redis adapter
-└── interfaces/
-    └── api/                        # REST controller와 DTO
+├── collection/
+│   ├── dto/                        # Collector와 Queue 계약
+│   └── service/                    # 수집 결과 검증과 저장
+├── product/
+│   ├── controller/                 # 상품 REST API
+│   ├── dto/                        # 상품 API 계약
+│   ├── entity/                     # 상품, 판매처 상품, snapshot, 옵션
+│   ├── repository/                 # 상품 JPA repository
+│   └── service/                    # 상품 조회 use case
+├── evidence/
+│   ├── entity/                     # 공개 출처 근거
+│   └── repository/                 # 근거 JPA repository
+└── common/                         # 공통 오류와 설정
 ```
+
+새 도메인이 추가되면 먼저 도메인 package를 만들고 필요한 `controller`, `dto`,
+`entity`, `repository`, `service`, `exception`을 그 아래에 둔다. 도메인을 찾기
+위해 여러 기술 계층을 오갈 필요가 없도록 하는 기준이다.
 
 ## 8. 현재 구현 상태
 
@@ -210,8 +221,8 @@ com.purchasesearch.product_backend
 |---|---|---|
 | Go Collector | 부분 구현 | ABC마트/29CM 검색, Registry, RabbitMQ 작업 소비와 결과 발행 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
-| Product Backend | 초기화 | Spring Boot 4.1.0, Java 21, JPA, Flyway, AMQP, PostgreSQL, Testcontainers 의존성 |
-| PostgreSQL 적재 | 전환 중 | 이전 Python 구현은 제거됐고 Spring Boot Flyway/JPA 적재는 미구현 |
+| Product Backend | 부분 구현 | 환경설정, CollectorResult DTO, 도메인별 JPA 구성, 상품 조회 API |
+| PostgreSQL 적재 | 부분 구현 | Flyway 초기 schema와 fixture 기반 upsert/snapshot 저장 검증, RabbitMQ consumer는 미구현 |
 | MCP Server | 계획 | 디렉토리와 책임 문서만 생성 |
 | Next.js Web | 초기화 | `frontend/purchase-web` 기본 scaffold |
 | RabbitMQ | 부분 구현 | Go Worker는 구현됐고 Spring 작업 발행과 결과 소비는 미구현 |
@@ -220,9 +231,9 @@ com.purchasesearch.product_backend
 
 ## 9. 구현 순서
 
-1. Product Backend 환경설정과 health check를 구현한다.
-2. 기존 Contract를 Java DTO와 테스트로 연결한다.
-3. Flyway 초기 schema와 JPA repository를 구현한다.
+1. RabbitMQ `CollectionResult` consumer를 현재 저장 서비스에 연결한다.
+2. 실제 ABC마트/29CM 검색 결과를 PostgreSQL에 적재한다.
+3. 수집 작업 생성 API와 RabbitMQ producer를 구현한다.
 4. RabbitMQ 작업 발행과 `CollectorResult` 저장 Worker를 구현한다.
 5. 상품 검색 REST API를 구현한다.
 6. MCP Server가 REST API를 호출하도록 연결한다.

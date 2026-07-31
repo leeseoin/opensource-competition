@@ -1,14 +1,16 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-07-30
+최종 갱신일: 2026-07-31
 
 ## 목적
 
-이 문서는 구현 계획의 완료 근거, 코드 위치, 검증 결과, 개발 중 발생한 문제와 해결 과정을 추적한다. 앞으로 할 일은 [구현 TODO](../planning/Purchase_Research_Agent_TODO.md)에서 관리하고, 완료된 작업의 증거는 이 문서에서 관리한다.
+이 문서는 구현 계획의 완료 근거, 코드 위치, 검증 결과, 개발 중 발생한 문제와 해결 과정을 추적한다. 상위 기능과 완료 기준은 [기능 목록](../planning/Purchase_Research_Agent_기능_목록.md), 앞으로 할 일은 [구현 TODO](../planning/Purchase_Research_Agent_TODO.md), 구현 commit 이력은 [코드트래커](../reports/코드트래커/INDEX.md)에서 관리한다.
 
 ## 기록 규칙
 
 - 상위 작업은 TODO에서, 세부 작업은 이 문서의 영역별 체크리스트에서 관리한다.
+- 새 작업 기록과 구현 근거에는 기능 목록의 기능 ID를 함께 기록한다.
+- 기능 목록, 코드트래커와 현재 상태를 연결하는 순서는 [기능 ID 기반 개발 추적 프로세스](기능_ID_기반_개발_추적_프로세스.md)를 따른다.
 - 세부 작업은 골격, 정상 경로, 실패 경로, 테스트, 문서, 검증처럼 독립적으로 확인 가능한 크기로 나눈다.
 - 세부 항목 자체가 실제로 끝났으면 `[x]`, 끝나지 않았거나 검증하지 못했으면 `[ ]`로 표시한다.
 - 영역은 모든 필수 세부 항목과 완료 조건을 충족한 경우에만 `완료`로 판정한다.
@@ -37,7 +39,7 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 초기화 | Spring Boot 4.1.0, Java 21, JPA, Flyway, AMQP, Testcontainers 의존성 | 설정, Java Contract, Flyway schema, JPA 적재 |
+| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, JPA 적재, 상품 조회 API | RabbitMQ 결과 consumer, 동시 저장 보강, 실제 수집 E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Go Worker 및 retry/DLQ | Spring 작업 발행/결과 저장, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
@@ -147,18 +149,20 @@
 
 ### 3. Spring Boot Product Backend와 PostgreSQL
 
-상태: **초기화**
+상태: **부분 구현**
 
 - [x] Spring Boot 4.1.0과 Java 21 Gradle 프로젝트 생성
 - [x] Web MVC, Validation, JPA, Flyway, PostgreSQL, AMQP, Actuator 의존성 추가
 - [x] PostgreSQL과 RabbitMQ Testcontainers 의존성 추가
-- [ ] local/test/production profile과 환경변수 설정
-- [ ] health check와 공통 오류 응답
-- [ ] Collector 요청과 응답 Java DTO
-- [ ] Contract 예제 기반 Java 검증 테스트
-- [ ] Product, MerchantProduct, OfferSnapshot, Option, Evidence JPA entity
-- [ ] Flyway 초기 schema
-- [ ] 동일 판매처 상품 upsert와 snapshot 추가 transaction
+- [x] product/collection/evidence 도메인 우선 package 구조 적용
+- [ ] local/test/production profile과 환경변수 설정 **(부분 구현)**
+- [ ] health check와 공통 오류 응답 **(Actuator health 완료)**
+- [ ] Collector 요청과 응답 Java DTO **(CollectorResult 응답 완료)**
+- [ ] Contract 예제 기반 Java 검증 테스트 **(정상/무효 예제 완료)**
+- [x] Product, MerchantProduct, OfferSnapshot, ProductOption, Evidence JPA entity
+- [x] Flyway 초기 schema
+- [x] 동일 판매처 상품 upsert와 snapshot 추가 transaction
+- [x] 저장된 최신 상품 검색 REST API
 - [ ] 실제 ABC마트/29CM 결과 PostgreSQL 적재 검증
 - [ ] 조사 세션과 작업 상태
 
@@ -333,6 +337,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
+| `BACKEND-001` Collector 결과 수동 적재 API | 부분 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/dto/CollectionResultStoreResponse.java:14` `CollectionResultStoreResponse`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79` `storesCollectorResultThroughHttpEndpoint` | `./gradlew test` 통과 / ABC마트 `manual-abc-001` 실제 저장 결과 상품 3개, 판매처 상품 3개, snapshot 3개, 옵션 19개, 근거 3개 확인 / 29CM와 Queue E2E 남음 |
+| `OPS-002` Product Backend OpenAPI와 Swagger UI | 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | `/v3/api-docs`의 수동 적재/상품 조회 경로와 `/swagger-ui.html` redirect 통합 테스트 통과 |
+| `OPS-003` 기능 ID 기반 개발 추적 | 구현 완료/검증 필요 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | Ruby YAML 구조 검사, 기능 ID 25개 중복 검사, `make docs-check`, `git diff --check` 통과 / 실제 commit 기반 전체 흐름 검증 필요 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
 
 ## 문제 기록
@@ -346,6 +353,10 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-07-16 | HTTP server refactor | `serve` 분리 직후 `undefined: err` compile 오류 | 기존 `Run` 지역변수를 새 method에서도 재사용 | `serve` 종료 결과를 method 내부 지역변수로 선언하고 전체 Go 검증 재실행 | 해결 |
 | 2026-07-16 | Go 검증 명령 | 저장소 root의 `go test ./...`가 main module을 찾지 못함 | Go module이 `services/collector` 하위에 위치 | `services/collector`에서 Go 검증 명령을 실행하고 작업 기록에 실행 위치 명시 | 해결 |
 | 2026-07-16 | 실제 판매처 조사 | 격리 환경에서 판매처 host DNS 조회 실패 | 기본 실행 환경의 외부 네트워크 제한 | 승인된 낮은 빈도 요청으로 공개 페이지와 robots 정책 확인 | 해결 |
+| 2026-07-31 | 스킬 형식 검증 | 공식 `generate_openai_yaml.py`와 `quick_validate.py`가 `ModuleNotFoundError: yaml`로 실행되지 않음 | 로컬 Python 환경에 PyYAML이 설치되지 않음 | 프로젝트 의존성을 추가하지 않고 Ruby 기본 YAML 파서와 별도 필수 필드 검사로 같은 파일 구조를 검증 / 공식 검사 재실행은 개발환경 PyYAML 준비 후 수행 | 부분 해결 |
+| 2026-07-31 | 검증 명령 | 첫 문서 검사에서 `rg`, `make`, `git`을 찾지 못함 | zsh의 특수 변수 `path`를 반복 변수로 사용해 해당 shell의 명령 검색 경로를 덮어씀 | 반복 변수명을 `doc_file`로 변경하고 전체 검증을 다시 실행 | 해결 |
+| 2026-07-31 | Product Backend 실행 | Flyway가 비어 있지 않은 `public` schema와 없는 `flyway_schema_history`를 감지해 서버 시작을 중단 | 이전 Python/Alembic 테이블과 데이터가 PostgreSQL Docker Volume에 남아 있음 | 로컬 schema를 정리한 뒤 Flyway V1 적용과 서버 실행 성공 / `flyway_schema_history` 존재, `alembic_version` 없음, Swagger 실제 적재 확인 | 해결 |
+| 2026-07-31 | Spring Boot 검증 | 최종 Gradle 재실행이 사용자 Gradle cache의 lock 파일 접근 권한 때문에 실패 | 격리 실행 환경이 workspace 밖의 `~/.gradle` lock 파일 쓰기를 제한 | 승인된 프로젝트 Gradle Wrapper 명령으로 재실행해 전체 테스트 통과 | 해결 |
 | 2026-07-16 | 판매처 정책 | 무신사 검색 구현 후 일반 Collector user-agent가 robots에서 전체 차단됨을 확인 | 무신사 `robots.txt`의 `User-agent: * / Disallow: /` 정책 | 무신사 구현을 제거하고 `User-agent: * / Allow: /`인 ABC마트로 전환 | 해결 |
 | 2026-07-16 | 무신사 parser test | 폐기 전 최소 HTML의 `__NEXT_DATA__` JSON 해석 실패 | 테스트 자료를 줄이는 과정에서 닫는 중괄호가 하나 많았음 | JSON을 수정해 원인을 확인했으나 robots 정책 확인 후 무신사 코드는 최종 제거 | 해결 |
 | 2026-07-16 | ABC마트 검색 조건 | 결과 개수 1개와 270 사이즈를 함께 요청하면 앞 상품이 맞지 않아 결과가 비어 보임 | 서버에서 1개만 받은 뒤 Collector가 사이즈 조건을 적용함 | 서버에서는 최소 30개를 받은 뒤 조건을 적용하고 마지막에 요청 개수만큼 잘라 반환 | 해결 |
@@ -639,6 +650,131 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
     공개 문서 동반 변경을 통과 처리
   - `git diff --check`: 통과
 
+### 2026-07-30 Product Backend 상품 수집 DB 저장과 조회
+
+- 진행상황: Spring Boot가 시작될 때 Flyway로 상품 수집 테이블을 만들고, ABC마트
+  CollectorResult 계약 예제를 검증해 PostgreSQL에 저장하는 transaction을 구현했다.
+  같은 판매처 상품은 중복 생성하지 않고 매 수집 시점의 가격/재고/옵션/근거를 새
+  snapshot으로 남긴다. 저장된 최신 상품을 판매처와 검색어로 조회하는 REST API도
+  구현했다. RabbitMQ 결과 consumer와 실제 Collector부터 DB까지 연결하는 E2E는
+  남아 있다.
+- 구조 결정: Product Backend는 `product`, `collection`, `evidence` 업무 도메인을
+  먼저 나누고 각 도메인 안에서 `controller`, `dto`, `entity`, `repository`,
+  `service`, `exception` 역할을 나누는 package-by-feature 구조를 사용한다.
+- 구현 위치:
+  - `services/product-backend/src/main/resources/application.yaml:1` `spring`: 로컬
+    환경변수 기반 PostgreSQL/RabbitMQ, Flyway, JPA validate 및 Actuator 설정
+  - `services/product-backend/src/main/resources/application-prod.yaml:1` `spring`:
+    운영 환경에서 필수 연결값을 외부 환경변수로 주입
+  - `services/product-backend/src/main/resources/db/migration/V1__initial_product_collection.sql:1`
+    `V1__initial_product_collection`: 상품, 판매처 상품, offer snapshot, 옵션 및 근거
+    schema와 제약조건
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectorResult.java:34`
+    `CollectorResult`: Go Collector v1 결과의 Java DTO와 Bean Validation
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:31`
+    `CollectorResultStoreService`: 상품 upsert와 snapshot/옵션/근거 저장 transaction
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductQueryController.java:24`
+    `ProductQueryController.search`: 최신 상품 검색 REST API
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:28`
+    `ProductQueryService.search`: 최신 snapshot과 옵션을 결합하고 `totalCount`와
+    `hasNext`를 반환
+  - `contracts/collector/v1/examples/collector-result.abcmart-success.json:1`
+    `collector-result.abcmart-success`: Java 저장 통합 테스트용 공통 계약 예제
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:41`
+    `ProductStorageIntegrationTests`: 실제 PostgreSQL에서 migration 재실행, 유효/무효
+    계약, 중복 방지, snapshot 추가 및 조회 API 검증
+- 발생 문제:
+  - 최초 코드가 `application/domain/infrastructure/interfaces` 최상위 계층으로
+    나뉘어 팀이 선호하는 도메인 중심 탐색 방식과 맞지 않았다.
+  - Flyway의 `CHAR(3)` 통화 열과 JPA의 `VARCHAR(3)` 매핑 차이로 Hibernate schema
+    검증이 실패했다.
+  - 현재 Flyway 버전의 migration 결과 개수는 method가 아니라 field로 제공되어
+    테스트 compile이 한 차례 실패했다.
+- 원인:
+  - Spring 계층형 package 구조를 기본값으로 적용해 팀의 기존 개발 방식이 반영되지
+    않았다.
+  - PostgreSQL의 `CHAR`와 Hibernate의 `VARCHAR` type 판단 차이를 초기 migration에서
+    고려하지 않았다.
+  - 현재 의존성의 Flyway API를 확인하기 전에 이전 API 형태를 사용했다.
+- 해결:
+  - 코드를 `collection`, `product`, `evidence` 도메인으로 이동하고 같은 구조를
+    `AGENTS.md`에 규칙으로 고정했다.
+  - 통화 열을 `VARCHAR(3)`으로 맞춰 Flyway schema와 JPA 검증을 일치시켰다.
+  - 현재 Flyway API에 맞춰 `migrationsExecuted` field를 검증했다.
+- 남은 위험: RabbitMQ 결과 consumer 미구현, 동시에 최초 저장할 때 unique 충돌을
+  재시도하는 정책 미구현, JSON Schema 직접 검증 미구현, 리뷰/실측값 저장 미구현,
+  실제 ABC마트/29CM 결과를 Queue부터 PostgreSQL까지 저장하는 E2E 미검증
+- 검증:
+  - `services/product-backend`에서 `./gradlew test`: Testcontainers PostgreSQL과
+    RabbitMQ를 사용한 전체 테스트 통과
+
+### 2026-07-31 BACKEND-001 Collector 결과 수동 적재 API
+
+- 진행상황: Go Collector가 만든 성공 또는 부분 성공 JSON을
+  `POST /internal/v1/collection-results`로 받아 기존 transaction 저장 서비스에
+  연결했다. 저장 개수를 HTTP 응답으로 반환하고 차단 상태 또는 Contract 위반은
+  400으로 거절한다. Swagger UI에서 ABC마트 `manual-abc-001` 결과를 전송해 로컬
+  PostgreSQL 적재까지 확인했다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35`
+    `CollectionResultController`: 수동 적재 내부 API와 저장 불가 상태의 400 응답
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectionResultStoreResponse.java:14`
+    `CollectionResultStoreResponse`: 상품, snapshot, 옵션과 근거 저장 개수 응답
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/exception/UnstorableCollectorResultException.java:7`
+    `UnstorableCollectorResultException`: 저장 불가 상태만 400으로 변환하고 내부
+    프로그래밍 오류와 구분
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79`
+    `storesCollectorResultThroughHttpEndpoint`: HTTP 요청부터 실제 PostgreSQL 저장까지
+    정상 경로 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:105`
+    `rejectsNonStorableCollectorResultThroughHttpEndpoint`: 저장 불가 상태의 400 응답과
+    미저장 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:127`
+    `rejectsContractViolationThroughHttpEndpoint`: Bean Validation 실패의 400 응답과
+    미저장 검증
+- 발생 문제: 최초 실행 시 로컬 PostgreSQL에 이전 Alembic 테이블과 데이터가 남아
+  Flyway 기반 Product Backend가 시작되지 않았다.
+- 원인: `make infra-down`은 PostgreSQL Volume을 보존하며 기존 DB에는
+  `alembic_version`만 있고 `flyway_schema_history`가 없다.
+- 해결: 로컬 schema를 정리하고 Flyway V1 마이그레이션을 적용했다. 현재
+  `flyway_schema_history`가 존재하고 `alembic_version`은 없으며, Swagger UI로
+  전송한 실제 ABC마트 결과가 정상 저장됐다. API 정상/실패 경로는 독립
+  Testcontainers PostgreSQL에서도 검증했다.
+- 남은 위험: 이 내부 API에는 아직 인증과 요청 본문 크기 제한이 없으므로 운영
+  환경에 외부 노출하면 안 된다. 최종 자동 적재는 RabbitMQ consumer가 같은 저장
+  서비스를 호출해야 한다. 29CM 실제 결과 적재도 별도로 검증해야 한다.
+- 검증:
+  - `services/product-backend`에서 `./gradlew test`: 통과
+  - `docker compose exec -T postgres psql`: Flyway V1 성공과 Alembic history 제거 확인
+  - ABC마트 `manual-abc-001` SQL 확인: 상품 3개, 판매처 상품 3개, 가격/재고
+    snapshot 3개, 옵션 19개, 근거 3개
+
+### 2026-07-31 OPS-002 Product Backend Swagger UI
+
+- 진행상황: Spring Boot 4용 springdoc-openapi를 추가해 수동 적재 API와 상품 조회 API를
+  Swagger UI에서 직접 호출할 수 있게 했다. OpenAPI JSON 경로와 Swagger UI redirect도
+  통합 테스트로 고정했다.
+- 구현 위치:
+  - `services/product-backend/build.gradle:28`
+    `springdoc-openapi-starter-webmvc-ui`: Spring Boot 4용 OpenAPI와 Swagger UI 의존성
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14`
+    `OpenApiConfiguration`: 내부 API 제목, 버전과 설명
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:57`
+    `store OpenAPI annotations`: 수동 적재 설명과 200/400 응답
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductQueryController.java:49`
+    `search OpenAPI annotations`: 최신 상품 검색 설명
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221`
+    `exposesOpenApiDocumentAndSwaggerUi`: OpenAPI 경로와 Swagger UI 진입점 검증
+- 발생 문제: 없음
+- 해결: 로컬 profile에서는 `/swagger-ui.html`과 `/v3/api-docs`를 제공하고 운영
+  profile에서는 두 기능을 기본 비활성화했다.
+- 남은 위험: Swagger UI와 수동 적재 API는 인증이 구현되기 전까지 운영 환경에
+  노출하면 안 된다.
+- 검증:
+  - `services/product-backend`에서 `./gradlew test`: 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -660,7 +796,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ## 다음 갱신 대상
 
-- Product Backend 환경설정과 health check
-- Collector Contract Java DTO와 contract test
-- Flyway 초기 schema와 JPA repository
 - Spring Boot RabbitMQ 작업 발행과 결과 저장 Worker
+- 실제 ABC마트/29CM 수집 결과 PostgreSQL 적재 E2E
+- 최초 상품 동시 upsert 충돌 처리
+- JSON Schema 직접 검증과 공통 오류 응답

@@ -1,0 +1,249 @@
+package com.purchasesearch.product_backend.collection.service;
+
+import java.util.Set;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.purchasesearch.product_backend.collection.dto.CollectorResult;
+import com.purchasesearch.product_backend.collection.dto.CollectorResult.Money;
+import com.purchasesearch.product_backend.collection.dto.CollectorResult.Provenance;
+import com.purchasesearch.product_backend.collection.exception.UnstorableCollectorResultException;
+import com.purchasesearch.product_backend.evidence.entity.Evidence;
+import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
+import com.purchasesearch.product_backend.product.entity.MerchantProduct;
+import com.purchasesearch.product_backend.product.entity.OfferSnapshot;
+import com.purchasesearch.product_backend.product.entity.Product;
+import com.purchasesearch.product_backend.product.entity.ProductOption;
+import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
+import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
+import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
+import com.purchasesearch.product_backend.product.repository.ProductRepository;
+
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
+
+/**
+ * CollectorResultStoreService는 검증된 CollectorResult의 상품, 가격 snapshot, 옵션 및
+ * 근거를 하나의 transaction으로 저장한다.
+ */
+@Service
+public class CollectorResultStoreService {
+
+	private final Validator validator;
+	private final ProductRepository productRepository;
+	private final MerchantProductRepository merchantProductRepository;
+	private final OfferSnapshotRepository offerSnapshotRepository;
+	private final ProductOptionRepository productOptionRepository;
+	private final EvidenceRepository evidenceRepository;
+
+	/**
+	 * Collector 결과 저장에 필요한 validator와 repository를 연결한다.
+	 *
+	 * @param validator Bean Validation validator
+	 * @param productRepository 공통 상품 repository
+	 * @param merchantProductRepository 판매처 상품 repository
+	 * @param offerSnapshotRepository 가격과 재고 snapshot repository
+	 * @param productOptionRepository 상품 옵션 repository
+	 * @param evidenceRepository 공개 출처 근거 repository
+	 */
+	public CollectorResultStoreService(
+			Validator validator,
+			ProductRepository productRepository,
+			MerchantProductRepository merchantProductRepository,
+			OfferSnapshotRepository offerSnapshotRepository,
+			ProductOptionRepository productOptionRepository,
+			EvidenceRepository evidenceRepository) {
+		this.validator = validator;
+		this.productRepository = productRepository;
+		this.merchantProductRepository = merchantProductRepository;
+		this.offerSnapshotRepository = offerSnapshotRepository;
+		this.productOptionRepository = productOptionRepository;
+		this.evidenceRepository = evidenceRepository;
+	}
+
+	/**
+	 * CollectorResult 전체를 검증하고 상품별 snapshot을 저장한다.
+	 *
+	 * @param result Go Collector 공통 결과
+	 * @return 저장된 상품, snapshot, 옵션 및 근거 개수
+	 * @throws ConstraintViolationException Contract 제약을 만족하지 못한 경우
+	 * @throws UnstorableCollectorResultException 저장할 수 없는 Collector 상태인 경우
+	 */
+	@Transactional
+	public StoreReport store(CollectorResult result) {
+		Set<ConstraintViolation<CollectorResult>> violations = validator.validate(result);
+		if (!violations.isEmpty()) {
+			throw new ConstraintViolationException(violations);
+		}
+		result.validateStorable();
+
+		int optionCount = 0;
+		int evidenceCount = 0;
+		for (CollectorResult.Product product : result.products()) {
+			MerchantProduct merchantProduct = upsertMerchantProduct(result, product);
+			OfferSnapshot snapshot = saveOfferSnapshot(result, product, merchantProduct);
+			optionCount += saveOptions(product, snapshot);
+			evidenceCount += saveEvidence(product, merchantProduct, snapshot);
+		}
+
+		return new StoreReport(
+				result.products().size(),
+				result.products().size(),
+				optionCount,
+				evidenceCount);
+	}
+
+	/**
+	 * 판매처와 외부 상품번호를 기준으로 기존 상품을 갱신하거나 새 상품을 생성한다.
+	 *
+	 * @param result Collector 결과 공통 정보
+	 * @param product 저장할 상품
+	 * @return 저장된 판매처 상품 entity
+	 */
+	private MerchantProduct upsertMerchantProduct(
+			CollectorResult result,
+			CollectorResult.Product product) {
+		return merchantProductRepository
+				.findByMerchantAndExternalId(result.merchant(), product.externalId())
+				.map(existing -> {
+					existing.getProduct().update(
+							product.name(),
+							product.brand(),
+							product.categoryPath(),
+							product.imageUrls());
+					existing.updateCollection(product.productUrl(), product.provenance().collectedAt());
+					return existing;
+				})
+				.orElseGet(() -> {
+					Product savedProduct = productRepository.save(Product.create(
+							product.name(),
+							product.brand(),
+							product.categoryPath(),
+							product.imageUrls()));
+					return merchantProductRepository.save(MerchantProduct.create(
+							savedProduct,
+							result.merchant(),
+							product.externalId(),
+							product.productUrl(),
+							product.provenance().collectedAt()));
+				});
+	}
+
+	/**
+	 * 상품 가격, 배송, 재고 및 평점 snapshot을 추가한다.
+	 *
+	 * @param result Collector 결과 공통 정보
+	 * @param product 저장할 상품
+	 * @param merchantProduct 판매처 상품
+	 * @return 저장된 offer snapshot
+	 */
+	private OfferSnapshot saveOfferSnapshot(
+			CollectorResult result,
+			CollectorResult.Product product,
+			MerchantProduct merchantProduct) {
+		Money price = product.price();
+		Money shippingFee = product.shipping().fee();
+		Provenance provenance = product.provenance();
+		return offerSnapshotRepository.save(OfferSnapshot.create(
+				merchantProduct,
+				result.requestId(),
+				price == null ? null : price.amount(),
+				price == null ? null : price.currency(),
+				shippingFee == null ? null : shippingFee.amount(),
+				shippingFee == null ? null : shippingFee.currency(),
+				product.shipping().summary(),
+				product.stockStatus(),
+				product.rating(),
+				product.reviewCount(),
+				provenance.sourceUrl(),
+				provenance.collectedAt(),
+				provenance.collectorVersion()));
+	}
+
+	/**
+	 * 하나의 offer snapshot에 포함된 옵션을 추가한다.
+	 *
+	 * @param product 옵션을 포함한 상품
+	 * @param snapshot 옵션이 속할 offer snapshot
+	 * @return 저장한 옵션 개수
+	 */
+	private int saveOptions(CollectorResult.Product product, OfferSnapshot snapshot) {
+		for (CollectorResult.Option option : product.options()) {
+			Money price = option.price();
+			Provenance provenance = option.provenance();
+			productOptionRepository.save(ProductOption.create(
+					snapshot,
+					option.externalId(),
+					option.label(),
+					option.size(),
+					option.color(),
+					option.stockStatus(),
+					price == null ? null : price.amount(),
+					price == null ? null : price.currency(),
+					provenance.sourceUrl(),
+					provenance.collectedAt(),
+					provenance.collectorVersion()));
+		}
+		return product.options().size();
+	}
+
+	/**
+	 * 상품과 배송 정보의 공개 출처를 snapshot에 연결한다.
+	 *
+	 * @param product 근거를 포함한 상품
+	 * @param merchantProduct 판매처 상품
+	 * @param snapshot 관련 offer snapshot
+	 * @return 저장한 근거 개수
+	 */
+	private int saveEvidence(
+			CollectorResult.Product product,
+			MerchantProduct merchantProduct,
+			OfferSnapshot snapshot) {
+		saveEvidenceItem("product", product.provenance(), merchantProduct, snapshot);
+		int savedCount = 1;
+		if (!product.shipping().provenance().equals(product.provenance())) {
+			saveEvidenceItem("shipping", product.shipping().provenance(), merchantProduct, snapshot);
+			savedCount++;
+		}
+		return savedCount;
+	}
+
+	/**
+	 * 하나의 provenance를 evidence 행으로 저장한다.
+	 *
+	 * @param evidenceType 근거 종류
+	 * @param provenance 공개 출처 정보
+	 * @param merchantProduct 판매처 상품
+	 * @param snapshot 관련 offer snapshot
+	 */
+	private void saveEvidenceItem(
+			String evidenceType,
+			Provenance provenance,
+			MerchantProduct merchantProduct,
+			OfferSnapshot snapshot) {
+		evidenceRepository.save(Evidence.create(
+				merchantProduct,
+				snapshot,
+				evidenceType,
+				provenance.sourceUrl(),
+				provenance.collectedAt(),
+				provenance.collectorVersion()));
+	}
+
+	/**
+	 * StoreReport는 한 CollectorResult transaction에서 저장한 행 개수를 요약한다.
+	 *
+	 * @param productCount 처리한 상품 수
+	 * @param snapshotCount 추가한 offer snapshot 수
+	 * @param optionCount 추가한 옵션 수
+	 * @param evidenceCount 추가한 근거 수
+	 */
+	public record StoreReport(
+			int productCount,
+			int snapshotCount,
+			int optionCount,
+			int evidenceCount) {
+	}
+}

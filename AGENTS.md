@@ -4,7 +4,7 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ 검색 작업/결과 Worker 구현, Spring Boot Product Backend 초기화, MCP/Web/DB 적재 재구현은 planned
+- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ 검색 작업/결과 Worker 구현, Spring Boot Product Backend의 Flyway/JPA 저장 및 상품 조회 API 구현, Spring RabbitMQ 연결과 MCP/Web은 planned
 - 핵심 기술: Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
@@ -46,6 +46,14 @@
 - API key, cookie, session, 개인 정보는 커밋하지 않는다.
 - Java는 Java 21과 서비스 내부 Gradle Wrapper를 사용한다.
 
+## Spring Boot 패키지 규칙
+
+- `services/product-backend`는 기술 계층보다 업무 도메인을 먼저 나누는 package-by-feature 구조를 사용한다.
+- 최상위 업무 package는 `product`, `collection`, `evidence`처럼 기능 이름으로 구분한다.
+- 각 업무 package 안에서 필요한 경우 `controller`, `dto`, `entity`, `repository`, `service`, `exception`으로 역할을 나눈다.
+- 여러 도메인에서 실제로 공유하는 코드만 `common`에 둔다. 한 곳에서만 사용하는 코드를 미리 `common`으로 옮기지 않는다.
+- 팀 합의 없이 최상위 package를 `application`, `domain`, `infrastructure`, `interfaces` 계층으로 나누지 않는다.
+
 ## Git 브랜치 규칙
 
 - 전체 작업 방식은 `docs/development/Git_브랜치_작업_방식.md`를 따른다.
@@ -72,8 +80,13 @@
 
 ## 진행 관리와 완료 보고
 
+- 아키텍처에서 추출한 상위 기능과 완료 기준은 `docs/planning/Purchase_Research_Agent_기능_목록.md`의 고정 기능 ID로 관리한다.
 - 구현 계획은 `docs/planning/Purchase_Research_Agent_TODO.md`의 영역별 체크박스로 관리한다.
 - 상위 계획의 세부 구현 상태는 `docs/development/Purchase_Research_Agent_개발_진행_관리.md`의 원자 작업 체크리스트로 관리한다.
+- 새 기능을 구현하기 전에 기능 ID를 확인하고, 없다면 `feature-catalog` 스킬로 기능 목록에 먼저 등록한다.
+- 기능 구현과 테스트를 commit한 뒤 `code-tracker` 스킬로 해당 기능 ID, commit, 변경 위치와 검증 결과를 기록한다.
+- 코드트래커 작성 뒤 `feature-progress` 스킬로 실제 코드와 테스트를 대조해 기능 목록, TODO와 개발 진행 관리 상태를 갱신한다.
+- 전체 순서와 각 문서의 책임은 `docs/development/기능_ID_기반_개발_추적_프로세스.md`를 따른다.
 - 큰 기능 하나를 한 항목으로 묶지 않고 골격, 정상 경로, 실패 경로, 테스트, 문서, 검증을 독립 체크 항목으로 분리한다.
 - 시작한 미완료 항목은 체크하지 않고 항목 끝에 `**(진행 중)**`을 표시한다.
 - 코드, 관련 테스트, 문서 또는 계약 갱신이 모두 끝나고 검증 명령이 통과한 경우에만 `[x]`로 변경한다.
@@ -98,8 +111,9 @@
 PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
 Go consumer와 result publisher는 구현됐다. 기존 Python producer/result consumer와
 DB 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot producer/result
-consumer, Flyway migration, Redis application adapter, 작업 상태 DB, MCP와 Agent
-Gateway는 구현 전이다.
+consumer, Redis application adapter, 작업 상태 DB, MCP와 Agent Gateway는 구현 전이다.
+Spring Boot의 Flyway 초기 schema, CollectorResult 검증/JPA 적재 및 상품 조회 API는
+구현됐다.
 
 예정 검증 계층:
 
@@ -112,8 +126,11 @@ Gateway는 구현 전이다.
 ## 문서
 
 - 시스템 구조: `docs/architecture/Purchase_Research_Agent_시스템_구조.md`
+- 기능 ID 목록과 완료 기준: `docs/planning/Purchase_Research_Agent_기능_목록.md`
 - 구현 계획: `docs/planning/Purchase_Research_Agent_TODO.md`
 - 개발 진행·구현 근거·문제 기록: `docs/development/Purchase_Research_Agent_개발_진행_관리.md`
+- 기능 ID 기반 개발 추적 절차: `docs/development/기능_ID_기반_개발_추적_프로세스.md`
+- 구현 commit 기록 인덱스: `docs/reports/코드트래커/INDEX.md`
 - Git 브랜치 작업 방식: `docs/development/Git_브랜치_작업_방식.md`
 - 대회 제출 전 규정 확인: `docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md`
 - 외부 구성요소 공개: `THIRD_PARTY_NOTICES.md`

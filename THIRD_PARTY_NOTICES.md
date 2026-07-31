@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-07-30
+최종 갱신일: 2026-07-31
 
 ## 이 문서를 공개하는 이유
 
@@ -36,6 +36,8 @@
 | Flyway | 12.4.0 | PostgreSQL schema migration | [flyway/flyway](https://github.com/flyway/flyway) | Apache-2.0 |
 | PostgreSQL JDBC Driver | 42.7.11 | PostgreSQL 연결 | [pgjdbc/pgjdbc](https://github.com/pgjdbc/pgjdbc) | BSD-2-Clause |
 | Lombok | 1.18.46 | Java 반복 코드 생성 | [projectlombok/lombok](https://github.com/projectlombok/lombok) | MIT |
+| springdoc-openapi | 3.0.3 | OpenAPI 문서 자동 생성과 Swagger UI 연결 | [springdoc/springdoc-openapi](https://github.com/springdoc/springdoc-openapi) | Apache-2.0 |
+| Swagger UI | 5.32.2 | browser에서 내부 API 조회와 수동 호출 | [swagger-api/swagger-ui](https://github.com/swagger-api/swagger-ui) | Apache-2.0 |
 | Testcontainers | 2.0.5 | PostgreSQL/RabbitMQ 통합 테스트 | [testcontainers/testcontainers-java](https://github.com/testcontainers/testcontainers-java) | MIT |
 
 Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 해석한다. 정확한 제출 목록은 `services/product-backend/gradle.lockfile` 도입 여부를 결정한 뒤 Gradle dependency report와 함께 확정한다.

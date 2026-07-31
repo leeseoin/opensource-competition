@@ -1,0 +1,4 @@
+interface:
+  display_name: "기능 목록 동기화"
+  short_description: "아키텍처에서 기능 ID와 완료 기준을 추출해 목록 갱신"
+  default_prompt: "Use $feature-catalog to synchronize the feature ID catalog from the architecture documents."

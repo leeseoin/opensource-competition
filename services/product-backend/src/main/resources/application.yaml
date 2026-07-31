@@ -1,3 +1,41 @@
 spring:
   application:
     name: product-backend
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:35432}/${POSTGRES_DB:purchase_research}
+    username: ${POSTGRES_USER:purchase_research}
+    password: ${POSTGRES_PASSWORD:purchase_research}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    port: ${RABBITMQ_AMQP_PORT:35672}
+    username: ${RABBITMQ_USER:purchase_research}
+    password: ${RABBITMQ_PASSWORD:purchase_research}
+    virtual-host: ${RABBITMQ_VHOST:purchase_research}
+  output:
+    ansi:
+      enabled: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    document-title: Purchase Research Product Backend API

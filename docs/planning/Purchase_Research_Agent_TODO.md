@@ -1,15 +1,33 @@
 # Purchase Research Agent 구현 계획
 
 작성일: 2026-07-13
-최종 수정일: 2026-07-30
+최종 수정일: 2026-07-31
 상태: in progress
 
 ## 체크박스 관리 규칙
 
+- 상위 기능과 완료 기준은 [기능 목록](Purchase_Research_Agent_기능_목록.md)의 고정 기능 ID로 관리한다.
+- 각 Phase가 담당하는 기능 ID는 아래 연결표를 기준으로 하며, 세부 체크박스마다 새 ID를 만들지 않는다.
 - `[ ]`: 시작 전 또는 미완료. 작업 중이면 항목 끝에 `**(진행 중)**`을 추가한다.
 - `[x]`: 구현, 관련 테스트, 문서 또는 계약 갱신이 끝나고 검증까지 통과한 상태다.
 - 완료 항목의 코드 위치와 검증 결과는 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 기록한다.
 - 문제가 발생하면 원인과 해결 방법을 개발 진행 관리 문서의 문제 기록에 남긴다.
+
+## Phase와 기능 ID 연결
+
+| Phase | 기능 ID |
+|---|---|
+| Phase 0 | `CONTRACT-001`, `CONTRACT-002` |
+| Phase 1 | `COLLECTOR-001`, `MERCHANT-001` |
+| Phase 2 | `COLLECTOR-002`부터 `COLLECTOR-005`, `MERCHANT-001` |
+| Phase 3 | `BACKEND-001`, `BACKEND-002` |
+| Phase 4 | `QUEUE-001`부터 `QUEUE-003`, `REDIS-001`, `BACKEND-002` |
+| Phase 5 | `MCP-001`, `MCP-002` |
+| Phase 6 | `WEB-001`부터 `WEB-003` |
+| Phase 7 | `ANALYSIS-001`, `VERIFY-001` |
+| Phase 8 | 기존 기능의 판매처 및 운영 확장 |
+| Phase 9 | `RUNTIME-001` |
+| 제출 준비 | `OPS-002`, `OPS-003` |
 
 ## Phase 0: 구조와 계약
 
@@ -23,6 +41,7 @@
 - [x] 재검증 결과 JSON Schema 초안과 변경 예제 작성
 - [x] 판매처 공통 수집 데이터 v1 초안 문서 작성
 - [x] Go Collector 판매처 원본→공통 Product 변환 동작 문서 작성
+- [ ] 기능 ID 기반 기능 목록/코드트래커/진행상황 스킬 구성 **(구현 완료/검증 필요: 실제 기능 작업 한 건으로 전체 흐름 검증 필요)**
 - [ ] 첫 판매처 선정과 공개 접근 범위 확인 **(진행 중: ABC마트 검색·robots 확인, 상세·리뷰 확인 필요)**
 - [ ] Go `CollectorResult` JSON schema 확정 **(공통 수집 데이터 명세의 검색 조건·가격·페이지·재고 상태 반영 필요)**
 - [ ] 상품 상세 수집 요청 Schema 작성
@@ -81,19 +100,23 @@
 
 - [x] Spring Boot 4.1.0 / Java 21 / Gradle Wrapper 기본 프로젝트 생성
 - [x] Web MVC / Validation / JPA / Flyway / PostgreSQL / AMQP / Actuator / Testcontainers 의존성 추가
-- [ ] local/test/production profile과 환경변수 설정
-- [ ] health check와 기본 오류 응답
-- [ ] Collector v1 검색 요청/응답 Java DTO
-- [ ] JSON Schema 기반 Java contract test
+- [ ] local/test/production profile과 환경변수 설정 **(부분 구현: 기본 로컬 설정, Testcontainers 연결, prod 필수 환경변수 구성)**
+- [ ] health check와 기본 오류 응답 **(부분 구현: Actuator health 구성, 공통 오류 응답 미구현)**
+- [ ] Collector v1 검색 요청/응답 Java DTO **(부분 구현: CollectorResult 응답 DTO와 Bean Validation 완료, 검색 요청 DTO 미구현)**
+- [ ] JSON Schema 기반 Java contract test **(부분 구현: 정상/무효 JSON 예제 기반 DTO 검증, JSON Schema 직접 검증 미구현)**
 - [ ] Go Collector 검색 HTTP client
 - [x] 루트 Docker Compose의 PostgreSQL·영구 volume·health check 구성
-- [ ] JPA entity와 repository 기반 구성
-- [ ] Flyway 첫 상품 수집 schema 작성
-- [ ] Flyway migration 실제 적용/재적용 검증
+- [x] 도메인별 JPA entity와 repository 구성
+- [x] Flyway 첫 상품 수집 schema 작성
+- [x] Flyway migration 실제 적용/재적용 검증
 - [ ] 개발·테스트·배포 환경별 Compose 설정과 비밀값 주입 정책 **(부분 구현: 로컬 `.env.example`과 Compose 기본값·덮어쓰기 구성 완료)**
-- [ ] product/merchant-product/offer-snapshot/option/evidence repository
-- [ ] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
-- [ ] ABC마트/29CM 실제 검색 결과 PostgreSQL 적재 검증
+- [x] product/merchant-product/offer-snapshot/option/evidence repository
+- [x] 동일 판매처 상품 upsert와 수집 snapshot 추가 transaction 정책
+- [x] Collector JSON 수동 적재 내부 API와 정상/실패 통합 테스트
+- [x] 저장된 최신 상품 검색 REST API
+- [x] springdoc-openapi 기반 Swagger UI와 OpenAPI 경로 통합 테스트
+- [x] ABC마트 실제 검색 결과 Swagger 수동 적재와 PostgreSQL 행 검증
+- [ ] 29CM 실제 검색 결과 PostgreSQL 적재 검증
 - [x] 현재 수집 필드·DB 저장 필드·미저장 필드 입문 문서 작성
 - [ ] 조사 세션과 작업 상태
 
