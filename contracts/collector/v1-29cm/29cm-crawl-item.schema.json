@@ -60,8 +60,8 @@
     },
     "color": {
       "type": "string",
-      "maxLength": 0,
-      "description": "29CM 목록 API는 카드 단위 색상 정보를 제공하지 않는다 — 항상 빈 문자열."
+      "maxLength": 200,
+      "description": "attach_details() 시 options[].value에서 추출한 고유 색상 목록 (콤마 구분). 상세 미수집 시 빈 문자열."
     },
     "style_code": {
       "type": "string",
@@ -74,6 +74,57 @@
       "maxLength": 500,
       "pattern": "^https://(www|product)\\.29cm\\.co\\.kr/.*$",
       "description": "itemUrl.webLink. www.29cm.co.kr 또는 product.29cm.co.kr 도메인."
+    },
+    "rating": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 5,
+      "description": "review-api averagePoint (리뷰 API 우선, 없으면 JSON-LD aggregateRating.ratingValue)."
+    },
+    "review_count": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "review-api count (리뷰 API 우선, 없으면 JSON-LD aggregateRating.reviewCount)."
+    },
+    "images": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "description": "JSON-LD image[] — 상세·상세컷 포함 다중 이미지 URL."
+    },
+    "category": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "JSON-LD Product.category — 최소 카테고리명(예: '플랫')."
+    },
+    "category_path": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Breadcrumb에서 조합한 전체 경로 (예: '여성슈즈 > 플랫슈즈 > 플랫')."
+    },
+    "category_codes": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "categoryLargeCode / categoryMediumCode / categorySmallCode."
+    },
+    "in_stock": {
+      "type": ["boolean", "null"],
+      "description": "JSON-LD offers.availability — InStock 여부."
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name":  { "type": "string" },
+          "value": { "type": "string" }
+        }
+      },
+      "description": "스트리밍 데이터에서 파싱한 옵션 목록 (SIZE / COLOR 등, KR·IT 사이즈 포함)."
+    },
+    "reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/review" },
+      "description": "review-api.29cm.co.kr/api/v4/reviews에서 수집한 리뷰 목록."
     }
   },
   "$defs": {
@@ -81,6 +132,24 @@
       "type": "string",
       "pattern": "^$|^[0-9,]+원$",
       "description": "빈 문자열 또는 '89,000원' 형태."
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_source_id", "content", "score", "date", "size"],
+      "properties": {
+        "review_source_id": { "type": "string", "maxLength": 50 },
+        "content":          { "type": "string", "maxLength": 500 },
+        "score":            { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "date":             { "type": "string", "maxLength": 10 },
+        "size":             { "type": "string", "maxLength": 200, "description": "optionValue — 타입 태그([SIZE] 등) 제거 후 합친 문자열." },
+        "user_size":        { "type": "array", "items": { "type": "string", "maxLength": 20 }, "description": "사용자 신발 사이즈 (예: ['240mm'])." },
+        "helpful_count":    { "type": "integer", "minimum": 0 },
+        "images":           { "type": "array", "items": { "type": "string", "maxLength": 500 } },
+        "partner_comment":  { "type": ["string", "null"], "maxLength": 1000 },
+        "size_survey":      { "type": ["string", "null"], "enum": ["작음", "맞음", "큼", null] },
+        "is_blind":         { "type": "boolean" }
+      }
     }
   }
 }

@@ -71,6 +71,12 @@
       "pattern": "^https://abcmart\\.a-rt\\.com/product\\?prdtNo=\\d+$|^https://www\\.abcmart\\.co\\.kr/.*$",
       "description": "DB product.link VARCHAR(500) NOT NULL. product.site + source_product_id가 UNIQUE KEY이므로 source_product_id가 link에서 추출된 값과 일치해야 한다."
     },
+    "rating": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 5,
+      "description": "attach_details() 시 reviews[].score 평균으로 계산. 리뷰 없으면 null."
+    },
     "review_count": {
       "type": "integer",
       "minimum": 0,
@@ -79,10 +85,29 @@
     "reviews": {
       "type": "array",
       "items": { "$ref": "#/$defs/review" },
-      "description": "attach_details()가 붙인 리뷰 목록. 현재 CrawlTriggerService.toPayload()는 이 필드를 backend로 넘기지 않으므로(reviews=null 고정) DB에는 아직 안 들어간다 — README의 '발견된 연결 누락' 참조."
+      "description": "attach_details()가 붙인 리뷰 목록."
     },
     "options": {
       "$ref": "#/$defs/options"
+    },
+    "images": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "description": "crawl4ai 상세 페이지 렌더링 후 메인 슬라이더 이미지(shrink=580:580) URL 목록."
+    },
+    "category": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "JS 내 category JSON에서 추출한 최소 카테고리명 (예: '웨지')."
+    },
+    "category_path": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "JS 내 category JSON 전체 경로 (예: '신발 > 구두 > 웨지')."
+    },
+    "in_stock": {
+      "type": ["boolean", "null"],
+      "description": "sold-out 클래스 없는 사이즈 버튼이 하나라도 있으면 true."
     }
   },
   "$defs": {
@@ -99,7 +124,7 @@
         "review_source_id": {
           "type": ["string", "null"],
           "maxLength": 50,
-          "description": "null이면 DB product_review.review_source_id VARCHAR(50) NOT NULL / ReviewPayload.reviewSourceId @NotBlank에 위반된다 — prdtRvwSeq가 없는 리뷰가 있을 수 있으므로 이 항목이 대부분의 실패 원인이 된다."
+          "description": "prdtRvwSeq. null이면 ReviewPayload.reviewSourceId @NotBlank에 위반."
         },
         "content": {
           "type": "string",
@@ -108,14 +133,39 @@
         "score": {
           "type": ["number", "null"],
           "minimum": 0,
-          "maximum": 5
+          "maximum": 5,
+          "description": "productReviewEvlts 중 prdtRvwCode=10000(종합 만족도) evltScore. API가 정수로 반환."
+        },
+        "detail_scores": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "항목별 세부 점수. 착화감/가격/디자인/내구성/경량성 등 상품에 따라 존재하는 항목이 다름."
         },
         "date": {
           "type": "string",
-          "description": "DetailFetcher._parse_review()가 'date' 키로 반환하지만 ReviewPayload.reviewDate와 이름이 다르다 — 직접 매핑하려면 변환 단계에서 키를 바꿀 필요."
+          "description": "writeDtm 앞 10자리(YYYY-MM-DD)."
         },
         "size": {
-          "type": "string"
+          "type": "string",
+          "description": "optnName — 'BLACK, 240' 형태로 색상+사이즈가 합쳐져 반환되는 경우 있음."
+        },
+        "color": {
+          "type": "string",
+          "description": "prdtColorCodeName — 리뷰 작성 시 선택한 색상."
+        },
+        "helpful_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "helpfulCnt — 도움이 됐어요 수."
+        },
+        "is_best": {
+          "type": "boolean",
+          "description": "bestYn == 'Y'."
+        },
+        "images": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 },
+          "description": "productReviewImages에서 추출한 리뷰 이미지 URL 목록."
         }
       }
     },

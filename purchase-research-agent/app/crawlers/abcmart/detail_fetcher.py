@@ -1,14 +1,28 @@
 import asyncio
 import re
+import statistics
 
 import httpx
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
 _BASE = "https://abcmart.a-rt.com"
 _REVIEW_URL = f"{_BASE}/product/review/get-review-list"
-_OPTION_URL = f"{_BASE}/product/review/get-prd-option"
+_OPTION_URL  = f"{_BASE}/product/review/get-prd-option"
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Referer": "https://abcmart.a-rt.com/",
+}
+_BROWSER_CFG = BrowserConfig(ignore_https_errors=True, headless=True)
+# networkidle 대신 load: JS 실행 완료 후 즉시 반환 → 더 빠르고 결과 동일
+_DETAIL_RUN_CFG = CrawlerRunConfig(wait_until="load", page_timeout=20000)
+
+_EVAL_LABELS: dict[int, str] = {
+    10000: "종합",
+    10006: "착화감",
+    10012: "가격",
+    10072: "디자인",
+    10078: "내구성",
+    10090: "경량성",
 }
 
 
@@ -17,21 +31,92 @@ def _prdtno(link: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _overall_score(evlts: list[dict]) -> float | None:
-    """productReviewEvlts는 "상품은 어떠셨나요?"/"사이즈"/"발볼" 등 여러 항목별 평점 리스트다.
-    prdtRvwCode == '10000'이 전체 만족도(종합 평점)에 해당한다."""
-    overall = next((e for e in evlts if e.get("prdtRvwCode") == "10000"), None)
-    return overall.get("evltScore") if overall else None
+def _parse_scores(evlts: list[dict]) -> tuple[float | None, dict[str, int]]:
+    overall = None
+    details: dict[str, int] = {}
+    for e in evlts:
+        code = e.get("prdtRvwCode")
+        score = e.get("evltScore")
+        if code is None or score is None:
+            continue
+        code = int(code)
+        label = _EVAL_LABELS.get(code)
+        if label == "종합":
+            overall = score
+        elif label:
+            details[label] = score
+    return overall, details
 
 
 def _parse_review(rv: dict) -> dict:
+    evlts = rv.get("productReviewEvlts", [])
+    overall_score, detail_scores = _parse_scores(evlts)
+    images = [
+        img.get("imageUrl") or img.get("prdtImgUrl", "")
+        for img in rv.get("productReviewImages", [])
+        if img.get("imageUrl") or img.get("prdtImgUrl")
+    ]
     return {
         "review_source_id": str(rv.get("prdtRvwSeq")) if rv.get("prdtRvwSeq") is not None else None,
         "content": rv.get("rvwContText", "")[:200],
-        "score": _overall_score(rv.get("productReviewEvlts", [])),
+        "score": overall_score,
+        "detail_scores": detail_scores,
         "date": rv.get("writeDtm", "")[:10],
         "size": rv.get("prdtOptnNm") or rv.get("optnName", ""),
+        "color": rv.get("prdtColorCodeName", ""),
+        "helpful_count": rv.get("helpfulCnt", 0),
+        "is_best": rv.get("bestYn") == "Y",
+        "images": images,
     }
+
+
+def _extract_detail(html: str) -> dict:
+    """렌더링된 HTML에서 images / category / in_stock 추출."""
+    images = list(dict.fromkeys(
+        re.sub(r"\?.*$", "", img)
+        for img in re.findall(
+            r"https://image\.a-rt\.com/art/product/\d{4}/\d{2}/[^\s\"'<>?]+\.jpg\?shrink=580:580",
+            html,
+        )
+    ))
+    cat_m = re.search(r'"category"\s*:\s*"([^"]+)"', html)
+    category_path = cat_m.group(1) if cat_m else ""
+    category = category_path.split(" > ")[-1].strip() if category_path else ""
+
+    all_size = re.findall(r'class="btn-prod-size[^"]*"', html)
+    sold_out = re.findall(r'class="btn-prod-size[^"]*\bsold-out\b[^"]*"', html)
+    in_stock = bool(all_size) and (len(sold_out) < len(all_size))
+
+    return {"images": images, "category": category, "category_path": category_path, "in_stock": in_stock}
+
+
+async def _fetch_review(client: httpx.AsyncClient, pno: str, rows: int) -> dict:
+    try:
+        r = await client.post(_REVIEW_URL, data={"prdtNo": pno, "pageNum": 1, "rowsPerPage": rows})
+        data = r.json()
+        return {"review_count": data.get("totalCount", 0),
+                "reviews": [_parse_review(rv) for rv in data.get("content", [])]}
+    except Exception as e:
+        return {"review_count": 0, "reviews": [], "_err": str(e)}
+
+
+async def _fetch_option(client: httpx.AsyncClient, pno: str) -> dict:
+    try:
+        r = await client.post(_OPTION_URL, data={"prdtNo": pno})
+        data = r.json()
+        return {
+            "colors": [c.get("codeDtlName", "") for c in data.get("resultColorList", [])],
+            "sizes":  [s.get("optnName", "") for s in data.get("resultList", [])],
+        }
+    except Exception:
+        return {}
+
+
+async def _noop() -> dict:
+    return {}
+
+
+_EMPTY_DETAIL = {"images": [], "category": "", "category_path": "", "in_stock": None}
 
 
 class DetailFetcher:
@@ -41,55 +126,61 @@ class DetailFetcher:
         products: list[dict],
         limit: int = 10,
         reviews_per_item: int = 3,
-        delay: float = 5.0,
+        delay: float = 0.0,
     ) -> tuple[list[dict], list[str]]:
-        """
-        상위 limit개 상품에 리뷰 + 옵션(사이즈/색상)을 추가한다.
-        나머지 상품은 그대로 반환.
-        """
+        """상위 limit개 상품에 images/category/in_stock/리뷰/옵션/rating을 추가한다.
+        crawl4ai는 arun_many로 병렬 실행, 리뷰/옵션 API는 asyncio.gather로 병렬 호출."""
         errors: list[str] = []
         targets = products[:limit]
+        pnos = [_prdtno(p.get("link", "")) for p in targets]
 
+        # ── 1) 상세 페이지 병렬 크롤링 ──
+        urls = [p["link"] for p in targets]
+
+        async with AsyncWebCrawler(config=_BROWSER_CFG) as crawler:
+            raw_results = await crawler.arun_many(urls, config=_DETAIL_RUN_CFG)
+        # arun_many는 입력 순서대로 결과를 반환한다
+        detail_list = [_extract_detail(res.html or "") for res in raw_results]
+
+        # ── 2) 리뷰 + 옵션 병렬 API 호출 ──
         async with httpx.AsyncClient(headers=_HEADERS, verify=False, timeout=10, follow_redirects=True) as client:
-            for i, product in enumerate(targets):
-                pno = _prdtno(product.get("link", ""))
-                if not pno:
-                    product["reviews"] = []
-                    product["review_count"] = 0
-                    product["options"] = {}
-                    continue
+            tasks = [
+                asyncio.gather(
+                    _fetch_review(client, pno, reviews_per_item) if pno else _noop(),
+                    _fetch_option(client, pno) if pno else _noop(),
+                )
+                for pno in pnos
+            ]
+            api_results = await asyncio.gather(*tasks)
 
-                # 리뷰 fetch
-                try:
-                    r = await client.post(
-                        _REVIEW_URL,
-                        data={"prdtNo": pno, "pageNum": 1, "rowsPerPage": reviews_per_item},
-                    )
-                    data = r.json()
-                    product["review_count"] = data.get("totalCount", 0)
-                    product["reviews"] = [_parse_review(rv) for rv in data.get("content", [])]
-                except Exception as e:
-                    errors.append(f"리뷰 오류 prdtNo={pno}: {e}")
-                    product["reviews"] = []
-                    product["review_count"] = 0
+        # ── 3) 결과 병합 ──
+        for i, product in enumerate(targets):
+            pno = pnos[i]
 
-                await asyncio.sleep(delay)
+            # 상세 페이지 데이터
+            detail = detail_list[i] if i < len(detail_list) else _EMPTY_DETAIL
+            product.update(detail)
 
-                # 옵션 fetch
-                try:
-                    r = await client.post(_OPTION_URL, data={"prdtNo": pno})
-                    data = r.json()
-                    product["options"] = {
-                        "colors": [c.get("codeDtlName", "") for c in data.get("resultColorList", [])],
-                        "sizes": [s.get("optnName", "") for s in data.get("resultList", [])],
-                    }
-                except Exception as e:
-                    errors.append(f"옵션 오류 prdtNo={pno}: {e}")
-                    product["options"] = {}
+            # 리뷰 + 옵션
+            rv_data, opt_data = api_results[i]
+            if "_err" in rv_data:
+                errors.append(f"리뷰 오류 prdtNo={pno}: {rv_data['_err']}")
+            product["review_count"] = rv_data.get("review_count", 0)
+            product["reviews"] = rv_data.get("reviews", [])
+            product["options"] = opt_data if opt_data else {}
 
-                print(f"[DETAIL] {i+1}/{limit} prdtNo={pno} 리뷰={product['review_count']}개 옵션={product.get('options')}")
+            # rating: 리뷰 score 평균
+            scores = [rv["score"] for rv in product["reviews"] if rv.get("score") is not None]
+            product["rating"] = round(statistics.mean(scores), 1) if scores else None
 
-                if i < limit - 1:
-                    await asyncio.sleep(delay)
+            print(
+                f"[DETAIL] {i+1}/{len(targets)} prdtNo={pno}"
+                f" rating={product.get('rating')}"
+                f" images={len(product.get('images', []))}"
+                f" category={product.get('category')!r}"
+                f" in_stock={product.get('in_stock')}"
+                f" 리뷰={product.get('review_count')}개"
+                f" 옵션={product.get('options')}"
+            )
 
         return products, errors
