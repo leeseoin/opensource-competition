@@ -18,7 +18,8 @@ Product Backend Result Consumer
   └─ 계약 검증 후 PostgreSQL 저장
 ```
 
-현재 Go Worker는 구현되어 있다. Spring Boot의 작업 발행, 결과 소비, PostgreSQL 저장은 아직 구현되지 않았다.
+현재 Go Worker와 Spring Boot 결과 Consumer 및 PostgreSQL 저장은 구현되어 있다.
+Spring Boot의 작업 발행 API와 작업 상태 저장은 아직 구현되지 않았다.
 
 ## 현재 Contract 범위
 

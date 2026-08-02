@@ -2,7 +2,7 @@
 
 사용자의 자연어 구매 요청을 구체화하고 실제 판매처의 공개 상품과 리뷰 정보를 수집해 근거 기반으로 비교한 뒤, 선택 상품을 다시 검증하는 구매 조사 Agent PoC다.
 
-현재 ABC마트와 29CM 검색 Collector 및 RabbitMQ 검색 Worker가 구현되어 있다. Spring Boot Product Backend는 Flyway/JPA 기반 상품 저장, 수동 적재 API와 조회 API까지 구현됐으며, RabbitMQ 결과 연결, MCP Server와 Next.js 화면은 앞으로 구현한다.
+현재 ABC마트와 29CM 검색 Collector 및 RabbitMQ 검색 Worker가 구현되어 있다. Spring Boot Product Backend는 Flyway/JPA 기반 상품 저장, 수동 적재 API, RabbitMQ 결과 Consumer와 조회 API까지 구현됐으며, RabbitMQ 작업 발행, MCP Server와 Next.js 화면은 앞으로 구현한다.
 
 ## 한눈에 보는 구조
 

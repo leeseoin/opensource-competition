@@ -8,18 +8,19 @@
 
 Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있다. Spring Boot에는
 Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색 API가
-구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, 현재 남은 연결은
-RabbitMQ 결과 consumer다. 수집 검색어와 filters를 DB에 연결하고 해당 검색어로
-상품을 다시 조회하는 경로는 구현 및 통합 테스트를 완료했다.
+구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, RabbitMQ 결과
+Consumer가 같은 저장 서비스를 호출하는 자동 저장 경로도 통합 테스트를 완료했다.
+현재 남은 연결은 Spring Boot가 수집 작업을 RabbitMQ에 발행하는 API다.
 
 ```text
 현재 가능:
 판매처 검색 → Go Collector → 공통 CollectorResult JSON
 공통 CollectorResult JSON → Spring Boot 수동 적재 API → PostgreSQL 저장
 수집 당시 query와 filters → requestId로 snapshot 연결 → 상품 조회
+RabbitMQ CollectionResult → Spring Boot Consumer → PostgreSQL 자동 저장
 
 현재 미구현:
-RabbitMQ 결과 → Spring Boot consumer → PostgreSQL 자동 저장
+Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
 ```
 
 따라서 지금 서버를 실행해 검색 JSON을 확인할 수는 있지만, 그 결과가 자동으로 DB에 저장되지는 않는다. 이전 Python 구현에서 DB 적재를 검증한 기록은 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 과거 작업으로 남겨 두었다.
@@ -107,9 +108,9 @@ JPA transaction
 PostgreSQL
 ```
 
-DTO 검증, JPA transaction과 PostgreSQL 저장은 fixture 기반 통합 테스트까지
-구현됐다. RabbitMQ 결과를 받아 이 저장 서비스를 호출하는 consumer는 다음
-작업이다.
+DTO 검증, JPA transaction, RabbitMQ 결과 Consumer와 PostgreSQL 저장은
+Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 Spring Boot가 검색 작업을
+생성하고 RabbitMQ에 발행하는 API다.
 
 현재 테이블 관계는 다음과 같다.
 
@@ -167,7 +168,7 @@ products
 5. [완료] `merchant + externalId` upsert와 snapshot 추가 transaction
 6. [완료] 저장된 최신 상품 검색 REST API
 7. [예정] RabbitMQ `CollectionTask` producer
-8. [예정] `CollectionResult` consumer와 실패/DLQ 처리
+8. [완료] `CollectionResult` consumer와 계약 위반 결과 DLQ 처리
 9. [완료] ABC마트와 29CM 실제 결과 수동 적재 및 PostgreSQL 행 검증
 10. [완료] 수집 요청 검색어와 적용 filters를 별도 검색 문맥에 저장하고 상품 조회에 연결
 
@@ -186,6 +187,6 @@ products
 
 ## 7. 다음 구현 순서
 
-다음 작업은 RabbitMQ `CollectionResult` consumer가
-`CollectorResultStoreService`를 호출하도록 연결하는 것이다. 이 연결이 끝나면 지금
-Swagger로 수동 전송하는 단계를 Queue 결과 처리로 자동화할 수 있다.
+다음 작업은 수집 요청 API와 RabbitMQ `CollectionTask` producer를 구현하는 것이다.
+그 뒤 Product Backend → RabbitMQ → Go Worker → RabbitMQ → Product Backend →
+PostgreSQL 전체 E2E를 실제 ABC마트와 29CM 요청으로 검증한다.

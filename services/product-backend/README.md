@@ -12,9 +12,10 @@ Spring Boot 기반 상품 데이터 서버다.
 - Flyway 상품 수집 초기 schema와 도메인별 JPA entity/repository 구현
 - CollectorResult DTO 검증과 동일 판매처 상품 upsert/snapshot 추가 서비스 구현
 - Collector JSON을 직접 저장하는 내부 수동 적재 API 구현
+- RabbitMQ `CollectionResult` 검증, 수동 ACK, 결과 DLQ와 PostgreSQL 자동 저장 Consumer 구현
 - 저장된 최신 상품 검색 API 구현
 - OpenAPI JSON과 Swagger UI 기반 내부 API 수동 검증
-- RabbitMQ 작업 발행과 결과 consumer는 아직 구현 전
+- RabbitMQ 작업 발행 API와 작업 상태 저장은 아직 구현 전
 
 ## Package 구조
 
@@ -23,10 +24,14 @@ Spring Boot 기반 상품 데이터 서버다.
 ```text
 com.purchasesearch.product_backend
 ├── collection/
+│   ├── config/                      # RabbitMQ 결과 Queue와 DLQ topology
 │   ├── controller/                  # 수동 적재 내부 API
 │   ├── dto/                         # Go Collector와 Queue 결과 계약
-│   ├── exception/                   # 저장할 수 없는 결과 상태
-│   └── service/                     # 수집 결과 검증과 DB 저장
+│   ├── entity/                      # 요청별 검색어와 filters
+│   ├── exception/                   # 저장할 수 없는 결과와 Queue 계약 오류
+│   ├── messaging/                   # RabbitMQ 결과 Consumer와 이름
+│   ├── repository/                  # 검색 문맥 JPA repository
+│   └── service/                     # Queue 결과 검증과 DB 저장
 ├── product/
 │   ├── controller/                  # 상품 REST API
 │   ├── dto/                         # 상품 API 요청과 응답
@@ -104,8 +109,8 @@ SPRINGDOC_SWAGGER_UI_ENABLED=true
 
 ## 실제 크롤링 결과 수동 적재
 
-RabbitMQ 결과 consumer를 구현하기 전에는 Go Collector의 JSON 파일을 내부 API로
-직접 전달해 PostgreSQL 저장 흐름을 확인한다.
+RabbitMQ 자동 적재와 별개로 Go Collector의 JSON 파일을 내부 API에 직접 전달해
+파싱 결과와 PostgreSQL 저장 흐름을 독립적으로 확인할 수 있다.
 
 먼저 Collector 결과를 저장한다.
 
@@ -143,8 +148,8 @@ curl -s \
 ```
 
 이 API는 로컬 수동 검증을 위한 내부 경로다. 운영 환경에서는 인증과 접근 제한을
-추가해야 하며, 최종 자동 적재 경로는 RabbitMQ 결과 consumer가 같은 저장 서비스를
-호출하도록 구현한다.
+추가해야 한다. 자동 적재 경로에서는 RabbitMQ 결과 Consumer가 같은 저장 서비스를
+호출한다.
 
 Testcontainers 기반 검증은 다음 명령으로 실행한다.
 

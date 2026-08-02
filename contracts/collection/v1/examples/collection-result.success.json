@@ -11,6 +11,8 @@
     "operation": "search",
     "status": "success",
     "merchant": "abcmart",
+    "query": "구두",
+    "filters": {},
     "totalCount": 0,
     "hasNext": false,
     "collectedAt": "2026-07-26T16:00:02+09:00",

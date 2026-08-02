@@ -18,6 +18,13 @@ spring:
     username: ${RABBITMQ_USER:purchase_research}
     password: ${RABBITMQ_PASSWORD:purchase_research}
     virtual-host: ${RABBITMQ_VHOST:purchase_research}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+        default-requeue-rejected: false
   output:
     ansi:
       enabled: always

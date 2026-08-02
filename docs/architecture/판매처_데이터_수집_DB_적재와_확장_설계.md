@@ -449,8 +449,8 @@ worker가 필요한 이유는 HTTP 요청 외에도 JSON 해석, 결과 정리, 
 
 Go HTTP handler에서 단순히 `go func()`를 실행하고 바로 끝내면 서버 재시작 시 작업과 결과를 잃을 수 있다.
 
-따라서 작업 전달은 RabbitMQ, 장기 작업 상태와 DB transaction은 Python
-Backend, 짧은 진행 상태와 중복 방지는 Redis가 담당한다.
+따라서 작업 전달은 RabbitMQ, 장기 작업 상태와 DB transaction은 Spring Boot
+Product Backend, 짧은 진행 상태와 중복 방지는 Redis가 담당한다.
 
 ```text
 Product Backend가 collection_job을 생성하고 queued 상태로 저장
@@ -668,10 +668,11 @@ fixture regression test 통과 후 배포
 ### 3단계: Redis·RabbitMQ 기반 Worker
 
 - [x] Redis·RabbitMQ Docker Compose와 health check
-- [ ] RabbitMQ 작업·결과 Queue와 Dead Letter Queue
+- [x] RabbitMQ 작업/결과 Queue와 Dead Letter Queue
 - [ ] Redis 판매처별 rate limiter와 중복 방지
-- [ ] Go 작업 consumer와 결과 publisher
-- [ ] Python 작업 producer와 결과 consumer
+- [x] Go 작업 Consumer와 결과 Publisher
+- [ ] Spring Boot 작업 Producer
+- [x] Spring Boot 결과 Consumer와 결과 DLQ
 - [ ] 판매처별 worker 상한
 - [ ] worker가 공유하는 판매처 전체 rate limiter
 - [ ] 작업당 최대 요청 예산
@@ -732,5 +733,5 @@ collection_job 성공·실패·저장 개수 기록
 Worker가 Redis의 판매처 전체 최소 요청 간격을 공유해야 한다. 자동 batch와 live
 smoke test는 opt-in으로 유지한다.
 
-이 흐름이 완성되면 Worker 수를 늘리거나 새 판매처 routing key를 추가해도 Python
+이 흐름이 완성되면 Worker 수를 늘리거나 새 판매처 routing key를 추가해도 Spring Boot
 저장 계약과 PostgreSQL 구조를 유지할 수 있는 첫 번째 확장형 수집 기능이 된다.

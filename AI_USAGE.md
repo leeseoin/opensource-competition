@@ -57,3 +57,4 @@
 | 2026-07-31 | Codex를 사용해 Collector JSON 수동 적재 API와 정상/실패 통합 테스트를 구현 | 사용자가 수동 적재 경로를 결정하고 Testcontainers PostgreSQL 기반 전체 Spring Boot 테스트와 diff를 검토 |
 | 2026-07-31 | Codex를 사용해 Spring Boot 내부 API에 OpenAPI 문서와 Swagger UI를 추가 | 공식 springdoc-openapi 문서와 라이선스를 확인하고 Swagger/OpenAPI 통합 테스트 및 운영 profile 기본 비활성화를 검토 |
 | 2026-08-02 | Codex를 사용해 Collector 검색어/filters 전달, PostgreSQL 검색 문맥 저장과 수집 검색어 기반 상품 조회를 구현 | 사용자가 문제 상황과 목표를 확인하고 Go 전체 테스트, Flyway V2를 포함한 Spring Boot PostgreSQL 통합 테스트 및 diff를 검토 |
+| 2026-08-02 | Codex를 사용해 Spring Boot RabbitMQ 결과 Consumer, 수동 ACK, 결과 DLQ와 PostgreSQL 자동 저장 경로를 구현 | RabbitMQ/PostgreSQL Testcontainers로 성공 저장, 정상 실패 무저장, 식별자 불일치 거절과 계약 위반 DLQ 이동을 검증 |

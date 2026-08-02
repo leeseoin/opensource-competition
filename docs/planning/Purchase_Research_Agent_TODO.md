@@ -170,9 +170,9 @@
 
 ### 4.5 Spring Boot 저장 Worker와 진행 상태
 
-- [ ] RabbitMQ의 `CollectorResult`를 소비하는 Spring Boot Worker 구현
-- [ ] Contract 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
-- [ ] 검증된 결과를 JPA transaction으로 저장
+- [x] RabbitMQ의 `CollectorResult`를 소비하는 Spring Boot Worker 구현
+- [x] Contract 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
+- [x] 검증된 결과를 JPA transaction으로 저장
 - [ ] `collection_jobs`, `collection_tasks` JPA entity 작성
 - [ ] `collection_jobs`, `collection_tasks` Flyway migration 작성
 - [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록

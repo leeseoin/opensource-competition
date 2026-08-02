@@ -39,8 +39,8 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, 상품 조회 API | RabbitMQ 결과 consumer, 동시 저장 보강, 실제 수집 E2E |
-| Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Go Worker 및 retry/DLQ | Spring 작업 발행/결과 저장, Redis limiter, 다중 페이지 |
+| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, RabbitMQ 결과 Consumer, 상품 조회 API | 작업 producer, 동시 저장 보강, 실제 전체 Queue E2E |
+| Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Go Worker, Spring 결과 Consumer 및 retry/DLQ | Spring 작업 발행, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
 | Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
@@ -185,7 +185,10 @@
 - [x] 검색 `CollectionTask`, `CollectionResult` JSON Schema와 Go 계약
 - [x] RabbitMQ exchange, queue, routing key, 5초 retry·DLQ topology
 - [x] Go consumer·result publisher와 작업 timeout
-- [ ] Spring Boot producer와 result consumer
+- [ ] Spring Boot `CollectionTask` producer
+- [x] Spring Boot `CollectionResult` Consumer와 수동 ACK
+- [x] 계약 위반 결과 reject와 결과 DLQ 이동
+- [x] 성공/부분 성공 결과의 JPA transaction 저장 연결
 - [ ] 실제 ABC마트 `구두` 3개 Queue 수집과 DB 저장 재검증
 - [ ] Redis rate limiter·중복 방지·진행 상태 adapter
 
@@ -334,11 +337,12 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
 | 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext`, 검색 query와 filters 추가 / Go 및 Java 테스트 통과 / 실제 Schema 자동 검증 CI 남음 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
-| RabbitMQ 검색 작업 계약 | 부분 구현 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask` | 성공/실패 Schema 예제와 Go 계약 테스트 통과, Java 계약 미구현 |
+| RabbitMQ 검색 작업 계약 | 부분 구현 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask`; Java `collection/dto/CollectionResultEnvelope.java:27` `CollectionResultEnvelope` | Go 작업/결과 계약과 Java 결과 계약 테스트 통과 / Java 작업 발행 계약 남음 |
 | Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
 | `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌과 Queue E2E 남음 |
+| `QUEUE-002` Spring RabbitMQ 결과 Consumer | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/config/RabbitCollectionConfiguration.java:20` `RabbitCollectionConfiguration`; `collection/dto/CollectionResultEnvelope.java:27` `CollectionResultEnvelope`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `collection/service/CollectionResultMessageService.java:49` `process`; `src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:93` `consumesSuccessfulResultAndStoresProducts`, `:113` `rejectsInvalidResultToDeadLetterQueue` | 실제 RabbitMQ/PostgreSQL Testcontainers에서 성공 결과 저장, 계약 위반 DLQ, 정상 failed 무저장과 ID 불일치 거절 통과 / 작업 producer와 실제 판매처 전체 E2E 남음 |
 | `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
 | `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
@@ -874,6 +878,28 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - PostgreSQL `collection_search_contexts`: 요청 ID, 판매처 `29cm`, 검색어 `구두`,
     `{"inStockOnly": true}` 저장 확인
 
+### 2026-08-02 QUEUE-002 Spring Boot RabbitMQ 결과 Consumer
+
+- 진행상황: Go Worker가 발행한 `CollectionResult`를 Spring Boot가 RabbitMQ 결과
+  Queue에서 받아 계약을 검증하고 기존 `CollectorResultStoreService`로 PostgreSQL에
+  자동 저장하는 경로를 구현했다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/config/RabbitCollectionConfiguration.java:20` `RabbitCollectionConfiguration`: 결과 Queue, DLQ와 binding 선언
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectionResultEnvelope.java:27` `CollectionResultEnvelope`: Java Queue 결과 계약과 상태 의미 검증
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionResultMessageService.java:49` `process`: JSON/Bean Validation 및 저장 서비스 연결
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/messaging/CollectionResultConsumer.java:43` `consume`: manual ACK와 reject 처리
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:93` `consumesSuccessfulResultAndStoresProducts`: RabbitMQ 결과의 PostgreSQL 저장 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:113` `rejectsInvalidResultToDeadLetterQueue`: 계약 위반 결과 DLQ 검증
+- 발생 문제: 없음.
+- 해결: 성공/부분 성공은 저장 후 ACK하고, 정상 `failed` 결과는 상품을 저장하지 않고
+  ACK한다. JSON/계약 위반과 DB 저장 예외는 requeue 없이 reject해 결과 DLQ로 보낸다.
+- 남은 위험: DB의 일시 장애도 현재는 결과 DLQ로 이동한다. 결과 Queue retry 정책과
+  `collection_jobs`/`collection_tasks` 실패 상태 저장은 후속 구현이 필요하다. Spring
+  작업 producer가 없어 실제 Product Backend 시작점부터의 전체 E2E도 아직 남아 있다.
+- 검증:
+  - `./gradlew test --tests com.purchasesearch.product_backend.CollectionResultConsumerIntegrationTests --rerun-tasks`: 4개 통합 테스트 통과
+  - `./gradlew test --rerun-tasks`: 기존 저장/API 테스트를 포함한 전체 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -895,7 +921,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ## 다음 갱신 대상
 
-- Spring Boot RabbitMQ 작업 발행과 결과 저장 Worker
+- Spring Boot RabbitMQ 작업 발행 API
 - RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
