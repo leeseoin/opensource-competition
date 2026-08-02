@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.purchasesearch.product_backend.collection.dto.CollectorResult;
+import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
@@ -47,6 +48,9 @@ class ProductStorageIntegrationTests {
 
 	@Autowired
 	private CollectorResultStoreService collectorResultStoreService;
+
+	@Autowired
+	private CollectionSearchContextRepository collectionSearchContextRepository;
 
 	@Autowired
 	private ProductRepository productRepository;
@@ -89,6 +93,7 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.evidenceCount").value(1));
 
 		assertThat(productRepository.count()).isEqualTo(1);
+		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
 		assertThat(merchantProductRepository.count()).isEqualTo(1);
 		assertThat(offerSnapshotRepository.count()).isEqualTo(1);
 		assertThat(productOptionRepository.count()).isEqualTo(1);
@@ -139,8 +144,8 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
-	 * 같은 판매처 상품을 두 번 저장하면 상품은 중복되지 않고 snapshot과 옵션 및 근거만
-	 * 이력으로 추가되는지 검증한다.
+	 * 같은 판매처 상품을 두 번 저장하면 검색 문맥과 상품은 중복되지 않고 snapshot, 옵션과
+	 * 근거만 이력으로 추가되며 상품명에 없는 원본 검색어로도 조회되는지 검증한다.
 	 *
 	 * @throws Exception fixture 읽기 또는 HTTP 검증에 실패한 경우
 	 */
@@ -157,6 +162,7 @@ class ProductStorageIntegrationTests {
 		assertThat(firstReport.evidenceCount()).isEqualTo(1);
 		assertThat(secondReport).isEqualTo(firstReport);
 		assertThat(productRepository.count()).isEqualTo(1);
+		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
 		assertThat(merchantProductRepository.count()).isEqualTo(1);
 		assertThat(offerSnapshotRepository.count()).isEqualTo(2);
 		assertThat(productOptionRepository.count()).isEqualTo(2);
@@ -164,7 +170,7 @@ class ProductStorageIntegrationTests {
 
 		mockMvc.perform(get("/internal/v1/products")
 						.param("merchant", "abcmart")
-						.param("query", "로퍼")
+						.param("query", "구두")
 						.param("limit", "10"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.totalCount").value(1))
@@ -175,6 +181,35 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.products[0].stockStatus").value("available"))
 				.andExpect(jsonPath("$.products[0].options[0].size").value("270"))
 				.andExpect(jsonPath("$.products[0].source.collectorVersion").value("abcmart-search-v2"));
+
+		assertThat(collectionSearchContextRepository.findById("backend-test-001"))
+				.hasValueSatisfying(context -> {
+					assertThat(context.getSearchQuery()).isEqualTo("구두");
+					assertThat(context.getFilters())
+							.containsEntry("inStockOnly", true)
+							.containsEntry("sizes", java.util.List.of("270"));
+				});
+	}
+
+	/**
+	 * search 결과에 query가 없으면 검색 문맥 없는 snapshot을 만들지 않고 400으로
+	 * 거절하는지 검증한다.
+	 *
+	 * @throws Exception fixture 읽기 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void rejectsSearchResultWithoutQueryContext() throws Exception {
+		String resultWithoutQuery = Files.readString(abcmartFixturePath())
+				.replace("\"query\": \"구두\",", "");
+
+		mockMvc.perform(post("/internal/v1/collection-results")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(resultWithoutQuery))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_COLLECTOR_RESULT"));
+
+		assertThat(collectionSearchContextRepository.count()).isZero();
+		assertThat(offerSnapshotRepository.count()).isZero();
 	}
 
 	/**

@@ -34,7 +34,10 @@ func NewSearchRegistryWithClock(searchers map[string]Searcher, now func() time.T
 func (r *SearchRegistry) Search(ctx context.Context, request SearchRequest) SearchResult {
 	searcher, ok := r.searchers[request.Merchant]
 	if ok {
-		return searcher.Search(ctx, request)
+		result := searcher.Search(ctx, request)
+		result.Query = request.Query
+		result.Filters = request.Filters
+		return result
 	}
 
 	return SearchResult{
@@ -42,6 +45,8 @@ func (r *SearchRegistry) Search(ctx context.Context, request SearchRequest) Sear
 		Operation:        OperationSearch,
 		Status:           StatusUnsupported,
 		Merchant:         request.Merchant,
+		Query:            request.Query,
+		Filters:          request.Filters,
 		CollectedAt:      r.now(),
 		CollectorVersion: "collector-registry-v1",
 		Products:         []Product{},

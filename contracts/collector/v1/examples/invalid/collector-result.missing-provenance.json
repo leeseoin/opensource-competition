@@ -3,6 +3,8 @@
   "operation": "search",
   "status": "success",
   "merchant": "musinsa",
+  "query": "구두",
+  "filters": {},
   "collectedAt": "2026-07-14T10:00:03+09:00",
   "collectorVersion": "musinsa-v1",
   "products": [

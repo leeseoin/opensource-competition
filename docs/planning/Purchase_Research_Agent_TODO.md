@@ -116,7 +116,9 @@
 - [x] 저장된 최신 상품 검색 REST API
 - [x] springdoc-openapi 기반 Swagger UI와 OpenAPI 경로 통합 테스트
 - [x] ABC마트 실제 검색 결과 Swagger 수동 적재와 PostgreSQL 행 검증
-- [ ] 29CM 실제 검색 결과 PostgreSQL 적재 검증
+- [x] 29CM 실제 검색 결과 Swagger 수동 적재와 PostgreSQL 행 검증
+- [x] 수집 요청 검색어와 적용 filters를 `collection_search_contexts`에 저장하고
+  `requestId`로 snapshot 및 상품 검색 API에 연결
 - [x] 현재 수집 필드·DB 저장 필드·미저장 필드 입문 문서 작성
 - [ ] 조사 세션과 작업 상태
 

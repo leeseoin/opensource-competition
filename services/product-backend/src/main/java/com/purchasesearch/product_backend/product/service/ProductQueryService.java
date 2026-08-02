@@ -48,7 +48,7 @@ public class ProductQueryService {
 	}
 
 	/**
-	 * 판매처와 상품명 또는 브랜드 조건으로 최신 상품 정보를 검색한다.
+	 * 판매처와 상품명, 브랜드 또는 수집 요청 검색어로 최신 상품 정보를 검색한다.
 	 *
 	 * @param merchant 선택 판매처
 	 * @param query 선택 검색어

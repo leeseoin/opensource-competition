@@ -407,7 +407,7 @@ func toProduct(item normalizedItem, sourceURL string, collectedAt time.Time) col
 func newResult(request collector.SearchRequest, collectedAt time.Time) collector.SearchResult {
 	return collector.SearchResult{
 		RequestID: request.RequestID, Operation: collector.OperationSearch, Status: collector.StatusSuccess,
-		Merchant: request.Merchant, TotalCount: nil, HasNext: nil,
+		Merchant: request.Merchant, Query: request.Query, Filters: request.Filters, TotalCount: nil, HasNext: nil,
 		CollectedAt: collectedAt, CollectorVersion: collectorVersion,
 		Products: []collector.Product{}, Warnings: []collector.Issue{}, Errors: []collector.Issue{},
 	}

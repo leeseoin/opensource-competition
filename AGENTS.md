@@ -4,7 +4,7 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ 검색 작업/결과 Worker 구현, Spring Boot Product Backend의 Flyway/JPA 저장 및 상품 조회 API 구현, Spring RabbitMQ 연결과 MCP/Web은 planned
+- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ 검색 작업/결과 Worker 구현, Spring Boot Product Backend의 Flyway/JPA 저장, 수집 검색어/filters 연결 및 상품 조회 API 구현, Spring RabbitMQ 연결과 MCP/Web은 planned
 - 핵심 기술: Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임

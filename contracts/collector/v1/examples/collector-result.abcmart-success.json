@@ -3,6 +3,11 @@
   "operation": "search",
   "status": "success",
   "merchant": "abcmart",
+  "query": "구두",
+  "filters": {
+    "sizes": ["270"],
+    "inStockOnly": true
+  },
   "totalCount": 1650,
   "hasNext": true,
   "collectedAt": "2026-07-30T15:00:00+09:00",

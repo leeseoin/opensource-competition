@@ -30,6 +30,16 @@
     "merchant": {
       "$ref": "#/$defs/merchant"
     },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "검색 작업에 사용한 원본 검색어다. search operation에서는 필수다."
+    },
+    "filters": {
+      "$ref": "#/$defs/searchFilters",
+      "description": "Collector가 검색 작업에 적용한 필터다. search operation에서는 필수다."
+    },
     "totalCount": {
       "type": ["integer", "null"],
       "minimum": 0,
@@ -65,6 +75,17 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "search"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "required": ["query", "filters"]
+      }
+    }
+  ],
   "$defs": {
     "identifier": {
       "type": "string",
@@ -112,6 +133,42 @@
         "unsupported",
         "temporarily_unavailable"
       ]
+    },
+    "nonEmptyStringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "uniqueItems": true,
+      "maxItems": 50
+    },
+    "attributeValue": {
+      "oneOf": [
+        {"type": "string", "maxLength": 200},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"$ref": "#/$defs/nonEmptyStringList"}
+      ]
+    },
+    "searchFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priceMin": {"type": "integer", "minimum": 0},
+        "priceMax": {"type": "integer", "minimum": 0},
+        "categories": {"$ref": "#/$defs/nonEmptyStringList"},
+        "sizes": {"$ref": "#/$defs/nonEmptyStringList"},
+        "colors": {"$ref": "#/$defs/nonEmptyStringList"},
+        "inStockOnly": {"type": "boolean", "default": false},
+        "attributes": {
+          "type": "object",
+          "propertyNames": {"minLength": 1, "maxLength": 100},
+          "additionalProperties": {"$ref": "#/$defs/attributeValue"},
+          "maxProperties": 30
+        }
+      }
     },
     "provenance": {
       "type": "object",

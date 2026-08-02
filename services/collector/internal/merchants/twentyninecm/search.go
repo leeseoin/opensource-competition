@@ -330,7 +330,8 @@ func categoryPath(item searchItem) []string {
 func newResult(request collector.SearchRequest, collectedAt time.Time) collector.SearchResult {
 	return collector.SearchResult{
 		RequestID: request.RequestID, Operation: collector.OperationSearch, Status: collector.StatusSuccess,
-		Merchant: merchantName, CollectedAt: collectedAt, CollectorVersion: collectorVersion,
+		Merchant: merchantName, Query: request.Query, Filters: request.Filters,
+		CollectedAt: collectedAt, CollectorVersion: collectorVersion,
 		Products: []collector.Product{}, Warnings: []collector.Issue{}, Errors: []collector.Issue{},
 	}
 }

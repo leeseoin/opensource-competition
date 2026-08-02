@@ -114,20 +114,22 @@ type SearchFilters struct {
 	Attributes  map[string]interface{} `json:"attributes,omitempty"`
 }
 
-// SearchResult는 상품 검색 작업의 상태, 판매처 기준 페이지 정보, 상품, 경고, 오류를 전달한다.
+// SearchResult는 상품 검색 작업의 상태, 원본 검색 조건, 판매처 기준 페이지 정보, 상품, 경고와 오류를 전달한다.
 // TotalCount와 HasNext는 판매처가 값을 제공하지 않거나 요청이 실패하면 nil이며, 로컬 필터 적용 전 판매처 검색 결과를 기준으로 한다.
 type SearchResult struct {
-	RequestID        string    `json:"requestId"`
-	Operation        string    `json:"operation"`
-	Status           string    `json:"status"`
-	Merchant         string    `json:"merchant"`
-	TotalCount       *int      `json:"totalCount"`
-	HasNext          *bool     `json:"hasNext"`
-	CollectedAt      time.Time `json:"collectedAt"`
-	CollectorVersion string    `json:"collectorVersion"`
-	Products         []Product `json:"products"`
-	Warnings         []Issue   `json:"warnings"`
-	Errors           []Issue   `json:"errors"`
+	RequestID        string        `json:"requestId"`
+	Operation        string        `json:"operation"`
+	Status           string        `json:"status"`
+	Merchant         string        `json:"merchant"`
+	Query            string        `json:"query"`
+	Filters          SearchFilters `json:"filters"`
+	TotalCount       *int          `json:"totalCount"`
+	HasNext          *bool         `json:"hasNext"`
+	CollectedAt      time.Time     `json:"collectedAt"`
+	CollectorVersion string        `json:"collectorVersion"`
+	Products         []Product     `json:"products"`
+	Warnings         []Issue       `json:"warnings"`
+	Errors           []Issue       `json:"errors"`
 }
 
 // Product는 판매처 검색 페이지에서 수집한 상품 기본 정보를 표현한다.

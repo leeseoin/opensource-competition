@@ -1,5 +1,6 @@
 package com.purchasesearch.product_backend.collection.service;
 
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -8,7 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.purchasesearch.product_backend.collection.dto.CollectorResult;
 import com.purchasesearch.product_backend.collection.dto.CollectorResult.Money;
 import com.purchasesearch.product_backend.collection.dto.CollectorResult.Provenance;
+import com.purchasesearch.product_backend.collection.entity.CollectionSearchContext;
 import com.purchasesearch.product_backend.collection.exception.UnstorableCollectorResultException;
+import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
 import com.purchasesearch.product_backend.evidence.entity.Evidence;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
 import com.purchasesearch.product_backend.product.entity.MerchantProduct;
@@ -32,6 +35,7 @@ import jakarta.validation.Validator;
 public class CollectorResultStoreService {
 
 	private final Validator validator;
+	private final CollectionSearchContextRepository collectionSearchContextRepository;
 	private final ProductRepository productRepository;
 	private final MerchantProductRepository merchantProductRepository;
 	private final OfferSnapshotRepository offerSnapshotRepository;
@@ -42,6 +46,7 @@ public class CollectorResultStoreService {
 	 * Collector 결과 저장에 필요한 validator와 repository를 연결한다.
 	 *
 	 * @param validator Bean Validation validator
+	 * @param collectionSearchContextRepository 수집 검색어와 필터 repository
 	 * @param productRepository 공통 상품 repository
 	 * @param merchantProductRepository 판매처 상품 repository
 	 * @param offerSnapshotRepository 가격과 재고 snapshot repository
@@ -50,12 +55,14 @@ public class CollectorResultStoreService {
 	 */
 	public CollectorResultStoreService(
 			Validator validator,
+			CollectionSearchContextRepository collectionSearchContextRepository,
 			ProductRepository productRepository,
 			MerchantProductRepository merchantProductRepository,
 			OfferSnapshotRepository offerSnapshotRepository,
 			ProductOptionRepository productOptionRepository,
 			EvidenceRepository evidenceRepository) {
 		this.validator = validator;
+		this.collectionSearchContextRepository = collectionSearchContextRepository;
 		this.productRepository = productRepository;
 		this.merchantProductRepository = merchantProductRepository;
 		this.offerSnapshotRepository = offerSnapshotRepository;
@@ -78,6 +85,7 @@ public class CollectorResultStoreService {
 			throw new ConstraintViolationException(violations);
 		}
 		result.validateStorable();
+		storeSearchContext(result);
 
 		int optionCount = 0;
 		int evidenceCount = 0;
@@ -93,6 +101,33 @@ public class CollectorResultStoreService {
 				result.products().size(),
 				optionCount,
 				evidenceCount);
+	}
+
+	/**
+	 * 검색 작업의 원본 검색어와 적용 필터를 requestId 기준으로 한 번만 저장한다.
+	 * 같은 requestId가 다른 조건으로 재사용되면 기존 snapshot의 의미가 바뀌지 않도록 거절한다.
+	 *
+	 * @param result 검증을 통과한 Collector 결과
+	 * @throws UnstorableCollectorResultException requestId가 다른 검색 조건으로 재사용된 경우
+	 */
+	private void storeSearchContext(CollectorResult result) {
+		if (!"search".equals(result.operation())) {
+			return;
+		}
+		Map<String, Object> filters = result.filters().toMap();
+		collectionSearchContextRepository.findById(result.requestId())
+				.ifPresentOrElse(existing -> {
+					if (!existing.matches(result.merchant(), result.query(), filters)) {
+						throw new UnstorableCollectorResultException(
+								"같은 requestId를 다른 검색 조건으로 재사용할 수 없습니다.");
+					}
+				}, () -> collectionSearchContextRepository.save(CollectionSearchContext.create(
+						result.requestId(),
+						result.merchant(),
+						result.query(),
+						filters,
+						result.collectedAt(),
+						result.collectorVersion())));
 	}
 
 	/**

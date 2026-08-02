@@ -25,7 +25,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 	Optional<MerchantProduct> findByMerchantAndExternalId(String merchant, String externalId);
 
 	/**
-	 * 판매처와 상품명 또는 브랜드 조건으로 상품을 검색한다.
+	 * 판매처와 상품명, 브랜드 또는 해당 상품을 수집한 검색어로 상품을 검색한다.
 	 *
 	 * @param merchant 선택 판매처
 	 * @param query 선택 검색어
@@ -33,27 +33,44 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 	 * @return 최근 수집 순서의 판매처 상품 page
 	 */
 	@Query(
+			nativeQuery = true,
 			value = """
-					SELECT merchantProduct
-					FROM MerchantProduct merchantProduct
-					JOIN FETCH merchantProduct.product product
-					WHERE (:merchant IS NULL OR merchantProduct.merchant = :merchant)
+					SELECT merchant_product.*
+					FROM merchant_products merchant_product
+					JOIN products product ON product.id = merchant_product.product_id
+					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
 					  AND (
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR EXISTS (
+							SELECT 1
+							FROM offer_snapshots snapshot
+							JOIN collection_search_contexts search_context
+							  ON search_context.request_id = snapshot.request_id
+							WHERE snapshot.merchant_product_id = merchant_product.id
+							  AND LOWER(search_context.search_query) LIKE LOWER(CONCAT('%', :query, '%'))
+						)
 					  )
-					ORDER BY merchantProduct.lastCollectedAt DESC, merchantProduct.id DESC
+					ORDER BY merchant_product.last_collected_at DESC, merchant_product.id DESC
 					""",
 			countQuery = """
-					SELECT COUNT(merchantProduct)
-					FROM MerchantProduct merchantProduct
-					JOIN merchantProduct.product product
-					WHERE (:merchant IS NULL OR merchantProduct.merchant = :merchant)
+					SELECT COUNT(merchant_product.id)
+					FROM merchant_products merchant_product
+					JOIN products product ON product.id = merchant_product.product_id
+					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
 					  AND (
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR EXISTS (
+							SELECT 1
+							FROM offer_snapshots snapshot
+							JOIN collection_search_contexts search_context
+							  ON search_context.request_id = snapshot.request_id
+							WHERE snapshot.merchant_product_id = merchant_product.id
+							  AND LOWER(search_context.search_query) LIKE LOWER(CONCAT('%', :query, '%'))
+						)
 					  )
 					""")
 	Page<MerchantProduct> search(

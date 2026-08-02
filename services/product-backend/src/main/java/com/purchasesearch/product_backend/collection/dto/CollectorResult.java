@@ -2,6 +2,7 @@ package com.purchasesearch.product_backend.collection.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,6 +26,8 @@ import jakarta.validation.constraints.Size;
  * @param operation Collector 작업 종류
  * @param status 수집 완료 상태
  * @param merchant 판매처 식별자
+ * @param query 검색 작업에 사용한 원본 검색어
+ * @param filters 검색 작업에 적용한 필터
  * @param totalCount 판매처 검색 기준 전체 상품 수
  * @param hasNext 다음 페이지 존재 여부
  * @param collectedAt 결과 수집 완료 시각
@@ -48,6 +51,10 @@ public record CollectorResult(
 		@Size(max = 64)
 		@Pattern(regexp = "^[a-z0-9][a-z0-9-]*$")
 		String merchant,
+		@Size(max = 200)
+		String query,
+		@Valid
+		SearchFilters filters,
 		@Min(0)
 		Integer totalCount,
 		Boolean hasNext,
@@ -75,6 +82,69 @@ public record CollectorResult(
 		if (!STORABLE_STATUSES.contains(status)) {
 			throw new UnstorableCollectorResultException(
 					"success 또는 partial CollectorResult만 저장할 수 있습니다.");
+		}
+		if ("search".equals(operation) && (query == null || query.isBlank() || filters == null)) {
+			throw new UnstorableCollectorResultException(
+					"search CollectorResult에는 query와 filters가 필요합니다.");
+		}
+	}
+
+	/**
+	 * SearchFilters는 Collector가 실제 검색에 적용한 조건을 저장 가능한 공통 구조로 표현한다.
+	 *
+	 * @param priceMin 최소 가격
+	 * @param priceMax 최대 가격
+	 * @param categories 카테고리 조건
+	 * @param sizes 사이즈 조건
+	 * @param colors 색상 조건
+	 * @param inStockOnly 재고 보유 상품만 요청했는지 여부
+	 * @param attributes 판매처 확장 검색 속성
+	 */
+	public record SearchFilters(
+			@Min(0)
+			Integer priceMin,
+			@Min(0)
+			Integer priceMax,
+			List<@NotBlank @Size(max = 100) String> categories,
+			List<@NotBlank @Size(max = 100) String> sizes,
+			List<@NotBlank @Size(max = 100) String> colors,
+			boolean inStockOnly,
+			Map<@NotBlank @Size(max = 100) String, Object> attributes) {
+
+		/**
+		 * nullable 선택값을 제거하고 JSONB 저장에 사용할 map으로 변환한다.
+		 *
+		 * @return Collector가 적용한 검색 필터 map
+		 */
+		public Map<String, Object> toMap() {
+			Map<String, Object> values = new LinkedHashMap<>();
+			if (priceMin != null) {
+				values.put("priceMin", priceMin);
+			}
+			if (priceMax != null) {
+				values.put("priceMax", priceMax);
+			}
+			putNonEmpty(values, "categories", categories);
+			putNonEmpty(values, "sizes", sizes);
+			putNonEmpty(values, "colors", colors);
+			values.put("inStockOnly", inStockOnly);
+			if (attributes != null && !attributes.isEmpty()) {
+				values.put("attributes", attributes);
+			}
+			return values;
+		}
+
+		/**
+		 * 비어 있지 않은 문자열 목록만 JSONB map에 추가한다.
+		 *
+		 * @param target 필터를 모으는 map
+		 * @param key 저장할 필터 이름
+		 * @param values 선택 문자열 목록
+		 */
+		private void putNonEmpty(Map<String, Object> target, String key, List<String> values) {
+			if (values != null && !values.isEmpty()) {
+				target.put(key, values);
+			}
 		}
 	}
 

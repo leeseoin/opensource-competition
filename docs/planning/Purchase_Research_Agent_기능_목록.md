@@ -82,7 +82,7 @@
 
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
-| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가됨 | 시스템 구조 / 현재 DB 저장 흐름 | 29CM 수동 적재, 동시 최초 저장 충돌 처리 후 Queue 결과 PostgreSQL 적재 E2E |
+| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 요청별 검색어/filters, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가되고 수집 검색어로 조회됨 | 시스템 구조 / 현재 DB 저장 흐름 | 동시 최초 저장 충돌 처리 후 Queue 결과 PostgreSQL 적재 E2E |
 | `BACKEND-002` | 수집 작업 영구 상태 관리 | 계획 | P0 | collection job/task, 상태 전이, 성공/실패 수량과 소요시간 | 장애 후에도 PostgreSQL 기준 최종 상태를 복구하고 Redis 상태와 일치함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 상태 전이와 Flyway schema 작성 |
 
 ### MCP와 AI 실행

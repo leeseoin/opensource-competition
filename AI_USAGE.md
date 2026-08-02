@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-07-31
+최종 갱신일: 2026-08-02
 
 ## 이 문서를 공개하는 이유
 
@@ -56,3 +56,4 @@
 | 2026-07-31 | Codex를 사용해 기능 ID 목록, 코드트래커, 진행상황 점검 스킬과 문서 추적 절차를 구성 | 사용자가 제안한 문서 역할을 세 스킬로 분리하고 스킬 형식 검사, 문서 동기화 검사 및 diff 검토 |
 | 2026-07-31 | Codex를 사용해 Collector JSON 수동 적재 API와 정상/실패 통합 테스트를 구현 | 사용자가 수동 적재 경로를 결정하고 Testcontainers PostgreSQL 기반 전체 Spring Boot 테스트와 diff를 검토 |
 | 2026-07-31 | Codex를 사용해 Spring Boot 내부 API에 OpenAPI 문서와 Swagger UI를 추가 | 공식 springdoc-openapi 문서와 라이선스를 확인하고 Swagger/OpenAPI 통합 테스트 및 운영 profile 기본 비활성화를 검토 |
+| 2026-08-02 | Codex를 사용해 Collector 검색어/filters 전달, PostgreSQL 검색 문맥 저장과 수집 검색어 기반 상품 조회를 구현 | 사용자가 문제 상황과 목표를 확인하고 Go 전체 테스트, Flyway V2를 포함한 Spring Boot PostgreSQL 통합 테스트 및 diff를 검토 |

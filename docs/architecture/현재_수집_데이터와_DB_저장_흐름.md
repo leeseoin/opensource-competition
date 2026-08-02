@@ -1,21 +1,25 @@
 # 현재 수집 데이터와 DB 저장 흐름
 
 작성일: 2026-07-26
-최종 수정일: 2026-07-30
+최종 수정일: 2026-08-02
 대상: 프로젝트를 처음 보는 개발자
 
 ## 1. 먼저 알아야 할 현재 상태
 
 Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있다. Spring Boot에는
 Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색 API가
-구현됐다. 현재 남은 연결은 RabbitMQ 결과 consumer와 실제 판매처 결과 적재다.
+구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, 현재 남은 연결은
+RabbitMQ 결과 consumer다. 수집 검색어와 filters를 DB에 연결하고 해당 검색어로
+상품을 다시 조회하는 경로는 구현 및 통합 테스트를 완료했다.
 
 ```text
 현재 가능:
 판매처 검색 → Go Collector → 공통 CollectorResult JSON
+공통 CollectorResult JSON → Spring Boot 수동 적재 API → PostgreSQL 저장
+수집 당시 query와 filters → requestId로 snapshot 연결 → 상품 조회
 
 현재 미구현:
-CollectorResult → Spring Boot 검증 → PostgreSQL 저장
+RabbitMQ 결과 → Spring Boot consumer → PostgreSQL 자동 저장
 ```
 
 따라서 지금 서버를 실행해 검색 JSON을 확인할 수는 있지만, 그 결과가 자동으로 DB에 저장되지는 않는다. 이전 Python 구현에서 DB 적재를 검증한 기록은 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 과거 작업으로 남겨 두었다.
@@ -107,9 +111,12 @@ DTO 검증, JPA transaction과 PostgreSQL 저장은 fixture 기반 통합 테스
 구현됐다. RabbitMQ 결과를 받아 이 저장 서비스를 호출하는 consumer는 다음
 작업이다.
 
-예정 테이블 관계는 다음과 같다.
+현재 테이블 관계는 다음과 같다.
 
 ```text
+collection_search_contexts
+  └── request_id
+        ↓ 같은 request_id
 products
   └── merchant_products
         ├── offer_snapshots
@@ -119,6 +126,7 @@ products
 
 | 테이블 | 역할 |
 |---|---|
+| `collection_search_contexts` | 요청별 검색어와 적용 filters를 한 번만 저장 |
 | `products` | 판매처와 관계없는 최소 상품 정보 |
 | `merchant_products` | `merchant + external_id`로 판매처 상품 식별 |
 | `offer_snapshots` | 수집 시점의 가격과 재고 이력 |
@@ -126,6 +134,29 @@ products
 | `evidence` | 값의 출처 URL, 수집 시각, Collector 버전 |
 
 같은 판매처 상품을 다시 수집하면 상품 행을 무한히 복제하지 않고 기존 `merchant_products`를 연결한다. 가격과 재고는 과거 값을 덮어쓰지 않고 새 snapshot으로 추가한다.
+
+### 검색어는 왜 별도 테이블에 저장하는가
+
+29CM에서 `구두`로 검색해도 상품명은 `BELLA SLINGBACK`처럼 영어일 수 있다. 예전
+조회 API는 상품명과 브랜드만 검사했기 때문에 DB에 상품이 있어도 `query=구두`로
+찾지 못했다.
+
+이를 다음 흐름으로 해결했다.
+
+```text
+1. 사용자가 query=구두와 filters를 Collector에 전달
+2. CollectorResult가 query=구두와 실제 적용 filters를 그대로 반환
+3. Spring Boot가 requestId별 검색 문맥을 collection_search_contexts에 저장
+4. 각 offer_snapshots가 같은 requestId를 저장
+5. 상품 조회 SQL이 상품명 / 브랜드 / 수집 당시 검색어를 함께 검사
+```
+
+검색어와 filters를 상품마다 복사하지 않은 이유는 한 요청에서 상품 100개를 받아도
+검색 조건은 하나이기 때문이다. `collection_search_contexts`에 한 번 저장하고
+`offer_snapshots.request_id`로 연결하면 중복을 줄이면서 수집 이유를 추적할 수 있다.
+
+같은 `requestId`를 다른 검색 조건으로 다시 사용하면 기존 snapshot의 의미가 바뀔 수
+있으므로 Spring Boot가 저장을 거절한다.
 
 ## 5. Spring Boot 구현 상태
 
@@ -137,7 +168,8 @@ products
 6. [완료] 저장된 최신 상품 검색 REST API
 7. [예정] RabbitMQ `CollectionTask` producer
 8. [예정] `CollectionResult` consumer와 실패/DLQ 처리
-9. [예정] ABC마트와 29CM 실제 결과 적재 통합 테스트
+9. [완료] ABC마트와 29CM 실제 결과 수동 적재 및 PostgreSQL 행 검증
+10. [완료] 수집 요청 검색어와 적용 filters를 별도 검색 문맥에 저장하고 상품 조회에 연결
 
 이 항목들이 완료되고 검증 명령이 통과한 뒤에만 “DB 적재 구현 완료”로 체크한다.
 
@@ -155,5 +187,5 @@ products
 ## 7. 다음 구현 순서
 
 다음 작업은 RabbitMQ `CollectionResult` consumer가
-`CollectorResultStoreService`를 호출하도록 연결하는 것이다. 그다음 실제
-ABC마트와 29CM 결과를 저장하고 상품 검색 API에서 확인한다.
+`CollectorResultStoreService`를 호출하도록 연결하는 것이다. 이 연결이 끝나면 지금
+Swagger로 수동 전송하는 단계를 Queue 결과 처리로 자동화할 수 있다.

@@ -19,6 +19,7 @@ func (f registrySearcherFunc) Search(ctx context.Context, request collector.Sear
 // TestSearchRegistryRoutesMerchant는 판매처 이름에 맞는 검색기가 호출되는지 검증한다.
 func TestSearchRegistryRoutesMerchant(t *testing.T) {
 	called := false
+	priceMin := 10000
 	registry := collector.NewSearchRegistry(map[string]collector.Searcher{
 		"abcmart": registrySearcherFunc(func(_ context.Context, request collector.SearchRequest) collector.SearchResult {
 			called = true
@@ -26,9 +27,16 @@ func TestSearchRegistryRoutesMerchant(t *testing.T) {
 		}),
 	})
 
-	result := registry.Search(context.Background(), collector.SearchRequest{Merchant: "abcmart"})
+	result := registry.Search(context.Background(), collector.SearchRequest{
+		Merchant: "abcmart",
+		Query:    "구두",
+		Filters:  collector.SearchFilters{PriceMin: &priceMin, Sizes: []string{"270"}},
+	})
 	if !called || result.Merchant != "abcmart" || result.Status != collector.StatusSuccess {
 		t.Fatalf("result = %#v, called = %v", result, called)
+	}
+	if result.Query != "구두" || result.Filters.PriceMin == nil || *result.Filters.PriceMin != priceMin || len(result.Filters.Sizes) != 1 {
+		t.Fatalf("검색 요청 문맥이 결과에 보존되지 않았습니다: %#v", result)
 	}
 }
 

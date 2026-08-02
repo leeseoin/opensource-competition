@@ -39,7 +39,7 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, JPA 적재, 상품 조회 API | RabbitMQ 결과 consumer, 동시 저장 보강, 실제 수집 E2E |
+| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, 상품 조회 API | RabbitMQ 결과 consumer, 동시 저장 보강, 실제 수집 E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Go Worker 및 retry/DLQ | Spring 작업 발행/결과 저장, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
@@ -163,7 +163,8 @@
 - [x] Flyway 초기 schema
 - [x] 동일 판매처 상품 upsert와 snapshot 추가 transaction
 - [x] 저장된 최신 상품 검색 REST API
-- [ ] 실제 ABC마트/29CM 결과 PostgreSQL 적재 검증
+- [x] 실제 ABC마트/29CM 결과 Swagger 수동 적재와 PostgreSQL 행 검증
+- [x] 수집 요청 검색어와 적용 filters 저장 및 조회
 - [ ] 조사 세션과 작업 상태
 
 완료 조건: fixture Collector 결과가 Java Contract로 검증되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
@@ -331,13 +332,13 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 무신사 공개 검색 Adapter | 완료 | `services/collector/internal/merchants/musinsa/search.go` `Searcher`, `Search`, `parseSearchItems` | 단위 테스트와 `MUSINSA_LIVE_SMOKE=1` 실제 상품 3개 변환 통과 |
 | Registry HTTP 연결 | 완료 | `services/collector/internal/transport/http/search.go` `newSearchHandler`, Registry 호출 | ABC마트·무신사 등록과 HTTP 전달 테스트 통과 |
 | 검색 요청 계약 초안 | 초안 | `contracts/collector/v1/search-request.schema.json:1` `Collector Search Request v1` | 예제 존재, 자동 검증 재확인 필요 |
-| 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext` 선택 필드 추가; 성공·부분 성공 예제 `check-jsonschema` 통과 |
+| 수집 결과 계약 초안 | 초안 | `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1` | `totalCount`, `hasNext`, 검색 query와 filters 추가 / Go 및 Java 테스트 통과 / 실제 Schema 자동 검증 CI 남음 |
 | 재검증 결과 계약 초안 | 초안 | `contracts/collector/v1/verification-result.schema.json:1` `Collector Verification Result v1` | 변경 예제 존재, 책임 경계 재검토 필요 |
 | RabbitMQ 검색 작업 계약 | 부분 구현 | `contracts/collection/v1/collection-task.schema.json:1`, `collection-result.schema.json:1`; Go `internal/messaging/contracts.go:31` `CollectionTask` | 성공/실패 Schema 예제와 Go 계약 테스트 통과, Java 계약 미구현 |
 | Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
-| `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/dto/CollectionResultStoreResponse.java:14` `CollectionResultStoreResponse`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79` `storesCollectorResultThroughHttpEndpoint` | `./gradlew test --rerun-tasks` 통과 / ABC마트 `manual-abc-001` 실제 저장 결과 상품 3개, 판매처 상품 3개, snapshot 3개, 옵션 19개, 근거 3개 확인 / 29CM, 동시 최초 저장 충돌과 Queue E2E 남음 |
+| `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌과 Queue E2E 남음 |
 | `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
 | `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
@@ -357,6 +358,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-07-31 | 검증 명령 | 첫 문서 검사에서 `rg`, `make`, `git`을 찾지 못함 | zsh의 특수 변수 `path`를 반복 변수로 사용해 해당 shell의 명령 검색 경로를 덮어씀 | 반복 변수명을 `doc_file`로 변경하고 전체 검증을 다시 실행 | 해결 |
 | 2026-07-31 | Product Backend 실행 | Flyway가 비어 있지 않은 `public` schema와 없는 `flyway_schema_history`를 감지해 서버 시작을 중단 | 이전 Python/Alembic 테이블과 데이터가 PostgreSQL Docker Volume에 남아 있음 | 로컬 schema를 정리한 뒤 Flyway V1 적용과 서버 실행 성공 / `flyway_schema_history` 존재, `alembic_version` 없음, Swagger 실제 적재 확인 | 해결 |
 | 2026-07-31 | Spring Boot 검증 | 최종 Gradle 재실행이 사용자 Gradle cache의 lock 파일 접근 권한 때문에 실패 | 격리 실행 환경이 workspace 밖의 `~/.gradle` lock 파일 쓰기를 제한 | 승인된 프로젝트 Gradle Wrapper 명령으로 재실행해 전체 테스트 통과 | 해결 |
+| 2026-08-02 | 29CM 저장 상품 검색 | DB에는 29CM 상품 3개가 있지만 `merchant=29cm&query=구두` 조회 결과가 0개 | Product Backend가 상품명과 브랜드만 검색했고 CollectorResult와 DB에 요청 검색어가 없었음 | CollectorResult에 query/filters를 추가하고 `collection_search_contexts`와 snapshot을 requestId로 연결 / 수집 검색어 조회 통합 테스트 통과 | 해결 |
 | 2026-07-16 | 판매처 정책 | 무신사 검색 구현 후 일반 Collector user-agent가 robots에서 전체 차단됨을 확인 | 무신사 `robots.txt`의 `User-agent: * / Disallow: /` 정책 | 무신사 구현을 제거하고 `User-agent: * / Allow: /`인 ABC마트로 전환 | 해결 |
 | 2026-07-16 | 무신사 parser test | 폐기 전 최소 HTML의 `__NEXT_DATA__` JSON 해석 실패 | 테스트 자료를 줄이는 과정에서 닫는 중괄호가 하나 많았음 | JSON을 수정해 원인을 확인했으나 robots 정책 확인 후 무신사 코드는 최종 제거 | 해결 |
 | 2026-07-16 | ABC마트 검색 조건 | 결과 개수 1개와 270 사이즈를 함께 요청하면 앞 상품이 맞지 않아 결과가 비어 보임 | 서버에서 1개만 받은 뒤 Collector가 사이즈 조건을 적용함 | 서버에서는 최소 30개를 받은 뒤 조건을 적용하고 마지막에 요청 개수만큼 잘라 반환 | 해결 |
@@ -819,6 +821,59 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 
+### 2026-08-02 BACKEND-001 29CM 실제 결과 PostgreSQL 적재 검증
+
+- 진행상황: 사용자가 실행한 Collector와 Product Backend를 사용해 29CM `구두`
+  검색 결과 3개를 수집하고 `POST /internal/v1/collection-results`로 저장했다.
+- 검증 결과:
+  - Collector 요청 ID: `manual-29cm-20260802-001`
+  - Collector 응답: `status=success`, `totalCount=5466`, `hasNext=true`, 상품 3개
+  - Product Backend 응답: 상품 3개, snapshot 3개, 옵션 0개, 근거 3개
+  - PostgreSQL SQL 조회: 요청 ID 기준 snapshot 3개, 판매처 상품 3개, 옵션 0개,
+    근거 3개
+  - `GET /internal/v1/products?merchant=29cm&limit=10`: 저장 상품 3개 조회
+- 발생 문제: `merchant=29cm&query=구두` 조회는 0개를 반환했다.
+- 원인: 현재 조회 API는 상품명과 브랜드만 검색하며 수집 요청의 `query`와
+  `filters`를 DB에 저장하지 않는다. 이번 29CM 상품명과 브랜드에는 `구두` 문자열이
+  포함되지 않았다.
+- 해결: 1차 검증에서는 판매처만 지정해 적재 성공을 확인했다. 이후 CollectorResult에
+  `query`와 `filters`를 추가하고 `collection_search_contexts`에 요청당 한 번 저장했다.
+  `offer_snapshots.request_id`와 연결한 조회 SQL 및 통합 테스트로 상품명에 `구두`가
+  없는 상품도 수집 검색어로 조회되는 것을 확인했다.
+- 남은 위험: 29CM 검색 결과에는 옵션이 없어 옵션 0개가 정상 저장됐다. 옵션은 향후
+  상품 상세 Adapter에서 수집해야 한다.
+
+### 2026-08-02 BACKEND-001 수집 검색어와 filters 저장 및 조회
+
+- 진행상황: Collector가 검색 요청의 `query`와 적용 `filters`를 결과에 포함하고,
+  Product Backend가 요청별 검색 문맥을 PostgreSQL에 저장하도록 구현했다.
+- 구현 위치:
+  - `services/collector/internal/collector/search.go:119` `SearchResult`: query와 filters 공통 응답 필드
+  - `services/collector/internal/collector/registry.go:34` `Search`: 요청 검색 문맥을 결과에 보존
+  - `contracts/collector/v1/collector-result.schema.json:1` `Collector Result v1`: search operation 조건부 계약
+  - `services/product-backend/src/main/resources/db/migration/V2__add_collection_search_context.sql:1` `collection_search_contexts`: 요청별 검색 문맥 schema
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`: JSONB filters entity
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:113` `storeSearchContext`: 중복 없는 문맥 저장과 requestId 오용 차단
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:35` `search`: 상품명/브랜드/수집 검색어 조회
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct`: 검색 문맥 저장과 조회 검증
+- 발생 문제: 첫 Go 테스트가 macOS 사용자 Go build cache 접근 제한으로 실패했다.
+- 원인: 격리 환경에서 workspace 밖의 `/Users/iseoin/Library/Caches/go-build` 쓰기가
+  허용되지 않았다.
+- 해결: `GOCACHE=/private/tmp/purchase-research-go-build`로 테스트 cache만 변경했다.
+  제품 코드나 실행 설정은 변경하지 않았다.
+- 남은 위험: 이미 저장된 과거 snapshot에는 검색 문맥이 자동 생성되지 않는다. 새
+  CollectorResult부터 연결되며, Queue consumer와 동시 최초 상품 upsert는 별도 작업이다.
+- 검증:
+  - `GOCACHE=/private/tmp/purchase-research-go-build go test ./...`: 전체 통과
+  - `./gradlew test --rerun-tasks`: V2 Flyway 및 PostgreSQL 통합 테스트 포함 전체 통과
+  - 실제 Collector 요청 `manual-29cm-lineage-20260802-001`: `query=구두`,
+    `filters.inStockOnly=true`, 상품 3개 반환
+  - 실제 Product Backend 저장: 상품 3개, snapshot 3개, 옵션 0개, 근거 3개
+  - `GET /internal/v1/products?merchant=29cm&query=구두&limit=10`: 상품명에
+    `구두`가 없는 29CM 상품 3개 조회
+  - PostgreSQL `collection_search_contexts`: 요청 ID, 판매처 `29cm`, 검색어 `구두`,
+    `{"inStockOnly": true}` 저장 확인
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -841,6 +896,6 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 ## 다음 갱신 대상
 
 - Spring Boot RabbitMQ 작업 발행과 결과 저장 Worker
-- 실제 ABC마트/29CM 수집 결과 PostgreSQL 적재 E2E
+- RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
