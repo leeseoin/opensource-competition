@@ -72,8 +72,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 500,
-      "pattern": "^https://www\\.29cm\\.co\\.kr/.*$",
-      "description": "itemUrl.webLink. 29CM 상품 상세 페이지 URL."
+      "pattern": "^https://(www|product)\\.29cm\\.co\\.kr/.*$",
+      "description": "itemUrl.webLink. www.29cm.co.kr 또는 product.29cm.co.kr 도메인."
     }
   },
   "$defs": {
