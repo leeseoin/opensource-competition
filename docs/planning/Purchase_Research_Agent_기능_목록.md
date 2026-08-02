@@ -1,8 +1,9 @@
 # Purchase Research Agent 기능 목록
 
 작성일: 2026-07-31
-최종 점검일: 2026-07-31
-상태: 초기 기능 ID 구성
+최종 점검일: 2026-08-02
+최종 점검 범위: `BACKEND-001`, `OPS-002`, `OPS-003`
+상태: 선택 기능 감사 완료
 
 ## 목적
 
@@ -81,7 +82,7 @@
 
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
-| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 완료 | P0 | Flyway schema, Java DTO 검증, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가됨 | 시스템 구조 / 현재 DB 저장 흐름 | 29CM 수동 적재 검증 후 Queue 결과 PostgreSQL 적재 E2E |
+| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가됨 | 시스템 구조 / 현재 DB 저장 흐름 | 29CM 수동 적재, 동시 최초 저장 충돌 처리 후 Queue 결과 PostgreSQL 적재 E2E |
 | `BACKEND-002` | 수집 작업 영구 상태 관리 | 계획 | P0 | collection job/task, 상태 전이, 성공/실패 수량과 소요시간 | 장애 후에도 PostgreSQL 기준 최종 상태를 복구하고 Redis 상태와 일치함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 상태 전이와 Flyway schema 작성 |
 
 ### MCP와 AI 실행
@@ -112,7 +113,7 @@
 |---|---|---|---|---|---|---|---|
 | `OPS-001` | 로컬 인프라와 루트 개발 명령 | 완료 | P0 | Compose PostgreSQL/Redis/RabbitMQ, 환경변수 예제와 Make 명령 | 루트 명령으로 인프라와 각 서비스를 실행/검증할 수 있음 | 시스템 구조 | 배포 환경 분리 전까지 유지 |
 | `OPS-002` | CI/보안/관측 가능성 | 부분 구현 | P1 | 계약 검사, unit/integration, 문서 동기화, 로그, metric과 보안 점검 | PR에서 필수 검사가 자동 실행되고 운영 오류를 request/job ID로 추적함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 계약 CI와 구조화 로그 |
-| `OPS-003` | 기능 ID 기반 개발 추적 | 구현 완료/검증 필요 | P1 | 기능 목록, 코드트래커, 진행상황 감사 스킬과 AGENTS 실행 규칙 | 세 스킬 형식 검증이 통과하고 하나의 기능 ID로 계획/변경/상태를 연결함 | [기능 ID 추적 프로세스](../development/기능_ID_기반_개발_추적_프로세스.md) | 구현 commit 후 실제 기능 작업 한 건으로 전체 흐름 검증 |
+| `OPS-003` | 기능 ID 기반 개발 추적 | 완료 | P1 | 기능 목록, 코드트래커, 진행상황 감사 스킬과 AGENTS 실행 규칙 | 세 스킬 형식 검증이 통과하고 하나의 기능 ID로 계획/변경/상태를 연결함 | [기능 ID 추적 프로세스](../development/기능_ID_기반_개발_추적_프로세스.md) | 새 기능 구현마다 코드트래커와 진행상황 감사를 같은 흐름으로 유지 |
 | `RUNTIME-001` | 여러 AI 실행 환경 지원 | 계획 | P2 | Codex/Claude Code CLI, Ollama, llama.cpp와 GPU model server adapter | 동일 MCP 도구 계약을 유지하며 실행 환경을 설정으로 교체하고 평가 결과를 비교함 | 시스템 구조 | PoC 완료 후 runtime adapter 설계 |
 
 ## 다음 우선순위

@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-07-31
+최종 갱신일: 2026-08-02
 
 ## 목적
 
@@ -337,9 +337,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | Go RabbitMQ 검색 Worker | 검색 1페이지 완료 | `services/collector/internal/messaging/processor.go:17` `NewProcessor`, `:29` `Process`; `rabbitmq.go:55` `RabbitWorker.Run`, `:110` `handleDelivery`; `cmd/worker/main.go:25` `run` | Go 전체 테스트와 ABC마트 실제 작업 1건 성공 |
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
-| `BACKEND-001` Collector 결과 수동 적재 API | 부분 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/dto/CollectionResultStoreResponse.java:14` `CollectionResultStoreResponse`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79` `storesCollectorResultThroughHttpEndpoint` | `./gradlew test` 통과 / ABC마트 `manual-abc-001` 실제 저장 결과 상품 3개, 판매처 상품 3개, snapshot 3개, 옵션 19개, 근거 3개 확인 / 29CM와 Queue E2E 남음 |
-| `OPS-002` Product Backend OpenAPI와 Swagger UI | 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | `/v3/api-docs`의 수동 적재/상품 조회 경로와 `/swagger-ui.html` redirect 통합 테스트 통과 |
-| `OPS-003` 기능 ID 기반 개발 추적 | 구현 완료/검증 필요 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | Ruby YAML 구조 검사, 기능 ID 25개 중복 검사, `make docs-check`, `git diff --check` 통과 / 실제 commit 기반 전체 흐름 검증 필요 |
+| `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/dto/CollectionResultStoreResponse.java:14` `CollectionResultStoreResponse`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79` `storesCollectorResultThroughHttpEndpoint` | `./gradlew test --rerun-tasks` 통과 / ABC마트 `manual-abc-001` 실제 저장 결과 상품 3개, 판매처 상품 3개, snapshot 3개, 옵션 19개, 근거 3개 확인 / 29CM, 동시 최초 저장 충돌과 Queue E2E 남음 |
+| `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
+| `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
 
 ## 문제 기록
@@ -772,6 +772,50 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   노출하면 안 된다.
 - 검증:
   - `services/product-backend`에서 `./gradlew test`: 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-02 BACKEND-001 / OPS-002 / OPS-003 기능 진행상황 감사
+
+- 진행상황:
+  - `BACKEND-001`: Flyway schema, Java DTO, 상품 upsert, snapshot/옵션/근거 저장,
+    최신 조회, 정상/실패 통합 테스트와 ABC마트 실제 적재를 확인해 `부분 구현`으로
+    판정했다.
+  - `OPS-002`: Swagger/OpenAPI 구현과 테스트는 완료됐지만 기능 범위에 포함된 계약
+    CI, 구조화 로그, metric과 운영 보안 점검이 남아 `부분 구현`을 유지했다.
+  - `OPS-003`: 세 스킬 형식, 기능 ID 중복, 구현 commit, 코드트래커와 현재 상태
+    감사를 하나의 실제 흐름으로 연결해 `완료`로 판정했다.
+- 구현 근거:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:75`
+    `CollectorResultStoreService.store`: 검증된 결과의 transaction 저장
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:79`
+    `storesCollectorResultThroughHttpEndpoint`: 실제 PostgreSQL 저장 정상 경로
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:105`
+    `rejectsNonStorableCollectorResultThroughHttpEndpoint`: 저장 불가 상태 실패 경로
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:127`
+    `rejectsContractViolationThroughHttpEndpoint`: 필수값 위반 실패 경로
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221`
+    `exposesOpenApiDocumentAndSwaggerUi`: Swagger/OpenAPI 통합 경로
+  - `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`
+  - `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`
+  - `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`
+- 발생 문제: 개발 진행 관리에서 Swagger 하위 구현을 `완료`로 표시해 상위
+  `OPS-002` 전체 상태와 혼동됐고, `BACKEND-001`은 상태 기준에 없는 `부분 완료`
+  표현을 사용했다.
+- 원인: 구현 단위의 완료 여부와 상위 기능 ID 전체 완료 여부를 같은 상태 열에서
+  구분하지 않았다.
+- 해결: 상위 기능 범위를 기준으로 두 항목을 `부분 구현`으로 통일하고, 완료된
+  Swagger 범위와 남은 운영 범위를 검증 근거에 분리했다. `OPS-003`은 이번 실제
+  코드트래커와 상태 감사로 완료 기준 충족을 확인했다.
+- 남은 위험:
+  - `BACKEND-001`: 29CM 실제 적재, 동시 최초 저장 충돌과 Queue E2E
+  - `OPS-002`: 계약 CI, 구조화 로그, metric, 인증과 운영 보안 점검
+  - `OPS-003`: 새 기능에서 같은 절차가 누락되지 않도록 지속 적용
+- 검증:
+  - `services/product-backend`에서 `./gradlew test --rerun-tasks`: 전체 작업 재실행 후
+    통과
+  - Ruby YAML 검사: 세 스킬의 frontmatter와 `openai.yaml` 필수 필드 통과
+  - 기능 목록 검사: 기능 ID 25개 중복 없음
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 
