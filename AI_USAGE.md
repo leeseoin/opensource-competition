@@ -60,3 +60,4 @@
 | 2026-08-02 | Codex를 사용해 Spring Boot RabbitMQ 결과 Consumer, 수동 ACK, 결과 DLQ와 PostgreSQL 자동 저장 경로를 구현 | RabbitMQ/PostgreSQL Testcontainers로 성공 저장, 정상 실패 무저장, 식별자 불일치 거절과 계약 위반 DLQ 이동을 검증 |
 | 2026-08-02 | Codex를 사용해 Spring Boot 수집 요청 API, CollectionTask 발행, 검색 Queue topology와 publisher confirm을 구현 | 사용자가 전체 Queue 구조를 확인하고 RabbitMQ Testcontainers로 HTTP 202, 계약 필드, persistent 메시지, 멱등성 키와 미지원 page 거절을 검증 |
 | 2026-08-03 | Codex를 사용해 실제 ABC마트 Queue E2E의 빈 filters 역직렬화 실패를 진단하고 Java DTO 기본값 처리를 수정 | 실제 RabbitMQ Queue/DLQ와 PostgreSQL을 확인하고 빈 filters 수동 저장, HTTP 저장 회귀 테스트와 결과 Consumer 통합 테스트로 검증 |
+| 2026-08-03 | Codex를 사용해 전달받은 Python 통합 Schema를 운영 CollectorResult와 분리하고 Python/Go 최대 10,000개 수집 및 성능 비교 설계를 작성 | 사용자가 Python/Go 비교 목표와 브랜치 경계를 결정하고 Schema/20건 예제/dev-jw 구현/현재 Go DTO를 대조해 필드 변환과 검증 기준을 확인 |

@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-08-02
+최종 갱신일: 2026-08-03
 
 ## 목적
 
@@ -45,6 +45,7 @@
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
 | Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
+| Python/Go 크롤러 비교 | 부분 구현 | 비교 Contract/20건 예제/최대 10,000개 수집과 benchmark 설계 | 언어별 adapter, pagination/checkpoint와 단계별 실수집 |
 
 ## 영역별 상세 체크리스트
 
@@ -954,6 +955,32 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests.storesCollectorResultWithEmptyFilters --rerun-tasks`: 통과
   - `./gradlew test --rerun-tasks`: 작업 발행/결과 소비/DB 저장 전체 테스트 통과
 
+### 2026-08-03 OPS-004 Python/Go 비교 Contract와 실행 기준
+
+- 진행상황: 정우님 Python 결과와 현재 Go `CollectorResult`를 같은 조건으로 비교할
+  `v1-unified` Schema/20건 예제를 저장소에 반영하고, 운영 계약을 약하게 바꾸지 않는
+  비교 Adapter 경계를 설계했다. 언어별 Adapter와 대량 수집 코드는 진행 중이다.
+- 구현 위치:
+  - `contracts/collector/unified/unified-product.schema.json:1` `통일 상품 스키마 v1-unified`: Python/Go 비교 상품 한 건 규격
+  - `contracts/collector/unified/README.md:1` `Python/Go 크롤러 비교 계약`: 운영 `CollectorResult`와 비교 계약의 필드 매핑 및 사용 제한
+  - `docs/architecture/Python_Go_크롤러_확장성과_성능_비교_설계.md:1` `Python/Go 크롤러 확장성과 성능 비교 설계`: 최대 10,000개 단계 수집, 안전 중단, Queue/Redis와 성능 측정 기준
+  - `docs/reference/크롤링_및_Contract_설계서_v2.0.html:1` `크롤링 및 Contract 설계서 v2.0`: 협업자가 전달한 원본 설계 참고 자료
+- 발생 문제: 전달받은 `v1-unified`는 가격을 `"19,000원"` 문자열로 표현하고 상품
+  사실의 `provenance`를 포함하지 않아 현재 Product Backend 운영 입력으로 바로 사용할
+  수 없었다.
+- 원인: 이 Schema는 기존 Python 크롤러 두 판매처 결과를 한 배열로 합치는 목적이며,
+  현재 Go/Spring 운영 계약은 정수 가격/통화와 출처 추적을 요구한다.
+- 해결: 운영 경계는 `contracts/collector/v1`로 유지하고 `v1-unified`는 언어 성능과
+  필드 완전성 비교용 호환 계약으로 분리했다. 각 언어가 별도 Adapter로 변환하도록
+  책임을 명시했다.
+- 남은 위험: 비교 Adapter가 아직 없고, 원본 Python 구현의 브라우저 기반 ABC마트
+  수집과 Go JSON 수집은 네트워크 작업량이 달라 E2E 시간만으로 언어 성능을 단정할 수
+  없다. 동일 fixture parser benchmark를 별도로 구현해야 한다.
+- 검증:
+  - `uvx check-jsonschema --schemafile /private/tmp/unified-products-array.schema.json contracts/collector/unified/examples/unified_구두_top20_20260803_002024.json`: 20건 전체 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -979,3 +1006,4 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - `collection_jobs`와 `collection_tasks` 작업 상태 저장
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
+- Python/Go `v1-unified` Adapter와 대량 수집 benchmark

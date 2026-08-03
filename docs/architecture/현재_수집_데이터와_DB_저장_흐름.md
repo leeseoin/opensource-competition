@@ -1,7 +1,7 @@
 # 현재 수집 데이터와 DB 저장 흐름
 
 작성일: 2026-07-26
-최종 수정일: 2026-08-02
+최종 수정일: 2026-08-03
 대상: 프로젝트를 처음 보는 개발자
 
 ## 1. 먼저 알아야 할 현재 상태
@@ -10,7 +10,8 @@ Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있�
 Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색 API가
 구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, RabbitMQ 결과
 Consumer가 같은 저장 서비스를 호출하는 자동 저장 경로도 통합 테스트를 완료했다.
-현재 남은 연결은 Spring Boot가 수집 작업을 RabbitMQ에 발행하는 API다.
+Spring Boot의 수집 작업 발행 API도 구현돼 현재 작업 생성부터 결과 저장까지의 코드
+경로가 연결됐다. 실제 판매처 전체 Queue E2E와 작업 상태 영구 저장은 남아 있다.
 
 ```text
 현재 가능:
@@ -18,12 +19,18 @@ Consumer가 같은 저장 서비스를 호출하는 자동 저장 경로도 통�
 공통 CollectorResult JSON → Spring Boot 수동 적재 API → PostgreSQL 저장
 수집 당시 query와 filters → requestId로 snapshot 연결 → 상품 조회
 RabbitMQ CollectionResult → Spring Boot Consumer → PostgreSQL 자동 저장
+Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
 
 현재 미구현:
-Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
+수집 작업의 PostgreSQL 상태 저장과 Redis 진행 상태
+여러 검색어/여러 페이지 batch 작업
+실제 ABC마트/29CM 전체 Queue E2E 재검증
 ```
 
-따라서 지금 서버를 실행해 검색 JSON을 확인할 수는 있지만, 그 결과가 자동으로 DB에 저장되지는 않는다. 이전 Python 구현에서 DB 적재를 검증한 기록은 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 과거 작업으로 남겨 두었다.
+Product Backend와 Go Worker를 함께 실행하면 Swagger에서 만든 작업 결과가 자동으로
+DB에 저장된다. 이전 Python 구현에서 DB 적재를 검증한 기록은
+[개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 과거 작업으로
+남겨 두었다.
 
 ## 2. 지금 수집하는 데이터
 
@@ -108,9 +115,9 @@ JPA transaction
 PostgreSQL
 ```
 
-DTO 검증, JPA transaction, RabbitMQ 결과 Consumer와 PostgreSQL 저장은
-Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 Spring Boot가 검색 작업을
-생성하고 RabbitMQ에 발행하는 API다.
+DTO 검증, JPA transaction, RabbitMQ 작업 발행/결과 Consumer와 PostgreSQL 저장은
+Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 다중 페이지 계약과 작업 상태를
+추가하고 실제 판매처 전체 Queue 흐름을 반복 검증하는 것이다.
 
 현재 테이블 관계는 다음과 같다.
 

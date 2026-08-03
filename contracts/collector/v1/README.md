@@ -50,13 +50,18 @@ Go의 `struct`와 Java의 DTO는 서로 직접 공유할 수 없다. JSON Schema
 5. 검사에 통과한 결과만 정규화하고 PostgreSQL에 저장한다.
 ```
 
-현재 1, 4, 5단계의 Spring Boot 구현은 남아 있다.
+현재 Spring Boot의 작업 발행, 결과 DTO 검증과 PostgreSQL 저장 경로가 구현돼 있다.
+JSON Schema를 런타임에 직접 적용하는 검증과 전체 계약 CI는 남아 있다.
 
 ## 현재 Contract 범위
 
 - `search-request.schema.json`: Product Backend가 Go에 전달하는 판매처 상품 검색 요청
 - `collector-result.schema.json`: 검색, 상품 상세, 공개 리뷰 수집 결과
 - `verification-result.schema.json`: 구매 후보의 최신 가격, 재고, 옵션 재검증 결과
+
+Python과 Go의 언어별 결과를 같은 상품 모양으로 비교하는 호환 계약은
+[`../unified`](../unified/README.md)에 둔다. 비교 계약은 가격 문자열과 기존 Python
+필드를 유지하므로 이 운영 계약이나 Product Backend 저장 입력을 대체하지 않는다.
 
 검색 결과는 판매처가 알려준 전체 상품 수 `totalCount`와 다음 페이지 여부 `hasNext`를 선택 필드로 포함한다. 값을 제공하지 않거나 요청이 실패하면 `null`을 사용한다.
 

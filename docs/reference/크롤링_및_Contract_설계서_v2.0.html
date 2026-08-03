@@ -1,0 +1,689 @@
+<title>크롤링 및 Contract 설계서 v2.0</title>
+<style>
+:root {
+  --bg:#F6F8FD;--surface:#FFFFFF;--surface-2:#EEF1FA;--border:#D8DCF0;
+  --text:#1C1F2E;--text-2:#545872;--text-3:#8A8FA8;
+  --accent:#1847B8;--accent-dim:#EBF0FF;
+  --abc:#E85A10;--abc-dim:#FFF2EB;
+  --cm29:#2B2E42;--cm29-dim:#EDEEF5;
+  --unified:#059669;--unified-dim:#DCFCE7;
+  --pass:#0D7A3E;--pass-dim:#E6F7EE;
+  --code-bg:#F0F3FC;--code-text:#2A2F55;
+  --header-bg:#111728;--header-text:#E8ECFC;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#111520;--surface:#191D2E;--surface-2:#202540;--border:#2C3150;
+    --text:#DCE0F5;--text-2:#8B90B8;--text-3:#565A78;
+    --accent:#5B82F5;--accent-dim:#1A2545;
+    --abc:#FF7A3A;--abc-dim:#2C1C10;
+    --cm29:#A8AECF;--cm29-dim:#1C1F35;
+    --unified:#3DD68C;--unified-dim:#0A2819;
+    --pass:#3DD68C;--pass-dim:#0A2819;
+    --code-bg:#1A1E35;--code-text:#A8B4F8;
+    --header-bg:#0B0E1A;--header-text:#E8ECFC;
+  }
+}
+:root[data-theme="light"] {
+  --bg:#F6F8FD;--surface:#FFFFFF;--surface-2:#EEF1FA;--border:#D8DCF0;
+  --text:#1C1F2E;--text-2:#545872;--text-3:#8A8FA8;
+  --accent:#1847B8;--accent-dim:#EBF0FF;
+  --abc:#E85A10;--abc-dim:#FFF2EB;--cm29:#2B2E42;--cm29-dim:#EDEEF5;
+  --unified:#059669;--unified-dim:#DCFCE7;
+  --pass:#0D7A3E;--pass-dim:#E6F7EE;
+  --code-bg:#F0F3FC;--code-text:#2A2F55;--header-bg:#111728;--header-text:#E8ECFC;
+}
+:root[data-theme="dark"] {
+  --bg:#111520;--surface:#191D2E;--surface-2:#202540;--border:#2C3150;
+  --text:#DCE0F5;--text-2:#8B90B8;--text-3:#565A78;
+  --accent:#5B82F5;--accent-dim:#1A2545;
+  --abc:#FF7A3A;--abc-dim:#2C1C10;--cm29:#A8AECF;--cm29-dim:#1C1F35;
+  --unified:#3DD68C;--unified-dim:#0A2819;
+  --pass:#3DD68C;--pass-dim:#0A2819;
+  --code-bg:#1A1E35;--code-text:#A8B4F8;--header-bg:#0B0E1A;--header-text:#E8ECFC;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);line-height:1.7;-webkit-font-smoothing:antialiased;}
+a{color:var(--accent);text-decoration:none;}
+code,pre{font-family:'JetBrains Mono',Consolas,'Courier New',monospace;font-size:.85em;}
+.doc-header{background:var(--header-bg);color:var(--header-text);padding:48px 0 36px;}
+.doc-header .inner{max-width:960px;margin:0 auto;padding:0 32px;}
+.doc-header .eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-weight:600;}
+.doc-header h1{font-size:1.85rem;font-weight:700;letter-spacing:-.01em;line-height:1.25;text-wrap:balance;color:#fff;}
+.doc-header .meta{margin-top:18px;display:flex;gap:24px;flex-wrap:wrap;font-size:.78rem;color:#8A90B8;border-top:1px solid #232843;padding-top:16px;}
+.doc-header .meta span strong{color:#BCC4E8;font-weight:500;}
+.result-banner{background:var(--pass-dim);border-bottom:2px solid var(--pass);padding:14px 0;}
+.result-banner .inner{max-width:960px;margin:0 auto;padding:0 32px;display:flex;align-items:center;gap:32px;flex-wrap:wrap;}
+.result-banner .badge{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--pass);letter-spacing:.04em;}
+.result-banner .badge::before{content:'✓';width:18px;height:18px;background:var(--pass);color:#fff;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;flex-shrink:0;}
+.result-banner .stat{font-size:.82rem;color:var(--text-2);}
+.result-banner .stat strong{color:var(--pass);font-variant-numeric:tabular-nums;}
+.content{max-width:960px;margin:0 auto;padding:0 32px 64px;}
+.toc-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px 28px;margin:32px 0 40px;}
+.toc-card h2{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);font-weight:700;margin-bottom:14px;}
+.toc-card ol{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 32px;}
+.toc-card ol li{font-size:.86rem;color:var(--text-2);}
+.toc-card ol li a{color:var(--text-2);display:flex;gap:8px;align-items:baseline;padding:2px 0;transition:color .15s;}
+.toc-card ol li a:hover{color:var(--accent);}
+.toc-card ol li a .num{font-size:.72rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;min-width:20px;}
+@media(max-width:600px){.toc-card ol{grid-template-columns:1fr;}}
+.section{margin-bottom:52px;}
+.section-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid var(--border);}
+.section-header .sec-num{font-size:.68rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);background:var(--accent-dim);padding:3px 8px;border-radius:4px;flex-shrink:0;font-variant-numeric:tabular-nums;}
+.section-header h2{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;color:var(--text);}
+.site-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:700;vertical-align:middle;}
+.site-badge.abc{background:var(--abc-dim);color:var(--abc);}
+.site-badge.cm29{background:var(--cm29-dim);color:var(--cm29);}
+.site-badge.unified{background:var(--unified-dim);color:var(--unified);}
+.cards-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+@media(max-width:640px){.cards-row{grid-template-columns:1fr;}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px 22px;}
+.card.abc-card{border-top:3px solid var(--abc);}
+.card.cm29-card{border-top:3px solid var(--cm29);}
+.card.unified-card{border-top:3px solid var(--unified);}
+.card h3{font-size:.82rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;}
+.card dt{font-size:.75rem;color:var(--text-3);font-weight:600;letter-spacing:.03em;padding-top:2px;white-space:nowrap;}
+.card dd{font-size:.82rem;color:var(--text-2);}
+.card dd code{background:var(--code-bg);color:var(--code-text);padding:1px 5px;border-radius:3px;font-size:.78rem;word-break:break-all;}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin:16px 0;}
+table{width:100%;border-collapse:collapse;font-size:.82rem;}
+table thead th{background:var(--surface-2);color:var(--text-3);font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);}
+table tbody td{padding:9px 14px;color:var(--text);border-bottom:1px solid var(--border);vertical-align:middle;}
+table tbody tr:last-child td{border-bottom:none;}
+table tbody tr:hover td{background:var(--surface-2);}
+.field-required{display:inline-block;width:7px;height:7px;background:var(--accent);border-radius:50%;vertical-align:middle;margin-right:4px;}
+.constraint-chip{display:inline-block;background:var(--code-bg);color:var(--code-text);padding:2px 6px;border-radius:4px;font-family:Consolas,'Courier New',monospace;font-size:.78rem;}
+.empty-always{background:var(--cm29-dim);color:var(--cm29);padding:2px 7px;border-radius:4px;font-size:.75rem;font-weight:600;white-space:nowrap;}
+.tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:.72rem;font-weight:600;letter-spacing:.03em;}
+.tag.green{background:var(--pass-dim);color:var(--pass);}
+.tag.blue{background:var(--accent-dim);color:var(--accent);}
+.tag.gray{background:var(--surface-2);color:var(--text-3);}
+.tag.unified{background:var(--unified-dim);color:var(--unified);}
+.gender{display:inline-block;padding:1px 7px;border-radius:3px;font-size:.72rem;font-weight:600;margin-right:4px;}
+.gender.male{background:#EBF3FF;color:#1A5FB4;}
+.gender.female{background:#FDEEF5;color:#B0186F;}
+.gender.child{background:#F3F0FF;color:#6531C0;}
+:root[data-theme="dark"] .gender.male{background:#0D1E38;color:#7EB3F8;}
+:root[data-theme="dark"] .gender.female{background:#2A0E1E;color:#F07BC0;}
+:root[data-theme="dark"] .gender.child{background:#1A1040;color:#B89CF8;}
+@media(prefers-color-scheme:dark){
+  .gender.male{background:#0D1E38;color:#7EB3F8;}
+  .gender.female{background:#2A0E1E;color:#F07BC0;}
+  .gender.child{background:#1A1040;color:#B89CF8;}
+}
+.pipeline{display:flex;align-items:center;gap:0;overflow-x:auto;padding:24px 0;}
+.pipeline-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;}
+.pipeline-box{padding:10px 16px;background:var(--surface);border:1.5px solid var(--border);border-radius:7px;font-size:.79rem;font-weight:600;text-align:center;color:var(--text);min-width:100px;}
+.pipeline-box.accent{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);}
+.pipeline-box.pass{border-color:var(--pass);background:var(--pass-dim);color:var(--pass);}
+.pipeline-box.unified-box{border-color:var(--unified);background:var(--unified-dim);color:var(--unified);}
+.pipeline-label{font-size:.68rem;color:var(--text-3);text-align:center;max-width:110px;line-height:1.3;}
+.pipeline-arrow{font-size:1rem;color:var(--text-3);padding:0 6px;flex-shrink:0;padding-bottom:20px;}
+.parallel-diag{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;margin:16px 0;}
+.parallel-diag .title-row{text-align:center;font-size:.78rem;font-weight:700;color:var(--text-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:20px;}
+.parallel-gather{display:flex;align-items:center;gap:0;}
+.gather-box{flex-shrink:0;padding:14px 18px;background:var(--accent-dim);border:2px solid var(--accent);border-radius:8px;font-size:.8rem;font-weight:700;color:var(--accent);text-align:center;}
+.gather-lines{display:flex;flex-direction:column;align-items:flex-start;gap:8px;flex:1;padding:0 8px;}
+.gather-line{display:flex;align-items:center;gap:8px;width:100%;}
+.gather-line .site-lbl{font-size:.78rem;font-weight:700;width:110px;flex-shrink:0;padding:6px 10px;border-radius:5px;}
+.gather-line .site-lbl.abc{background:var(--abc-dim);color:var(--abc);}
+.gather-line .site-lbl.cm{background:var(--cm29-dim);color:var(--cm29);}
+.gather-line .line{flex:1;height:2px;border-top:2px dashed var(--border);}
+.gather-merge{flex-shrink:0;padding:14px 18px;background:var(--pass-dim);border:2px solid var(--pass);border-radius:8px;font-size:.8rem;font-weight:700;color:var(--pass);text-align:center;}
+.timing-note{text-align:center;font-size:.75rem;color:var(--text-3);margin-top:16px;}
+.timing-note strong{color:var(--pass);}
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:7px;padding:16px 18px;overflow-x:auto;font-family:Consolas,'Courier New',monospace;font-size:.80rem;line-height:1.6;color:var(--code-text);margin:12px 0;}
+.code-block .comment{color:var(--text-3);}
+.code-block .key{color:var(--accent);}
+.callout{border-radius:7px;padding:14px 18px;font-size:.82rem;margin:14px 0;display:flex;gap:10px;align-items:flex-start;}
+.callout.info{background:var(--accent-dim);border-left:3px solid var(--accent);}
+.callout.warn{background:var(--abc-dim);border-left:3px solid var(--abc);}
+.callout.success{background:var(--unified-dim);border-left:3px solid var(--unified);}
+.callout .icon{font-size:.9rem;flex-shrink:0;margin-top:1px;}
+.callout p{color:var(--text-2);line-height:1.55;}
+.callout p strong{color:var(--text);}
+.test-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0;}
+@media(max-width:640px){.test-grid{grid-template-columns:1fr;}}
+.test-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.test-card .tc-head{padding:12px 16px;font-size:.78rem;font-weight:700;display:flex;align-items:center;gap:8px;}
+.test-card.abc-test .tc-head{background:var(--abc-dim);color:var(--abc);}
+.test-card.cm29-test .tc-head{background:var(--cm29-dim);color:var(--cm29);}
+.test-card.unified-test .tc-head{background:var(--unified-dim);color:var(--unified);}
+.test-card .tc-body{padding:16px;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;}
+.stat-row:last-child{border-bottom:none;}
+.stat-row .lbl{color:var(--text-2);}
+.stat-row .val{font-weight:700;font-variant-numeric:tabular-nums;}
+.stat-row .val.pass{color:var(--pass);}
+.stat-row .val.zero{color:var(--text-3);}
+.big-pass{font-size:1.8rem;font-weight:800;color:var(--pass);text-align:center;padding:10px 0 4px;font-variant-numeric:tabular-nums;}
+.big-pass-lbl{font-size:.72rem;color:var(--text-3);text-align:center;padding-bottom:10px;}
+.new-badge{display:inline-block;background:var(--unified-dim);color:var(--unified);font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:6px;letter-spacing:.03em;}
+.doc-footer{background:var(--surface-2);border-top:1px solid var(--border);padding:20px 0;margin-top:16px;}
+.doc-footer .inner{max-width:960px;margin:0 auto;padding:0 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:.75rem;color:var(--text-3);}
+</style>
+
+<header class="doc-header">
+  <div class="inner">
+    <p class="eyebrow">purchase-research-agent &nbsp;·&nbsp; Collector Layer</p>
+    <h1>크롤링 및 Contract 설계서</h1>
+    <div class="meta">
+      <span><strong>버전</strong> v2.0</span>
+      <span><strong>작성일</strong> 2026-08-03</span>
+      <span><strong>대상 브랜치</strong> dev-jw</span>
+      <span><strong>지원 사이트</strong> ABC마트 · 29CM</span>
+      <span><strong>Contract 스키마</strong> JSON Schema Draft 2020-12</span>
+      <span><strong>변경 내용</strong> 상세 수집 전면 추가 · Unified 스키마 신설</span>
+    </div>
+  </div>
+</header>
+
+<div class="result-banner">
+  <div class="inner">
+    <span class="badge">CONTRACT 검증 통과</span>
+    <span class="stat">ABC마트 &nbsp;<strong>10/10</strong>&nbsp; (상세 포함)</span>
+    <span class="stat">29CM &nbsp;<strong>10/10</strong>&nbsp; (상세 포함)</span>
+    <span class="stat">Unified &nbsp;<strong>20/20</strong></span>
+    <span class="stat">전체 소요 &nbsp;<strong>~48s</strong></span>
+  </div>
+</div>
+
+<main class="content">
+
+  <nav class="toc-card" aria-label="목차">
+    <h2>목차</h2>
+    <ol>
+      <li><a href="#s1"><span class="num">1</span> 시스템 구성 개요</a></li>
+      <li><a href="#s2"><span class="num">2</span> ABC마트 크롤러</a></li>
+      <li><a href="#s3"><span class="num">3</span> 29CM 크롤러</a></li>
+      <li><a href="#s4"><span class="num">4</span> Contract — v1-abcmart</a></li>
+      <li><a href="#s5"><span class="num">5</span> Contract — v1-29cm</a></li>
+      <li><a href="#s6"><span class="num">6</span> Unified 스키마 &amp; Normalizer</a></li>
+      <li><a href="#s7"><span class="num">7</span> 병렬 실행 구조</a></li>
+      <li><a href="#s8"><span class="num">8</span> 검증 파이프라인</a></li>
+      <li><a href="#s9"><span class="num">9</span> 테스트 결과</a></li>
+    </ol>
+  </nav>
+
+  <!-- §1 개요 -->
+  <section class="section" id="s1">
+    <div class="section-header"><span class="sec-num">§ 1</span><h2>시스템 구성 개요</h2></div>
+
+    <p style="color:var(--text-2);font-size:.88rem;margin-bottom:20px;line-height:1.7;">
+      purchase-research-agent(FastAPI, 포트 8012)는 두 쇼핑몰에서 상품·리뷰·옵션 데이터를 수집하고
+      JSON Schema로 품질을 검증한다. v2.0부터 <strong>상세 정보 수집(attach_details)</strong>이 양쪽 모두 지원되며,
+      <code>app/normalizer.py</code>가 두 사이트 출력을 <strong>통일 구조(Unified)</strong>로 변환한다.
+    </p>
+
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="pipeline-box accent">API 요청</div>
+        <div class="pipeline-label">FastAPI<br>/search·/category</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-box accent">SiteCrawler</div>
+        <div class="pipeline-label">ABC마트·29CM<br>asyncio.gather</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-box accent">attach_details</div>
+        <div class="pipeline-label">리뷰·옵션·이미지<br>병렬 수집</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-box unified-box">Normalizer</div>
+        <div class="pipeline-label">통일 구조<br>변환</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-box">Contract<br>검증</div>
+        <div class="pipeline-label">JSON Schema</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="pipeline-box pass">Backend<br>전송</div>
+        <div class="pipeline-label">Spring API<br>MySQL 적재</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>항목</th><th>ABC마트</th><th>29CM</th></tr></thead>
+        <tbody>
+          <tr><td>클래스</td><td><code>AbcMartCrawler</code></td><td><code>Cm29Crawler</code></td></tr>
+          <tr><td>수집 방식 (목록)</td><td>Crawl4AI + BeautifulSoup</td><td>httpx (BFF JSON API)</td></tr>
+          <tr><td>키워드 검색</td><td><span class="tag green">지원</span></td><td><span class="tag green">지원</span></td></tr>
+          <tr><td>카테고리 크롤링</td><td><span class="tag green">지원 (19개)</span></td><td><span class="tag gray">미지원</span></td></tr>
+          <tr><td>상세 수집 (attach_details)</td><td><span class="tag green">지원 — crawl4ai arun_many 병렬</span></td><td><span class="tag green">지원 — httpx 순차</span></td></tr>
+          <tr><td>Contract 스키마</td><td><code>v1-abcmart</code></td><td><code>v1-29cm</code></td></tr>
+          <tr><td>통일 스키마</td><td colspan="2" style="text-align:center;"><code>v1-unified</code> — normalizer.py가 양쪽을 변환</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §2 ABC마트 -->
+  <section class="section" id="s2">
+    <div class="section-header"><span class="sec-num">§ 2</span><h2>ABC마트 크롤러</h2></div>
+
+    <div class="cards-row">
+      <div class="card abc-card">
+        <h3><span class="site-badge abc">ABC마트</span> 목록 수집</h3>
+        <dl>
+          <dt>파일</dt><dd><code>app/crawlers/abcmart/crawler.py</code></dd>
+          <dt>키워드</dt><dd><code>crawl(keyword, max_items)</code></dd>
+          <dt>카테고리</dt><dd><code>crawl_category(category, max_items)</code></dd>
+          <dt>엔드포인트</dt><dd><code>abcmart.a-rt.com/display/search-word/result</code></dd>
+          <dt>렌더링</dt><dd>Crawl4AI + BrowserConfig (headless)</dd>
+          <dt>파싱</dt><dd>BeautifulSoup — <code>li.col-list-item.prod-item</code></dd>
+          <dt>딜레이</dt><dd>페이지 간 <code>asyncio.sleep(1)</code></dd>
+        </dl>
+      </div>
+      <div class="card abc-card">
+        <h3><span class="site-badge abc">ABC마트</span> 상세 수집 <span class="new-badge">v2.0</span></h3>
+        <dl>
+          <dt>파일</dt><dd><code>app/crawlers/abcmart/detail_fetcher.py</code></dd>
+          <dt>메서드</dt><dd><code>DetailFetcher.attach(products, limit)</code></dd>
+          <dt>crawl4ai</dt><dd><code>arun_many(urls)</code> — 전체 URL 병렬 렌더링<br><code>wait_until="load"</code>, timeout 20s</dd>
+          <dt>리뷰 API</dt><dd><code>POST .../product/review/get-review-list</code></dd>
+          <dt>옵션 API</dt><dd><code>POST .../product/review/get-prd-option</code></dd>
+          <dt>API 방식</dt><dd>asyncio.gather — 전 상품 동시 호출</dd>
+          <dt>딜레이</dt><dd>없음 (병렬화로 불필요)</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="callout success">
+      <span class="icon">✓</span>
+      <p>
+        <strong>arun_many 병렬화 효과.</strong>
+        crawl4ai 순차 실행(~100s) → <code>arun_many</code> 병렬(~25s)로 단축.
+        순차 실행 시 브라우저 상태 누적으로 발생하던 images=0 문제도 해결됨.
+        각 URL이 독립 컨텍스트에서 실행되어 10건 모두 images=5 달성.
+      </p>
+    </div>
+
+    <h3 style="font-size:.85rem;font-weight:700;color:var(--text-2);margin:20px 0 8px;">상세 수집 추가 필드</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>수집 방법</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td><code>images[]</code></td><td>crawl4ai 렌더 HTML — <code>?shrink=580:580</code> 패턴</td><td>메인 슬라이더 5장</td></tr>
+          <tr><td><code>category</code></td><td>렌더 HTML 내 <code>"category":"신발 > 구두 > 로퍼"</code> JSON</td><td>마지막 세그먼트</td></tr>
+          <tr><td><code>category_path</code></td><td>동일 JSON 전체 값</td><td>"신발 > 구두 > 로퍼"</td></tr>
+          <tr><td><code>in_stock</code></td><td><code>.btn-prod-size</code> 중 <code>.sold-out</code> 없는 버튼 존재 여부</td><td>boolean</td></tr>
+          <tr><td><code>rating</code></td><td><code>reviews[].score</code> 평균</td><td>리뷰 없으면 null</td></tr>
+          <tr><td><code>review_count</code></td><td>리뷰 API <code>totalCount</code></td><td>전체 리뷰 수</td></tr>
+          <tr><td><code>reviews[]</code></td><td>리뷰 API — score, detail_scores, color, is_best 포함</td><td>review_limit개</td></tr>
+          <tr><td><code>options</code></td><td>옵션 API — <code>{colors[], sizes[]}</code></td><td>OptionsPayload 호환</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="font-size:.85rem;font-weight:700;color:var(--text-2);margin:20px 0 8px;">카테고리 목록 (19개)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>키</th><th>분류</th><th>성별</th><th>ctgrNo</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td><code>신발_남성</code></td><td>신발</td><td><span class="gender male">남</span></td><td><code>1000000441</code></td></tr>
+          <tr><td>2</td><td><code>신발_여성</code></td><td>신발</td><td><span class="gender female">여</span></td><td><code>1000000441</code></td></tr>
+          <tr><td>3</td><td><code>신발_아동</code></td><td>신발</td><td><span class="gender child">아동</span></td><td><code>1000000441</code></td></tr>
+          <tr><td>4</td><td><code>스니커즈_남성</code></td><td>스니커즈</td><td><span class="gender male">남</span></td><td><code>1000000245</code></td></tr>
+          <tr><td>5</td><td><code>스니커즈_여성</code></td><td>스니커즈</td><td><span class="gender female">여</span></td><td><code>1000000245</code></td></tr>
+          <tr><td>6-7</td><td><code>스포츠_남/여</code></td><td>스포츠</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000249</code></td></tr>
+          <tr><td>8-9</td><td><code>러닝화_남/여</code></td><td>러닝화</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000250</code></td></tr>
+          <tr><td>10-11</td><td><code>샌들_남/여</code></td><td>샌들</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000260</code></td></tr>
+          <tr><td>12-13</td><td><code>부츠_남/여</code></td><td>부츠</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000266</code></td></tr>
+          <tr><td>14-15</td><td><code>구두_남/여</code></td><td>구두</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000254</code></td></tr>
+          <tr><td>16-17</td><td><code>의류_남/여</code></td><td>의류</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000442</code></td></tr>
+          <tr><td>18-19</td><td><code>잡화_남/여</code></td><td>잡화</td><td><span class="gender male">남</span><span class="gender female">여</span></td><td><code>1000000443</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §3 29CM -->
+  <section class="section" id="s3">
+    <div class="section-header"><span class="sec-num">§ 3</span><h2>29CM 크롤러</h2></div>
+
+    <div class="cards-row">
+      <div class="card cm29-card">
+        <h3><span class="site-badge cm29">29CM</span> 목록 수집</h3>
+        <dl>
+          <dt>파일</dt><dd><code>app/crawlers/cm29/crawler.py</code></dd>
+          <dt>메서드</dt><dd><code>crawl(keyword, max_items)</code></dd>
+          <dt>엔드포인트</dt><dd><code>POST display-bff-api.29cm.co.kr/api/v1/listing/items</code></dd>
+          <dt>라이브러리</dt><dd>httpx (브라우저 불필요)</dd>
+          <dt>페이지 크기</dt><dd>50개 / 페이지</dd>
+          <dt>종료 조건</dt><dd><code>pagination.hasNext == false</code></dd>
+        </dl>
+      </div>
+      <div class="card cm29-card">
+        <h3><span class="site-badge cm29">29CM</span> 상세 수집 <span class="new-badge">v2.0</span></h3>
+        <dl>
+          <dt>파일</dt><dd><code>app/crawlers/cm29/detail_fetcher.py</code></dd>
+          <dt>메서드</dt><dd><code>Cm29DetailFetcher.attach(products, limit, review_limit)</code></dd>
+          <dt>상세 페이지</dt><dd><code>GET product.29cm.co.kr/catalog/{itemId}</code> — JSON-LD 파싱</dd>
+          <dt>리뷰 API</dt><dd><code>GET review-api.29cm.co.kr/api/v4/reviews?itemId={id}</code></dd>
+          <dt>딜레이</dt><dd>상품 간 <code>asyncio.sleep(0.5)</code></dd>
+        </dl>
+      </div>
+    </div>
+
+    <h3 style="font-size:.85rem;font-weight:700;color:var(--text-2);margin:0 0 8px;">상세 수집 추가 필드</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>수집 방법</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td><code>rating</code></td><td>review-api <code>averagePoint</code> (JSON-LD 보정)</td><td>0–5</td></tr>
+          <tr><td><code>review_count</code></td><td>review-api <code>count</code></td><td>전체 수</td></tr>
+          <tr><td><code>images[]</code></td><td>JSON-LD <code>Product.image[]</code></td><td>3–5장</td></tr>
+          <tr><td><code>category</code></td><td>JSON-LD <code>Product.category</code></td><td>"플랫"</td></tr>
+          <tr><td><code>category_path</code></td><td>BreadcrumbList itemListElement 조합</td><td>"여성슈즈 > 플랫슈즈 > 플랫"</td></tr>
+          <tr><td><code>category_codes</code></td><td>Breadcrumb URL 파라미터 추출</td><td>Large/Medium/Small Code</td></tr>
+          <tr><td><code>in_stock</code></td><td>JSON-LD <code>offers.availability</code></td><td>InStock 여부</td></tr>
+          <tr><td><code>options[]</code></td><td>Next.js 스트리밍 데이터 — optionItemName/Value</td><td>{name, value} 배열</td></tr>
+          <tr><td><code>color</code></td><td><code>options[].value</code>에서 <code>/</code> 또는 <code>:</code> 앞 추출</td><td>콤마 구분 문자열</td></tr>
+          <tr><td><code>reviews[]</code></td><td>review-api — score, size_survey, user_size, partner_comment 포함</td><td>review_limit개</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout warn">
+      <span class="icon">⚠</span>
+      <p><strong>카테고리 크롤링 미지원.</strong> 29CM 검색은 Next.js SSR 구조로 클라이언트 측 카테고리 API가 없어 키워드 검색(SRP)만 가능하다.</p>
+    </div>
+  </section>
+
+  <!-- §4 v1-abcmart -->
+  <section class="section" id="s4">
+    <div class="section-header"><span class="sec-num">§ 4</span><h2>Contract 규칙 — v1-abcmart</h2></div>
+    <p style="color:var(--text-2);font-size:.85rem;margin-bottom:16px;">
+      <code>contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json</code> · Draft 2020-12 · <code>additionalProperties: false</code>
+    </p>
+
+    <h3 style="font-size:.82rem;font-weight:700;color:var(--text-2);margin:0 0 8px;letter-spacing:.05em;text-transform:uppercase;">필수 필드 (required)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>타입</th><th>제약</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><span class="field-required"></span><code>site</code></td><td><code>string</code></td><td><span class="constraint-chip">const: "abcmart"</span></td><td>고정값</td></tr>
+          <tr><td><span class="field-required"></span><code>source_product_id</code></td><td><code>string</code></td><td><span class="constraint-chip">minLen:1 maxLen:50</span></td><td>prdtNo</td></tr>
+          <tr><td><span class="field-required"></span><code>title</code></td><td><code>string</code></td><td><span class="constraint-chip">minLen:1 maxLen:300</span></td><td></td></tr>
+          <tr><td><span class="field-required"></span><code>brand</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:100</span></td><td>미발견 시 빈 문자열</td></tr>
+          <tr><td><span class="field-required"></span><code>price / price_original</code></td><td><code>string</code></td><td><span class="constraint-chip">^$|^[0-9,]+원$</span></td><td>"69,000원"</td></tr>
+          <tr><td><span class="field-required"></span><code>discount_percent</code></td><td><code>integer|null</code></td><td><span class="constraint-chip">0–100</span></td><td></td></tr>
+          <tr><td><span class="field-required"></span><code>image_url</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:500</span></td><td>목록 썸네일</td></tr>
+          <tr><td><span class="field-required"></span><code>color</code></td><td><code>string</code></td><td>제한 없음</td><td>data-prdt-color-info</td></tr>
+          <tr><td><span class="field-required"></span><code>style_code</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:50</span></td><td>data-style-info</td></tr>
+          <tr><td><span class="field-required"></span><code>link</code></td><td><code>string</code></td><td><span class="constraint-chip">abcmart.a-rt.com pattern</span></td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="font-size:.82rem;font-weight:700;color:var(--text-2);margin:20px 0 8px;letter-spacing:.05em;text-transform:uppercase;">선택 필드 — attach_details 후 추가 <span class="new-badge">v2.0</span></h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>images[]</code></td><td><code>string[]</code></td><td>crawl4ai 상세 페이지 슬라이더 이미지 (최대 5장)</td></tr>
+          <tr><td><code>category</code></td><td><code>string</code></td><td>JS JSON category 마지막 세그먼트 (예: "로퍼")</td></tr>
+          <tr><td><code>category_path</code></td><td><code>string</code></td><td>JS JSON category 전체 경로 (예: "신발 > 구두 > 로퍼")</td></tr>
+          <tr><td><code>in_stock</code></td><td><code>boolean|null</code></td><td>사이즈 버튼 중 sold-out 없는 항목 존재 여부</td></tr>
+          <tr><td><code>rating</code></td><td><code>number|null</code></td><td>reviews[].score 평균. 리뷰 없으면 null</td></tr>
+          <tr><td><code>review_count</code></td><td><code>integer</code></td><td>리뷰 API totalCount</td></tr>
+          <tr><td><code>options</code></td><td><code>{colors[], sizes[]}</code></td><td>옵션 API 결과. maxLen:50 각 항목</td></tr>
+          <tr><td><code>reviews[]</code></td><td><code>array</code></td><td>review_source_id, content, score, detail_scores, date, size, color, helpful_count, is_best, images[]</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §5 v1-29cm -->
+  <section class="section" id="s5">
+    <div class="section-header"><span class="sec-num">§ 5</span><h2>Contract 규칙 — v1-29cm</h2></div>
+    <p style="color:var(--text-2);font-size:.85rem;margin-bottom:16px;">
+      <code>contracts/collector/v1-29cm/29cm-crawl-item.schema.json</code> · Draft 2020-12 · <code>additionalProperties: false</code>
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>타입</th><th>제약</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><span class="field-required"></span><code>site</code></td><td><code>string</code></td><td><span class="constraint-chip">const: "29cm"</span></td><td>고정값</td></tr>
+          <tr><td><span class="field-required"></span><code>source_product_id</code></td><td><code>string</code></td><td><span class="constraint-chip">minLen:1 maxLen:50</span></td><td>itemId str()</td></tr>
+          <tr><td><span class="field-required"></span><code>title / brand</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:300/100</span></td><td>BFF itemInfo</td></tr>
+          <tr><td><span class="field-required"></span><code>price / price_original</code></td><td><code>string</code></td><td><span class="constraint-chip">^$|^[0-9,]+원$</span></td><td>sellPrice → "n,nnn원"</td></tr>
+          <tr><td><span class="field-required"></span><code>discount_percent</code></td><td><code>integer|null</code></td><td><span class="constraint-chip">0–100</span></td><td>saleRate round()</td></tr>
+          <tr><td><span class="field-required"></span><code>image_url</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:500</span></td><td>thumbnailUrl</td></tr>
+          <tr><td><span class="field-required"></span><code>color</code></td><td><code>string</code></td><td><span class="constraint-chip">maxLen:200</span></td><td>options[].value에서 추출 (v1.0: maxLen:0 → v2.0: 200)</td></tr>
+          <tr><td><span class="field-required"></span><code>style_code</code></td><td><code>string</code></td><td><span class="empty-always">maxLen:0 — 항상 빈 문자열</span></td><td>API 미제공</td></tr>
+          <tr><td><span class="field-required"></span><code>link</code></td><td><code>string</code></td><td><span class="constraint-chip">(www|product).29cm.co.kr</span></td><td>webLink</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="font-size:.82rem;font-weight:700;color:var(--text-2);margin:20px 0 8px;letter-spacing:.05em;text-transform:uppercase;">선택 필드 — attach_details 후 추가 <span class="new-badge">v2.0</span></h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>타입</th><th>설명</th></tr></thead>
+        <tbody>
+          <tr><td><code>rating</code></td><td><code>number|null</code></td><td>review-api averagePoint</td></tr>
+          <tr><td><code>review_count</code></td><td><code>integer|null</code></td><td>review-api count</td></tr>
+          <tr><td><code>images[]</code></td><td><code>string[]</code></td><td>JSON-LD Product.image[]</td></tr>
+          <tr><td><code>category / category_path</code></td><td><code>string</code></td><td>JSON-LD + BreadcrumbList</td></tr>
+          <tr><td><code>category_codes</code></td><td><code>object</code></td><td>categoryLargeCode / MediumCode / SmallCode</td></tr>
+          <tr><td><code>in_stock</code></td><td><code>boolean|null</code></td><td>JSON-LD offers.availability</td></tr>
+          <tr><td><code>options[]</code></td><td><code>array</code></td><td>{name, value} — SIZE/COLOR 로우 텍스트</td></tr>
+          <tr><td><code>reviews[]</code></td><td><code>array</code></td><td>review_source_id, content, score, date, size, user_size, helpful_count, images[], partner_comment, size_survey, is_blind</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info">
+      <span class="icon">ℹ</span>
+      <p><strong>size_survey enum:</strong> "작음" | "맞음" | "큼" | null. review-api surveyList에서 surveyType=SIZE 항목 매핑.</p>
+    </div>
+  </section>
+
+  <!-- §6 Unified -->
+  <section class="section" id="s6">
+    <div class="section-header"><span class="sec-num">§ 6</span><h2>Unified 스키마 &amp; Normalizer <span class="new-badge">v2.0 신설</span></h2></div>
+
+    <p style="color:var(--text-2);font-size:.87rem;margin-bottom:16px;">
+      두 사이트 크롤러 출력 구조가 달라 <code>app/normalizer.py</code>가 단일 배열로 처리할 수 있는 통일 구조로 변환한다.
+      스키마: <code>contracts/collector/unified/unified-product.schema.json</code>
+    </p>
+
+    <div class="parallel-diag">
+      <div class="title-row">변환 흐름</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:center;text-align:center;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="background:var(--abc-dim);border:1px solid var(--border);border-radius:8px;padding:12px;">
+            <div style="font-weight:700;color:var(--abc);margin-bottom:4px;">ABC마트 raw</div>
+            <div style="font-size:11px;color:var(--text-muted);">options: {colors[], sizes[]}<br>reviews: detail_scores, is_best</div>
+          </div>
+          <div style="background:var(--cm29-dim);border:1px solid var(--border);border-radius:8px;padding:12px;">
+            <div style="font-weight:700;color:var(--cm29);margin-bottom:4px;">29CM raw</div>
+            <div style="font-size:11px;color:var(--text-muted);">options: [{name,value}] 로우텍스트<br>reviews: user_size, size_survey</div>
+          </div>
+        </div>
+        <div style="font-size:24px;color:var(--accent);">→</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="font-weight:700;margin-bottom:6px;">app/normalizer.py</div>
+          <div style="font-size:11px;color:var(--text-2);line-height:1.8;"><code>normalize_abcmart()</code><br><code>normalize_cm29()</code><br><code>normalize()</code> — site 자동</div>
+        </div>
+        <div style="font-size:24px;color:var(--accent);">→</div>
+        <div style="background:var(--unified-dim);border:2px solid var(--unified);border-radius:8px;padding:14px;">
+          <div style="font-weight:700;color:var(--unified);margin-bottom:4px;">통일 구조</div>
+          <div style="font-size:11px;color:var(--text-2);">options: {colors[], sizes[]}<br>reviews: 공통 + 사이트별 null<br>두 사이트 단일 배열</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:.82rem;font-weight:700;color:var(--text-2);margin:20px 0 8px;letter-spacing:.05em;text-transform:uppercase;">핵심 변환 규칙</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>ABC마트 원본</th><th>29CM 원본</th><th>통일 결과</th></tr></thead>
+        <tbody>
+          <tr><td><code>options.colors[]</code></td><td>options API resultColorList</td><td>product.color 콤마 분리</td><td>동일 형태</td></tr>
+          <tr><td><code>options.sizes[]</code></td><td>options API resultList</td><td>options[].value → "KR (\d+)" 추출</td><td>동일 형태</td></tr>
+          <tr><td><code>reviews[].detail_scores</code></td><td>있음 (착화감·가격 등)</td><td><strong>null</strong></td><td>null 가능</td></tr>
+          <tr><td><code>reviews[].size_survey</code></td><td><strong>null</strong></td><td>"작음"|"맞음"|"큼"</td><td>null 가능</td></tr>
+          <tr><td><code>reviews[].user_size[]</code></td><td><strong>null</strong></td><td>["240mm"] 등</td><td>null 가능</td></tr>
+          <tr><td><code>reviews[].is_best</code></td><td>bestYn == "Y"</td><td><strong>null</strong></td><td>null 가능</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §7 병렬 실행 -->
+  <section class="section" id="s7">
+    <div class="section-header"><span class="sec-num">§ 7</span><h2>병렬 실행 구조</h2></div>
+
+    <div class="parallel-diag">
+      <div class="title-row">수집 단계 — ASYNCIO.GATHER</div>
+      <div class="parallel-gather">
+        <div class="gather-box">asyncio<br>.gather()</div>
+        <div class="gather-lines">
+          <div class="gather-line">
+            <div class="site-lbl abc">ABC마트<br>crawl()</div>
+            <div class="line"></div>
+          </div>
+          <div class="gather-line">
+            <div class="site-lbl cm">29CM<br>crawl()</div>
+            <div class="line"></div>
+          </div>
+        </div>
+        <div class="gather-merge">결과 병합<br>~8s</div>
+      </div>
+    </div>
+
+    <div class="parallel-diag" style="margin-top:12px;">
+      <div class="title-row">상세 단계 — ASYNCIO.GATHER (두 사이트 동시)</div>
+      <div class="parallel-gather">
+        <div class="gather-box">asyncio<br>.gather()</div>
+        <div class="gather-lines">
+          <div class="gather-line">
+            <div class="site-lbl abc">ABC마트<br>arun_many 병렬</div>
+            <div class="line"></div>
+          </div>
+          <div class="gather-line">
+            <div class="site-lbl cm">29CM<br>httpx 순차</div>
+            <div class="line"></div>
+          </div>
+        </div>
+        <div class="gather-merge">결과 병합<br>~40s</div>
+      </div>
+      <div class="timing-note">총 소요: 수집 8s + 상세 40s = <strong>~48s</strong> (10건 기준)</div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:16px;">
+      <table>
+        <thead><tr><th>구분</th><th>방식</th><th>딜레이</th></tr></thead>
+        <tbody>
+          <tr><td><span class="site-badge abc">ABC마트</span> 목록</td><td>Crawl4AI arun() 단일</td><td>페이지 간 1s</td></tr>
+          <tr><td><span class="site-badge abc">ABC마트</span> 상세</td><td>crawl4ai <strong>arun_many</strong> 병렬 + httpx asyncio.gather</td><td>없음</td></tr>
+          <tr><td><span class="site-badge cm29">29CM</span> 목록</td><td>httpx POST JSON API</td><td>페이지 간 1s</td></tr>
+          <tr><td><span class="site-badge cm29">29CM</span> 상세</td><td>httpx GET 상세 + review-api 순차</td><td>상품 간 0.5s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §8 검증 파이프라인 -->
+  <section class="section" id="s8">
+    <div class="section-header"><span class="sec-num">§ 8</span><h2>검증 파이프라인</h2></div>
+
+    <p style="color:var(--text-2);font-size:.87rem;margin-bottom:16px;">
+      파일: <code>app/services/contract_validation.py</code>
+    </p>
+
+    <div class="pipeline" style="padding:16px 0;">
+      <div class="pipeline-step"><div class="pipeline-box">상품 dict<br>list</div><div class="pipeline-label">site 필드 포함</div></div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step"><div class="pipeline-box accent">사이트<br>감지</div><div class="pipeline-label">item["site"]</div></div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step"><div class="pipeline-box accent">스키마<br>로드</div><div class="pipeline-label">_SCHEMA_PATHS</div></div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step"><div class="pipeline-box">jsonschema<br>validate()</div><div class="pipeline-label">Draft 2020-12</div></div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step"><div class="pipeline-box pass">valid_items<br>errors[]</div><div class="pipeline-label">분리 반환</div></div>
+    </div>
+
+    <div class="code-block"><span class="comment"># _SCHEMA_PATHS 매핑</span>
+_SCHEMA_PATHS = {
+    <span class="key">"abcmart"</span>: "contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json",
+    <span class="key">"29cm"</span>:    "contracts/collector/v1-29cm/29cm-crawl-item.schema.json",
+}
+
+<span class="comment"># Unified 검증은 별도 호출</span>
+from app.normalizer import normalize
+unified = [normalize(p) for p in valid_items]
+<span class="comment"># → contracts/collector/unified/unified-product.schema.json 으로 검증</span></div>
+  </section>
+
+  <!-- §9 테스트 결과 -->
+  <section class="section" id="s9">
+    <div class="section-header"><span class="sec-num">§ 9</span><h2>테스트 결과</h2></div>
+
+    <p style="color:var(--text-2);font-size:.87rem;margin-bottom:20px;">
+      <strong>조건:</strong> 키워드 "구두" · ABC마트 10건 + 29CM 10건 · 상세 수집 포함 · 실행일 2026-08-03
+    </p>
+
+    <div class="test-grid">
+      <div class="test-card abc-test">
+        <div class="tc-head">ABC마트 v1-abcmart</div>
+        <div class="tc-body">
+          <div class="big-pass">10 / 10</div>
+          <div class="big-pass-lbl">Contract 통과</div>
+          <div class="stat-row"><span class="lbl">images (상세)</span><span class="val pass">5장 전 상품</span></div>
+          <div class="stat-row"><span class="lbl">Contract 위반</span><span class="val zero">0건</span></div>
+          <div class="stat-row"><span class="lbl">크롤 에러</span><span class="val zero">0건</span></div>
+          <div class="stat-row"><span class="lbl">상세 소요</span><span class="val">~25s (arun_many)</span></div>
+        </div>
+      </div>
+      <div class="test-card cm29-test">
+        <div class="tc-head">29CM v1-29cm</div>
+        <div class="tc-body">
+          <div class="big-pass">10 / 10</div>
+          <div class="big-pass-lbl">Contract 통과</div>
+          <div class="stat-row"><span class="lbl">평균 리뷰 수</span><span class="val pass">~159개/상품</span></div>
+          <div class="stat-row"><span class="lbl">Contract 위반</span><span class="val zero">0건</span></div>
+          <div class="stat-row"><span class="lbl">크롤 에러</span><span class="val zero">0건</span></div>
+          <div class="stat-row"><span class="lbl">상세 소요</span><span class="val">~7s (순차 0.5s)</span></div>
+        </div>
+      </div>
+      <div class="test-card unified-test">
+        <div class="tc-head">Unified v1-unified</div>
+        <div class="tc-body">
+          <div class="big-pass">20 / 20</div>
+          <div class="big-pass-lbl">통일 스키마 통과</div>
+          <div class="stat-row"><span class="lbl">ABC마트</span><span class="val pass">10건</span></div>
+          <div class="stat-row"><span class="lbl">29CM</span><span class="val pass">10건</span></div>
+          <div class="stat-row"><span class="lbl">파일 크기</span><span class="val">~193 KB</span></div>
+          <div class="stat-row"><span class="lbl">전체 소요</span><span class="val">~48s</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout info" style="margin-top:20px;">
+      <span class="icon">ℹ</span>
+      <p>
+        <strong>출력 파일:</strong> <code>output/abcmart_*.json</code>, <code>output/29cm_*.json</code>, <code>output/unified_abcmart_29cm_*.json</code>.
+        <code>output/</code> 디렉터리는 <code>.gitignore</code> 적용으로 미커밋 — 팀 공유 시 파일 직접 전달 필요.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="doc-footer">
+  <div class="inner">
+    <span>purchase-research-agent &nbsp;·&nbsp; 크롤링 및 Contract 설계서 v2.0</span>
+    <span>작성 2026-08-03 &nbsp;·&nbsp; branch: dev-jw</span>
+  </div>
+</footer>
