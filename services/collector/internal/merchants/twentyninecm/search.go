@@ -110,10 +110,18 @@ func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterva
 
 // Search는 검색어를 29CM 공개 검색 데이터 요청으로 전달하고 상품 기본정보를 공통 결과로 변환한다.
 func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) collector.SearchResult {
+	return s.SearchPage(ctx, request, 1)
+}
+
+// SearchPage는 대량 수집 실행기가 지정한 29CM 검색 페이지 한 건을 수집한다.
+func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchRequest, page int) collector.SearchResult {
 	collectedAt := s.now()
 	searchPageURL := buildSearchPageURL(request)
 	result := newResult(request, collectedAt)
 
+	if page < 1 {
+		return failedResult(result, collector.StatusUnsupported, "PAGE_INVALID", "29CM 검색 page는 1 이상이어야 합니다", false, searchPageURL)
+	}
 	if request.Currency != "KRW" {
 		return failedResult(result, collector.StatusUnsupported, "CURRENCY_UNSUPPORTED", "29CM 검색 가격은 KRW만 지원합니다", false, searchPageURL)
 	}
@@ -126,7 +134,7 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 		PageType: "SRP",
 		SortType: "RECOMMENDED",
 		PageRequest: pageRequest{
-			Page: 1,
+			Page: page,
 			Size: request.Limit,
 		},
 	})

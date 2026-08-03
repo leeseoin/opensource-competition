@@ -140,6 +140,23 @@ func TestSearcherStopsCanceledRateLimitWait(t *testing.T) {
 	}
 }
 
+// TestSearcherRequestsSelectedPage는 대량 수집용 SearchPage가 지정 페이지를 URL에 넣는지 검증한다.
+func TestSearcherRequestsSelectedPage(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Query().Get("page") != "2" {
+			t.Fatalf("page = %s", request.URL.Query().Get("page"))
+		}
+		return jsonResponse(http.StatusOK, []byte(`{"SEARCH":[],"SEARCH_COUNT":60,"PAGE":{"finalPageNo":2}}`)), nil
+	})}
+	searcher := abcmart.NewSearcherWithClient(client, time.Now, 0)
+
+	result := searcher.SearchPage(context.Background(), validRequest(), 2)
+
+	if result.Status != collector.StatusSuccess || result.HasNext == nil || *result.HasNext {
+		t.Fatalf("status=%s hasNext=%v errors=%v", result.Status, result.HasNext, result.Errors)
+	}
+}
+
 // validRequest는 ABC마트 검색 테스트에서 재사용할 정상 요청을 생성한다.
 func validRequest() collector.SearchRequest {
 	return collector.SearchRequest{

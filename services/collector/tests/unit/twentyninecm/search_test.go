@@ -116,6 +116,31 @@ func TestSearcherReportsMissingPagination(t *testing.T) {
 	}
 }
 
+// TestSearcherRequestsSelectedPage는 대량 수집용 SearchPage가 지정 페이지를 JSON body에 넣는지 검증한다.
+func TestSearcherRequestsSelectedPage(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var body struct {
+			PageRequest struct {
+				Page int `json:"page"`
+			} `json:"pageRequest"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatalf("request decode: %v", err)
+		}
+		if body.PageRequest.Page != 2 {
+			t.Fatalf("page = %d", body.PageRequest.Page)
+		}
+		return jsonResponse(http.StatusOK, []byte(`{"meta":{"result":"SUCCESS"},"data":{"list":[],"pagination":{"page":2,"size":50,"hasNext":false,"totalCount":60}}}`)), nil
+	})}
+	searcher := twentyninecm.NewSearcherWithClient(client, time.Now, 0)
+
+	result := searcher.SearchPage(context.Background(), validRequest(), 2)
+
+	if result.Status != collector.StatusSuccess || result.HasNext == nil || *result.HasNext {
+		t.Fatalf("status=%s hasNext=%v errors=%v", result.Status, result.HasNext, result.Errors)
+	}
+}
+
 // validRequest는 29CM 검색 테스트에서 재사용할 정상 요청을 생성한다.
 func validRequest() collector.SearchRequest {
 	return collector.SearchRequest{

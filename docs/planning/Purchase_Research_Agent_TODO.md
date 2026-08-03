@@ -306,7 +306,7 @@
 
 - [ ] `origin/dev-jw` Python ABC마트/29CM 크롤러와 Contract 선별 이식 **(진행 중)**
 - [ ] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
-- [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산
+- [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산 **(진행 중: Go Adapter page 지정 완료)**
 - [ ] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장
 - [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집
 - [ ] 동일 fixture parser/normalizer CPU 및 메모리 benchmark

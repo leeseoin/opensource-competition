@@ -100,10 +100,18 @@ func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterva
 
 // Search는 ABC마트 공개 검색 JSON에서 상품, 사이즈별 재고, 전체 수와 다음 페이지 여부를 수집한다.
 func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) collector.SearchResult {
+	return s.SearchPage(ctx, request, 1)
+}
+
+// SearchPage는 대량 수집 실행기가 지정한 ABC마트 검색 페이지 한 건을 수집한다.
+func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchRequest, page int) collector.SearchResult {
 	collectedAt := s.now()
-	searchURL := buildSearchURL(request)
+	searchURL := buildSearchURL(request, page)
 	result := newResult(request, collectedAt)
 
+	if page < 1 {
+		return failedResult(result, "PAGE_INVALID", "ABC마트 검색 page는 1 이상이어야 합니다", false, searchURL)
+	}
 	if request.Currency != "KRW" {
 		return failedResult(result, "CURRENCY_UNSUPPORTED", "ABC마트 검색 가격은 KRW만 지원합니다", false, searchURL)
 	}
@@ -153,7 +161,7 @@ func (s *Searcher) Search(ctx context.Context, request collector.SearchRequest) 
 	}
 
 	totalCount := *payload.SearchCount
-	hasNext := *payload.Page.FinalPageNo > 1
+	hasNext := page < *payload.Page.FinalPageNo
 	result.TotalCount = &totalCount
 	result.HasNext = &hasNext
 
@@ -318,14 +326,14 @@ func (s *Searcher) waitForTurn(ctx context.Context) error {
 }
 
 // buildSearchURL은 검색 요청을 ABC마트 공개 상품 JSON URL로 변환한다.
-func buildSearchURL(request collector.SearchRequest) string {
+func buildSearchURL(request collector.SearchRequest, page int) string {
 	values := url.Values{}
 	pageSize := request.Limit
 	if pageSize < 30 {
 		pageSize = 30
 	}
 	values.Set("sort", "point")
-	values.Set("page", "1")
+	values.Set("page", strconv.Itoa(page))
 	values.Set("perPage", strconv.Itoa(pageSize))
 	values.Set("pageColumn", "3")
 	values.Set("smartSearchCheck", "true")

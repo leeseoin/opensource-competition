@@ -43,8 +43,8 @@ type CollectionTask struct {
 	Payload        SearchPayload `json:"payload"`
 }
 
-// SearchPayload는 판매처 Adapter가 검색 URL을 만들 때 사용할 조건이다.
-// 현재 Adapter pagination이 1페이지만 지원하므로 Page가 1이 아니면 검증에 실패한다.
+// SearchPayload는 판매처 Adapter가 검색 URL을 만들 때 사용할 Queue v1 조건이다.
+// Adapter의 대량 수집용 SearchPage와 별개로 Queue v1은 Page가 1이 아니면 검증에 실패한다.
 type SearchPayload struct {
 	Query    string                  `json:"query"`
 	Page     int                     `json:"page"`
@@ -101,7 +101,7 @@ func (t CollectionTask) Validate() error {
 		return fmt.Errorf("idempotencyKey 형식이 올바르지 않습니다")
 	}
 	if t.Payload.Page != 1 {
-		return fmt.Errorf("현재 검색 Worker는 page=1만 지원합니다")
+		return fmt.Errorf("현재 Queue v1 검색 Worker는 page=1만 지원합니다")
 	}
 	return t.SearchRequest().Validate()
 }

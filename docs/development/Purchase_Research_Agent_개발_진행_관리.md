@@ -981,6 +981,24 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 
+### 2026-08-03 OPS-004 Go 판매처 pagination 경계
+
+- 진행상황: 기존 단건 검색/HTTP/RabbitMQ Queue v1 계약은 page=1을 유지하면서,
+  ABC마트와 29CM의 구체 Adapter에 `SearchPage`를 추가했다. 대량 수집 실행기는 이
+  method를 사용해 page=2 이상을 요청할 수 있다.
+- 구현 위치:
+  - `services/collector/internal/merchants/abcmart/search.go:107` `Searcher.SearchPage`: ABC마트 지정 페이지 요청과 hasNext 계산
+  - `services/collector/internal/merchants/twentyninecm/search.go:117` `Searcher.SearchPage`: 29CM 지정 페이지 JSON body 생성
+  - `services/collector/tests/unit/abcmart/search_test.go` `TestSearcherRequestsSelectedPage`: ABC마트 page=2 URL 검증
+  - `services/collector/tests/unit/twentyninecm/search_test.go` `TestSearcherRequestsSelectedPage`: 29CM page=2 body 검증
+- 발생 문제: `SearchRequest`와 운영 JSON Schema에 page를 바로 추가하면 Spring DTO와
+  기존 HTTP/Queue 계약까지 동시에 바뀐다.
+- 해결: 기존 `Search()`는 `SearchPage(..., 1)`을 호출하게 하고, 대량 수집 전용
+  method는 구체 Adapter에만 추가했다. Queue v1은 기존처럼 page=1만 허용한다.
+- 남은 위험: 아직 page 반복/중복 제거/checkpoint/파일 저장을 담당할 Go 실행기는 없다.
+- 검증:
+  - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 전체 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
