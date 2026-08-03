@@ -56,3 +56,14 @@ uv run purchase-python-collector \
 29CM은 `--merchant 29cm`를 사용한다. 같은 실행을 이어갈 때는 같은 출력 디렉토리에
 `--resume`을 추가한다. 1,000건과 10,000건은 앞 단계의 오류/429/계약 실패를 확인한
 뒤에만 순차 실행한다.
+
+## 저장 fixture parser benchmark
+
+실제 네트워크 시간과 언어의 JSON decode/정규화 비용을 분리하기 위해 Go와 같은
+`services/collector/testdata` fixture를 반복 처리한다. 측정 범위는 fixture bytes의
+JSON decode, 판매처별 공통 상품 변환과 `v1-unified` Contract 검증이다.
+
+```bash
+uv run python -m purchase_collector.benchmark --merchant abcmart --iterations 1000 --warmup 100
+uv run python -m purchase_collector.benchmark --merchant 29cm --iterations 1000 --warmup 100
+```

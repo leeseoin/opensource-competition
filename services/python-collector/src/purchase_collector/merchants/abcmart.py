@@ -105,6 +105,30 @@ def parse_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_page_payload(payload: dict[str, Any], page: int) -> PageResult:
+    """ABC마트 검색 JSON 한 페이지를 공통 비교 상품과 pagination으로 변환한다.
+
+    Args:
+        payload: 저장 fixture 또는 실제 HTTP 응답에서 해석한 JSON 객체다.
+        page: 현재 요청한 1부터 시작하는 페이지 번호다.
+
+    Returns:
+        변환한 상품 목록과 다음 페이지/전체 건수 정보다.
+
+    Raises:
+        MerchantRequestError: 상품 목록 또는 pagination 필드가 올바르지 않은 경우다.
+    """
+
+    if not isinstance(payload.get("SEARCH"), list):
+        raise MerchantRequestError("ABC마트 응답에서 SEARCH 목록을 찾지 못했습니다")
+    page_info = payload.get("PAGE")
+    if not isinstance(page_info, dict) or "finalPageNo" not in page_info or "SEARCH_COUNT" not in payload:
+        raise MerchantRequestError("ABC마트 응답에서 pagination 정보를 찾지 못했습니다")
+    products = [parse_item(item) for item in payload["SEARCH"]]
+    final_page = int(page_info["finalPageNo"])
+    return PageResult(products=products, has_next=page < final_page, total_count=int(payload["SEARCH_COUNT"]))
+
+
 class AbcMartAdapter(MerchantAdapter):
     """ABC마트 검색 JSON의 pagination과 상품 변환을 담당한다."""
 
@@ -146,11 +170,4 @@ class AbcMartAdapter(MerchantAdapter):
             payload = response.json()
         except ValueError as exc:
             raise MerchantRequestError("ABC마트 응답이 올바른 JSON이 아닙니다") from exc
-        if not isinstance(payload.get("SEARCH"), list):
-            raise MerchantRequestError("ABC마트 응답에서 SEARCH 목록을 찾지 못했습니다")
-        page_info = payload.get("PAGE")
-        if not isinstance(page_info, dict) or "finalPageNo" not in page_info or "SEARCH_COUNT" not in payload:
-            raise MerchantRequestError("ABC마트 응답에서 pagination 정보를 찾지 못했습니다")
-        products = [parse_item(item) for item in payload["SEARCH"]]
-        final_page = int(page_info["finalPageNo"])
-        return PageResult(products=products, has_next=page < final_page, total_count=int(payload["SEARCH_COUNT"]))
+        return parse_page_payload(payload, page)

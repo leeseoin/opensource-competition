@@ -81,6 +81,35 @@ def parse_item(item: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def parse_page_payload(payload: dict[str, Any]) -> PageResult:
+    """29CM 검색 JSON 한 페이지를 공통 비교 상품과 pagination으로 변환한다.
+
+    Args:
+        payload: 저장 fixture 또는 실제 HTTP 응답에서 해석한 JSON 객체다.
+
+    Returns:
+        PRODUCT 항목과 다음 페이지/전체 건수 정보다.
+
+    Raises:
+        MerchantRequestError: 성공 상태, 상품 목록 또는 pagination이 올바르지 않은 경우다.
+    """
+
+    if (payload.get("meta") or {}).get("result") != "SUCCESS":
+        raise MerchantRequestError("29CM 응답의 meta.result가 SUCCESS가 아닙니다")
+    data = payload.get("data") or {}
+    pagination = data.get("pagination")
+    if not isinstance(data.get("list"), list) or not isinstance(pagination, dict):
+        raise MerchantRequestError("29CM 응답에서 상품 목록 또는 pagination을 찾지 못했습니다")
+    if "hasNext" not in pagination or "totalCount" not in pagination:
+        raise MerchantRequestError("29CM pagination 필드가 누락됐습니다")
+    products = [product for raw in data["list"] if (product := parse_item(raw)) is not None]
+    return PageResult(
+        products=products,
+        has_next=bool(pagination["hasNext"]),
+        total_count=int(pagination["totalCount"]),
+    )
+
+
 class TwentyNineCmAdapter(MerchantAdapter):
     """29CM 검색 JSON의 pagination과 상품 변환을 담당한다."""
 
@@ -120,17 +149,4 @@ class TwentyNineCmAdapter(MerchantAdapter):
             payload = response.json()
         except ValueError as exc:
             raise MerchantRequestError("29CM 응답이 올바른 JSON이 아닙니다") from exc
-        if (payload.get("meta") or {}).get("result") != "SUCCESS":
-            raise MerchantRequestError("29CM 응답의 meta.result가 SUCCESS가 아닙니다")
-        data = payload.get("data") or {}
-        pagination = data.get("pagination")
-        if not isinstance(data.get("list"), list) or not isinstance(pagination, dict):
-            raise MerchantRequestError("29CM 응답에서 상품 목록 또는 pagination을 찾지 못했습니다")
-        if "hasNext" not in pagination or "totalCount" not in pagination:
-            raise MerchantRequestError("29CM pagination 필드가 누락됐습니다")
-        products = [product for raw in data["list"] if (product := parse_item(raw)) is not None]
-        return PageResult(
-            products=products,
-            has_next=bool(pagination["hasNext"]),
-            total_count=int(pagination["totalCount"]),
-        )
+        return parse_page_payload(payload)

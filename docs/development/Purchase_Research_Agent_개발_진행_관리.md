@@ -1023,6 +1023,30 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - Python 29CM 최대 단계: 고유 10,000건, 요청 225회, 오류/429 0, wall 271.762초
   - `uvx check-jsonschema`: 최대 단계 19,417건 전체 통과
 
+### 2026-08-04 OPS-004 Python 저장 fixture parser benchmark
+
+- 진행상황: Go와 Python이 공유하는 ABC마트/29CM 원본 JSON fixture를 대상으로 JSON
+  decode/판매처별 정규화/`v1-unified` Contract 검증을 반복하는 Python benchmark를
+  구현했다. 네트워크 요청은 측정 범위에서 제외했다.
+- 구현 위치:
+  - `services/python-collector/src/purchase_collector/benchmark.py:19` `fixture_path`: 공통 fixture 경로 선택
+  - `services/python-collector/src/purchase_collector/benchmark.py:51` `run_benchmark`: warmup과 wall/CPU/메모리/상품 처리량 측정
+  - `services/python-collector/src/purchase_collector/merchants/abcmart.py:108` `parse_page_payload`: ABC마트 순수 페이지 변환
+  - `services/python-collector/src/purchase_collector/merchants/twentyninecm.py:84` `parse_page_payload`: 29CM 순수 페이지 변환
+  - `services/python-collector/tests/test_benchmark.py:10` `ParserBenchmarkTests`: 양쪽 fixture 측정 경계 검증
+- 발생 문제: 실제 수집 wall time은 요청 간 1초 제한과 판매처 응답 시간이 대부분이어서
+  Python/Go parser 성능을 직접 설명하지 못한다.
+- 원인: E2E 측정에는 네트워크와 의도적인 rate limit이 포함된다.
+- 해결: fixture bytes를 메모리에 미리 읽은 뒤 각 반복에서 JSON decode/정규화/Contract
+  검증만 실행하고 처리 상품 수를 기준으로 기록했다.
+- 남은 위험: fixture가 ABC마트 3개/29CM 2개인 작은 표본이므로 절대 처리량은 환경에
+  따라 달라진다. Go도 같은 반복 수와 측정 범위를 사용해야 비교할 수 있다.
+- 검증:
+  - `uv run python -m unittest discover -s tests -v`: 10개 통과
+  - Python ABC마트 1,000회: 3,000개/0.256125초/11,713.042개/초
+  - Python 29CM 1,000회: 2,000개/0.143613초/13,926.292개/초
+  - `uv run python -m compileall -q src tests`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
