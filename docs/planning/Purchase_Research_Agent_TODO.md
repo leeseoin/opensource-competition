@@ -310,7 +310,7 @@
 - [x] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장
 - [x] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집
 - [x] 동일 fixture parser/normalizer CPU 및 메모리 benchmark
-- [ ] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
+- [x] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
 
 ## Phase 9: 여러 AI 실행 환경 지원
 

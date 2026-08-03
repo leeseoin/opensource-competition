@@ -45,7 +45,7 @@
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
 | Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
-| Python/Go 크롤러 비교 | 부분 구현 | 공통 Contract, 양쪽 pagination/checkpoint, 단계별 실수집과 parser benchmark | 결과 비교 보고서와 코드트래커 검증 |
+| Python/Go 크롤러 비교 | 완료 | 공통 Contract, 양쪽 pagination/checkpoint, 단계별 실수집, parser benchmark와 결과 보고서 | 후속 운영 확장은 별도 기능 ID로 관리 |
 
 ## 영역별 상세 체크리스트
 
@@ -1058,6 +1058,25 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `GOCACHE=/private/tmp/purchase-go-build go vet ./...`: 통과
   - Go ABC마트 1,000회: 3,000개/0.028838초/104,028.655개/초
   - Go 29CM 1,000회: 2,000개/0.019812초/100,951.254개/초
+
+### 2026-08-04 OPS-004 완료 감사
+
+- 상태: 완료
+- 충족한 완료 기준: Python/Go 공통 Contract, ABC마트/29CM pagination, 최대 10,000개
+  상한, 중복 제거, checkpoint 재개, 요청 예산, 401/403/429 중단, gzip NDJSON,
+  100개/1,000개/최대 단계 순차 실수집, 동일 fixture parser benchmark, 비교 보고서와
+  코드트래커를 확인했다.
+- 구현 근거:
+  - `contracts/collector/unified/unified-product.schema.json:1` `v1-unified Schema`
+  - `services/collector/internal/bulk/runner.go:108` `Runner`
+  - `services/collector/internal/comparison/unified.go:63` `FromCollectorProduct`
+  - `services/collector/cmd/parser-benchmark/main.go:76` `runBenchmark`
+  - `services/python-collector/src/purchase_collector/runner.py:36` `CollectionRunner`
+  - `services/python-collector/src/purchase_collector/benchmark.py:51` `run_benchmark`
+- 검증 근거: Go 전체/race/vet, Python 10개 단위 테스트/compileall, 최대 단계 각
+  19,417개 JSON Schema 검사, `make docs-check`를 통과했다.
+- 남은 기준: 없음. Redis 전역 rate limiter/RabbitMQ 페이지 분산/구조 변경 감지는
+  이번 비교 기능의 후속 운영 기능으로 분리한다.
 
 ## 작업 기록 템플릿
 
