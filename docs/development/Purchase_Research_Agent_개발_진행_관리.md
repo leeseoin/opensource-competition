@@ -986,7 +986,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 진행상황: `origin/dev-jw`의 Python ABC마트/29CM Adapter와 Contract 검증 책임만
   선별 이식했다. 현재 구조에서는 두 판매처 모두 공개 검색 JSON을 사용하며, 최대
   10,000개 고유 상품/pagination/중복 제거/checkpoint/요청 예산/timeout/retry/403 및
-  429 중단/gzip NDJSON 저장을 공통 실행기가 관리한다. 실제 100건 수집은 아직 실행 전이다.
+  429 중단/gzip NDJSON 저장을 공통 실행기가 관리한다. Python은 ABC마트와 29CM에서
+  100건/1,000건 단계를 순차 실행했다.
 - 구현 위치:
   - `services/python-collector/src/purchase_collector/runner.py:34` `CollectionRunner`: 수집 반복, 중복 제거, checkpoint, 요청 예산과 성능 지표
   - `services/python-collector/src/purchase_collector/merchants/abcmart.py:109` `AbcMartAdapter`: ABC마트 공개 검색 JSON pagination과 비교 상품 변환
@@ -1001,11 +1002,20 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   판매처에 독립적인 `CollectionRunner`로 분리했다. 새 실행은 401/403/429를 즉시
   중단하며 일시 네트워크/5xx 오류만 설정 상한 안에서 재시도한다.
 - 남은 위험: 검색 JSON endpoint는 판매처가 외부 개발자용으로 보장한 API가 아니므로
-  구조가 바뀔 수 있다. 실수집 100건에서 접근 상태와 실제 pagination을 확인해야 한다.
+  구조가 바뀔 수 있다. 여러 검색어를 사용하는 최대 10,000건 단계에서는 검색어 사이
+  중복률과 판매처별 실제 고유 상품 상한을 확인해야 한다.
+- 추가 문제와 해결: 29CM 1,000건의 마지막 페이지는 50건을 받았지만 목표 도달 뒤
+  47건을 저장하지 않았다. 기존 통계에는 이 차이가 보이지 않아
+  `skipped_after_target_count`를 추가했다. 또한 공통 client에 있던 29CM Origin/Referer가
+  ABC마트 요청에도 붙는 문제를 찾아 29CM Adapter 요청으로 헤더 책임을 옮겼다.
 - 검증:
-  - `cd services/python-collector && uv run python -m unittest discover -s tests -v`: 7개 통과
+  - `make python-collector-test`: 9개 통과
   - `python3 -m compileall -q src tests`: 통과
   - `git diff --check`: 통과
+  - Python ABC마트 100건: 요청 2회, 계약 100/100, 중복 0, 오류/429 0, wall 1.423초
+  - Python 29CM 100건: 요청 2회, 계약 100/100, 중복 0, 오류/429 0, wall 1.375초
+  - Python ABC마트 1,000건: 요청 20회, 계약 1,000/1,000, 중복 0, 오류/429 0, wall 22.144초
+  - Python 29CM 1,000건: 요청 21회, 계약 1,000/1,000, 중복 3, 오류/429 0, wall 23.985초
 
 ## 작업 기록 템플릿
 

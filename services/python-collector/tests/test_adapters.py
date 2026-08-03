@@ -47,6 +47,8 @@ class MerchantAdapterTests(unittest.IsolatedAsyncioTestCase):
             request_body = json.loads(request.content)
             self.assertEqual(1, request_body["pageRequest"]["page"])
             self.assertEqual("구두", request_body["keyword"])
+            self.assertEqual("https://www.29cm.co.kr", request.headers["Origin"])
+            self.assertEqual("https://www.29cm.co.kr/", request.headers["Referer"])
             return httpx.Response(200, content=fixture, headers={"content-type": "application/json"})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -57,6 +59,23 @@ class MerchantAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("100,960원", result.products[0]["price"])
         self.assertEqual("여성슈즈 > 플랫슈즈 > 플랫", result.products[0]["category_path"])
         self.assertEqual([], validate_product(result.products[0]))
+
+    async def test_abcmart_request_does_not_use_29cm_origin(self) -> None:
+        """ABC마트 요청에 다른 판매처 Origin/Referer가 섞이지 않는지 검증한다."""
+
+        fixture = (repository_root() / "services" / "collector" / "testdata" / "abcmart" / "search-products.json").read_bytes()
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            """ABC마트 요청 헤더를 검사하고 fixture를 반환한다."""
+
+            self.assertNotIn("Origin", request.headers)
+            self.assertNotIn("Referer", request.headers)
+            return httpx.Response(200, content=fixture, headers={"content-type": "application/json"})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await AbcMartAdapter().fetch_page(client, "구두", 1, 30)
+
+        self.assertTrue(result.products)
 
 
 if __name__ == "__main__":

@@ -74,6 +74,7 @@ class CollectionStats:
     target_count: int
     unique_count: int = 0
     received_count: int = 0
+    skipped_after_target_count: int = 0
     duplicate_count: int = 0
     contract_pass_count: int = 0
     contract_fail_count: int = 0

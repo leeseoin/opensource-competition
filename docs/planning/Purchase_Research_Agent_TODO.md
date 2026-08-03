@@ -308,7 +308,7 @@
 - [ ] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
 - [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산 **(진행 중: Python 완료, Go 남음)**
 - [ ] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장 **(진행 중: Python 완료, Go 남음)**
-- [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집
+- [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집 **(진행 중: Python ABC마트/29CM 100개와 1,000개 완료)**
 - [ ] 동일 fixture parser/normalizer CPU 및 메모리 benchmark
 - [ ] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
 

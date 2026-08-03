@@ -81,8 +81,6 @@ class CollectionRunner:
                 "User-Agent": "PurchaseResearchAgent/0.1 (+public product research; low rate)",
                 "Accept": "application/json",
                 "Accept-Language": "ko-KR",
-                "Origin": "https://www.29cm.co.kr",
-                "Referer": "https://www.29cm.co.kr/",
             },
         )
 
@@ -134,7 +132,7 @@ class CollectionRunner:
                         stats.stop_reason = "request_failed"
                     return
                 stats.received_count += len(page_result.products)
-                for product in page_result.products:
+                for product_index, product in enumerate(page_result.products):
                     product_id = str(product.get("source_product_id") or "")
                     if product_id in seen:
                         stats.duplicate_count += 1
@@ -146,16 +144,17 @@ class CollectionRunner:
                         self._remember_error(stats, f"contract {query}/{page}/{product_id}: {'; '.join(issues)}")
                         continue
                     output.write(json.dumps(product, ensure_ascii=False, separators=(",", ":")) + "\n")
-                    output.flush()
                     seen.add(product_id)
                     stats.unique_count = len(seen)
                     stats.contract_pass_count += 1
                     stats.missing_field_count += count_missing_fields(product)
                     if len(seen) >= config.max_items:
+                        stats.skipped_after_target_count += len(page_result.products) - product_index - 1
                         break
 
                 reached_target = len(seen) >= config.max_items
                 next_page = page if reached_target else page + 1
+                output.flush()
                 self._save_checkpoint(
                     checkpoint_path,
                     Checkpoint(

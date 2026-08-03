@@ -102,7 +102,14 @@ class TwentyNineCmAdapter(MerchantAdapter):
             "facets": {},
             "pageRequest": {"page": page, "size": page_size},
         }
-        response = await client.post(_LISTING_ENDPOINT, json=body)
+        response = await client.post(
+            _LISTING_ENDPOINT,
+            json=body,
+            headers={
+                "Origin": "https://www.29cm.co.kr",
+                "Referer": "https://www.29cm.co.kr/",
+            },
+        )
         if response.status_code != 200:
             raise MerchantRequestError(
                 f"29CM가 HTTP {response.status_code}를 반환했습니다",

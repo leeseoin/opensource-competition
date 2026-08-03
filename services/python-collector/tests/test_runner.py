@@ -88,8 +88,30 @@ class CollectionRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(3, stats.unique_count)
         self.assertEqual(1, stats.duplicate_count)
         self.assertEqual(3, stats.contract_pass_count)
+        self.assertEqual(0, stats.skipped_after_target_count)
         self.assertEqual("target_reached", stats.stop_reason)
         self.assertEqual(3, len(saved))
+
+    async def test_counts_products_skipped_after_target(self) -> None:
+        """마지막 응답에서 목표 뒤에 남은 상품 수를 별도 지표로 기록하는지 검증한다."""
+
+        products = example_products()
+        adapter = FakeAdapter({1: PageResult(products, False, 3)})
+        with tempfile.TemporaryDirectory() as directory:
+            config = CollectionConfig(
+                merchant="abcmart",
+                queries=["구두"],
+                output_dir=Path(directory),
+                max_items=2,
+                request_budget=1,
+                min_interval_seconds=0,
+            )
+            async with httpx.AsyncClient() as client:
+                stats = await CollectionRunner(adapter).run(config, client)
+
+        self.assertEqual(3, stats.received_count)
+        self.assertEqual(2, stats.unique_count)
+        self.assertEqual(1, stats.skipped_after_target_count)
 
     async def test_resume_continues_from_checkpoint(self) -> None:
         """요청 예산으로 중단한 작업이 다음 페이지부터 재개되는지 검증한다."""
