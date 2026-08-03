@@ -10,11 +10,14 @@ WEB_DIR := frontend/purchase-web
 MERCHANT ?= abcmart
 QUERY ?= 구두
 LIMIT ?= 3
+MAX_ITEMS ?= 100
+REQUEST_BUDGET ?= 10
+OUTPUT_DIR ?= tmp/go-collector/$(MERCHANT)-$(MAX_ITEMS)
 WEB_PORT ?= 3000
 RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBITMQ_URL),amqp://purchase_research:purchase_research@127.0.0.1:35672/purchase_research)
 
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
-	collector-run collector-worker collector-worker-once collector-test \
+	collector-run collector-worker collector-worker-once collector-batch collector-test \
 	product-backend-run product-backend-test \
 	web-install web-dev web-lint web-build docs-check test check
 
@@ -30,6 +33,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make db-shell        PostgreSQL 터미널 접속' \
 		'  make collector-run   Go Collector 서버 실행' \
 		'  make collector-worker  RabbitMQ 검색 작업 처리 Worker 실행' \
+		'  make collector-batch  Go 비교 Collector 단계별 수집 실행' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make web-dev         Next.js 개발 서버 실행' \
@@ -39,6 +43,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'' \
 		'실행 예시:' \
 		'  make collector-run' \
+		'  make collector-batch MERCHANT=abcmart QUERY=구두 MAX_ITEMS=100 REQUEST_BUDGET=10' \
 		'  make product-backend-run' \
 		'  make web-dev WEB_PORT=2500'
 
@@ -69,6 +74,11 @@ collector-worker: ## RabbitMQ 검색 작업을 계속 처리하는 Go Worker를 
 
 collector-worker-once: ## RabbitMQ 검색 작업 하나를 처리한 뒤 Go Worker를 종료한다.
 	@cd $(COLLECTOR_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" go run ./cmd/worker --once
+
+collector-batch: ## 비교용 공개 상품을 gzip NDJSON과 checkpoint로 단계별 수집한다.
+	cd $(COLLECTOR_DIR) && go run ./cmd/batch \
+		-merchant "$(MERCHANT)" -query "$(QUERY)" -max-items "$(MAX_ITEMS)" \
+		-request-budget "$(REQUEST_BUDGET)" -output-dir "../../$(OUTPUT_DIR)"
 
 collector-test: ## Go Collector 전체 테스트를 실행한다.
 	cd $(COLLECTOR_DIR) && go test ./...

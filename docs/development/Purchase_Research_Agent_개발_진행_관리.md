@@ -999,6 +999,33 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 검증:
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 전체 통과
 
+### 2026-08-03 OPS-004 Go 비교 Adapter와 대량 수집 실행기
+
+- 진행상황: 운영 `CollectorResult.Product`를 `v1-unified` 상품으로 변환하는 비교
+  Adapter/validator와 최대 10,000개 순차 수집 실행기를 구현했다. 실행기는 여러 검색어,
+  상품 ID 중복 제거, 요청 예산, timeout/retry 결과 판정, 401/403/429 중단, checkpoint
+  재개, gzip NDJSON과 summary 저장을 지원한다. 실제 100건 수집은 아직 실행 전이다.
+- 구현 위치:
+  - `services/collector/internal/comparison/unified.go:15` `UnifiedProduct`: 비교 계약 자료형과 필드 validator
+  - `services/collector/internal/comparison/unified.go:62` `FromCollectorProduct`: 운영 상품을 사실 생성 없이 비교 상품으로 변환
+  - `services/collector/internal/bulk/runner.go:107` `Runner`: pagination/중복 제거/checkpoint/요청 예산/성능 통계
+  - `services/collector/cmd/batch/main.go:35` `main`: 단계별 실수집 CLI
+  - `services/collector/tests/unit/comparison/unified_test.go` `TestSharedExamplesPassGoValidator`: 전달받은 20건 Go 계약 검증
+  - `services/collector/tests/unit/bulk/runner_test.go:30` `TestRunnerDeduplicatesAndReachesTarget`: 중복 제거와 저장 검증
+- 발생 문제: `v1-unified`에는 원가/할인율/style code가 있지만 현재 운영
+  `CollectorResult.Product`에는 이 필드가 없다. 비교를 위해 운영 계약을 바꾸면 Spring
+  저장 계약까지 영향을 준다.
+- 해결: 비교 Adapter는 운영 계약에 확인된 값만 옮기고 없는 원가/style code는 빈
+  문자열, 할인율은 null로 둔다. 이 값은 `MissingFieldCount`에 반영하며 사실을 만들지
+  않는다.
+- 남은 위험: 수동 validator는 현재 Schema의 필수 필드/문자열 길이/숫자 범위를
+  검사한다. Schema 변경 시 Go 자료형/validator/20건 contract test를 함께 갱신해야 한다.
+  실제 100건에서 output 배열/null 형태와 외부 중단 상태를 다시 확인해야 한다.
+- 검증:
+  - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 전체 통과
+  - Go 비교 계약: 전달받은 ABC마트 10건/29CM 10건 전체 통과
+  - Go 대량 실행기: 중복 제거/checkpoint 재개/429 즉시 중단/gzip NDJSON 단위 테스트 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

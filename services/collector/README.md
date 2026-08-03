@@ -19,6 +19,8 @@ Go 기반 판매처 데이터 수집 서비스다.
 - ABC마트·29CM·무신사 요청 사이의 최소 1초 간격 제한
 - 역할별로 분리된 단위 테스트
 - `tests/integration`의 opt-in 실제 ABC마트·29CM·무신사 검색 테스트
+- Python/Go 비교용 최대 10,000개 pagination, 중복 제거, checkpoint와 gzip NDJSON 저장
+- 운영 `CollectorResult`를 `v1-unified` 비교 계약으로 바꾸는 별도 Adapter와 validator
 
 판매처 범위:
 
@@ -43,8 +45,11 @@ DB에 쓰거나 상품 추천을 수행하지 않는다.
 collector/
 ├── cmd/server/                 # Collector 실행
 ├── cmd/worker/                 # RabbitMQ 검색 작업 Worker 실행
+├── cmd/batch/                  # 단계별 대량 수집과 비교 결과 저장
 ├── internal/
 │   ├── app/                    # HTTP·Worker가 공유하는 판매처 Registry 조립
+│   ├── bulk/                   # pagination, 중복 제거, checkpoint와 성능 통계
+│   ├── comparison/             # 운영 상품을 v1-unified 비교 상품으로 변환
 │   ├── collector/              # 공통 요청·결과 형식
 │   │   ├── registry.go         # 판매처 이름과 Searcher 연결
 │   ├── config/                 # 실행 설정
@@ -75,6 +80,37 @@ go vet ./...
 - `tests/integration/`: 실제 외부 서비스에 접속하는 통합 테스트
 
 `internal/`에는 실행에 사용되는 실제 코드만 둔다.
+
+## 단계별 비교 수집
+
+대량 수집 명령은 PostgreSQL이나 RabbitMQ에 직접 쓰지 않고 루트 `tmp/` 아래에
+`products.ndjson.gz`, `checkpoint.json`, `summary.json`을 저장한다. 한 번에 10,000건을
+시작하지 않고 100건/1,000건/최대 10,000건 순서로 실행한다.
+
+```bash
+make collector-batch \
+  MERCHANT=abcmart \
+  QUERY=구두 \
+  MAX_ITEMS=100 \
+  REQUEST_BUDGET=10
+```
+
+직접 실행하면서 여러 검색어를 사용할 때는 `-query`를 반복한다.
+
+```bash
+cd services/collector
+go run ./cmd/batch \
+  -merchant 29cm \
+  -query 구두 \
+  -query 운동화 \
+  -max-items 1000 \
+  -request-budget 30 \
+  -output-dir ../../tmp/go-collector/29cm-1000
+```
+
+401/403/429는 즉시 중단한다. timeout/5xx처럼 일시적인 오류만 기본 1회 재시도하며,
+상품 수를 맞추기 위해 중복 상품이나 확인하지 않은 필드를 만들지 않는다. 중단된 같은
+작업은 동일 출력 경로와 `-resume`으로 이어서 실행할 수 있다.
 
 ## RabbitMQ Worker 실행
 

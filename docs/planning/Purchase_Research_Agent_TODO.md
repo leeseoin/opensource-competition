@@ -53,7 +53,7 @@
 - [ ] Java DTO가 같은 정상/무효 예제를 검증하는 contract test 추가
 - [ ] Schema, Go DTO, Java DTO 변경을 함께 검사하는 CI 추가
 - [ ] v1 필수 필드, 실패 상태, 호환성 정책 최종 검토
-- [ ] Python/Go 비교용 `v1-unified` adapter와 언어별 contract test **(진행 중: 전달받은 Schema/20건 예제와 운영 계약 경계 문서화 완료)**
+- [x] Python/Go 비교용 `v1-unified` adapter와 언어별 contract test
 
 완료 기준: 실제 Go 응답과 Java DTO가 같은 v1 Schema 및 예제로 검증되고, 두 서비스의 책임과 실패 상태를 설명할 수 있다.
 
@@ -304,11 +304,11 @@
 
 ### Python/Go 크롤러 확장성과 성능 비교
 
-- [ ] `origin/dev-jw` Python ABC마트/29CM 크롤러와 Contract 선별 이식 **(진행 중)**
-- [ ] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
-- [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산 **(진행 중: Go Adapter page 지정 완료)**
-- [ ] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장
-- [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집
+- [x] `origin/dev-jw` Python ABC마트/29CM 크롤러와 Contract 선별 이식
+- [x] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
+- [x] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산
+- [x] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장
+- [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집 **(진행 중: Python 100개와 1,000개 완료, Go 실행 전)**
 - [ ] 동일 fixture parser/normalizer CPU 및 메모리 benchmark
 - [ ] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
 
