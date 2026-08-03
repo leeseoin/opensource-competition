@@ -1008,6 +1008,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   47건을 저장하지 않았다. 기존 통계에는 이 차이가 보이지 않아
   `skipped_after_target_count`를 추가했다. 또한 공통 client에 있던 29CM Origin/Referer가
   ABC마트 요청에도 붙는 문제를 찾아 29CM Adapter 요청으로 헤더 책임을 옮겼다.
+- 재개 통계 문제와 해결: 체크포인트 재개 후 `unique_count`는 누적값이었지만
+  `contract_pass_count`와 `missing_field_count`는 새 실행 구간만 표시됐다. checkpoint에
+  두 누적값을 저장하고, 이전 형식 checkpoint는 gzip 결과를 읽어 복원하도록 수정했다.
 - 검증:
   - `make python-collector-test`: 9개 통과
   - `python3 -m compileall -q src tests`: 통과
@@ -1016,6 +1019,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - Python 29CM 100건: 요청 2회, 계약 100/100, 중복 0, 오류/429 0, wall 1.375초
   - Python ABC마트 1,000건: 요청 20회, 계약 1,000/1,000, 중복 0, 오류/429 0, wall 22.144초
   - Python 29CM 1,000건: 요청 21회, 계약 1,000/1,000, 중복 3, 오류/429 0, wall 23.985초
+  - Python ABC마트 최대 단계: 고유 9,417건, 총 요청 420회, 오류/429 0, 검색어 소진으로 중단
+  - Python 29CM 최대 단계: 고유 10,000건, 요청 225회, 오류/429 0, wall 271.762초
+  - `uvx check-jsonschema`: 최대 단계 19,417건 전체 통과
 
 ## 작업 기록 템플릿
 

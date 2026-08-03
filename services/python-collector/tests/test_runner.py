@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 
-from purchase_collector.contract import repository_root
+from purchase_collector.contract import count_missing_fields, repository_root
 from purchase_collector.merchants.base import MerchantAdapter
 from purchase_collector.models import CollectionConfig, MerchantRequestError, PageResult
 from purchase_collector.runner import CollectionRunner
@@ -150,6 +150,11 @@ class CollectionRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([2], second_adapter.pages)
         self.assertTrue(second_stats.checkpoint_resumed)
         self.assertEqual(3, second_stats.unique_count)
+        self.assertEqual(3, second_stats.contract_pass_count)
+        self.assertEqual(
+            sum(count_missing_fields(product) for product in products),
+            second_stats.missing_field_count,
+        )
         self.assertEqual(3, len(saved))
 
     async def test_http_429_stops_without_retry(self) -> None:

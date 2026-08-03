@@ -29,6 +29,8 @@ class Checkpoint:
     query_index: int
     next_page: int
     seen_ids: list[str]
+    contract_pass_count: int | None = None
+    missing_field_count: int | None = None
 
 
 class CollectionRunner:
@@ -65,10 +67,17 @@ class CollectionRunner:
 
         checkpoint = self._load_checkpoint(config, checkpoint_path)
         seen = set(checkpoint.seen_ids)
+        contract_pass_count, missing_field_count = self._resume_counts(
+            config,
+            checkpoint,
+            result_path,
+        )
         stats = CollectionStats(
             merchant=config.merchant,
             target_count=config.max_items,
             unique_count=len(seen),
+            contract_pass_count=contract_pass_count,
+            missing_field_count=missing_field_count,
             checkpoint_resumed=bool(config.resume and seen),
         )
         started_wall = time.perf_counter()
@@ -163,6 +172,8 @@ class CollectionRunner:
                         query_index=query_index,
                         next_page=next_page,
                         seen_ids=sorted(seen),
+                        contract_pass_count=stats.contract_pass_count,
+                        missing_field_count=stats.missing_field_count,
                     ),
                 )
                 if reached_target:
@@ -181,6 +192,8 @@ class CollectionRunner:
                     query_index=query_index + 1,
                     next_page=1,
                     seen_ids=sorted(seen),
+                    contract_pass_count=stats.contract_pass_count,
+                    missing_field_count=stats.missing_field_count,
                 ),
             )
         stats.stop_reason = "queries_exhausted"
@@ -237,6 +250,39 @@ class CollectionRunner:
         if checkpoint.merchant != config.merchant or checkpoint.queries != config.queries:
             raise ValueError("checkpoint의 판매처 또는 검색어가 현재 설정과 다릅니다")
         return checkpoint
+
+    def _resume_counts(
+        self,
+        config: CollectionConfig,
+        checkpoint: Checkpoint,
+        result_path: Path,
+    ) -> tuple[int, int]:
+        """재개 요약의 누적 계약 통과 수와 누락 필드 수를 복원한다.
+
+        이전 버전 checkpoint에 누적 통계가 없으면 기존 gzip 결과를 한 번 읽어
+        정확한 값을 재계산한다.
+
+        Raises:
+            ValueError: checkpoint와 기존 결과 파일의 상품 수가 일치하지 않는 경우다.
+        """
+
+        if not config.resume or not checkpoint.seen_ids:
+            return 0, 0
+        if checkpoint.contract_pass_count is not None and checkpoint.missing_field_count is not None:
+            return checkpoint.contract_pass_count, checkpoint.missing_field_count
+        if not result_path.exists():
+            raise ValueError("checkpoint는 있지만 기존 결과 파일이 없습니다")
+
+        contract_pass_count = 0
+        missing_field_count = 0
+        with gzip.open(result_path, "rt", encoding="utf-8") as source:
+            for line in source:
+                product = json.loads(line)
+                contract_pass_count += 1
+                missing_field_count += count_missing_fields(product)
+        if contract_pass_count != len(checkpoint.seen_ids):
+            raise ValueError("checkpoint와 기존 결과 파일의 상품 수가 다릅니다")
+        return contract_pass_count, missing_field_count
 
     def _save_checkpoint(self, path: Path, checkpoint: Checkpoint) -> None:
         """페이지 완료 상태를 임시 파일 교체 방식으로 안전하게 저장한다."""
