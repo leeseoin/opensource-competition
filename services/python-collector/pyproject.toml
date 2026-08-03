@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "purchase-research-python-collector"
+version = "0.1.0"
+description = "Purchase Research Agent의 Python 크롤러 비교 구현"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx==0.28.1",
+  "jsonschema==4.25.1",
+]
+
+[project.scripts]
+purchase-python-collector = "purchase_collector.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/purchase_collector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

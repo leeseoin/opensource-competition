@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-07-31
+최종 갱신일: 2026-08-03
 
 ## 이 문서를 공개하는 이유
 
@@ -25,6 +25,20 @@
 | RabbitMQ AMQP 0-9-1 Go Client | 1.10.0 | RabbitMQ 작업과 결과 메시지 처리 | [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) | BSD-3-Clause |
 
 정확한 Go 모듈 해석 결과는 `services/collector/go.mod`와 `services/collector/go.sum`에서 확인한다.
+
+### Python Collector 비교 구현
+
+| 구성요소 | 버전 | 용도 | 출처 | 라이선스 |
+|---|---:|---|---|---|
+| Python | 3.12 이상 | Python 크롤러 비교 구현 실행 | [python/cpython](https://github.com/python/cpython) | PSF-2.0 |
+| HTTPX | 0.28.1 | ABC마트/29CM 공개 검색 HTTP 요청과 테스트용 MockTransport | [encode/httpx](https://github.com/encode/httpx) | BSD-3-Clause |
+| jsonschema | 4.25.1 | `v1-unified` JSON Schema runtime 검증 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | MIT |
+| Hatchling | 1.27.0 | Python package build backend | [pypa/hatch](https://github.com/pypa/hatch) | MIT |
+
+정확한 Python 의존성 해석 결과는 `services/python-collector/pyproject.toml`과
+`services/python-collector/uv.lock`에서 확인한다. `origin/dev-jw`에서 참고한 Python
+크롤러는 같은 저장소 협업 브랜치의 코드이며, 선별 이식 범위와 변경 이유는
+`services/python-collector/README.md`에 기록한다.
 
 ### Spring Boot Product Backend
 
@@ -82,6 +96,7 @@ Docker image에는 Alpine Linux와 여러 system package가 포함되므로 위 
 다음 파일에서 의존성, image, plugin, MCP 또는 model 관련 항목을 추가/삭제/변경하면 같은 commit에서 이 문서도 갱신한다.
 
 - `services/collector/go.mod` 및 `services/collector/go.sum`
+- `services/python-collector/pyproject.toml` 및 `services/python-collector/uv.lock`
 - `services/product-backend/build.gradle` 및 Gradle 설정
 - `frontend/purchase-web/package.json` 및 `frontend/purchase-web/package-lock.json`
 - `compose.yaml`

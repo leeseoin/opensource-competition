@@ -5,6 +5,7 @@
 COLLECTOR_DIR := services/collector
 PRODUCT_BACKEND_DIR := services/product-backend
 MCP_SERVER_DIR := services/mcp-server
+PYTHON_COLLECTOR_DIR := services/python-collector
 WEB_DIR := frontend/purchase-web
 
 MERCHANT ?= abcmart
@@ -15,6 +16,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
+	python-collector-sync python-collector-test \
 	product-backend-run product-backend-test \
 	web-install web-dev web-lint web-build docs-check test check
 
@@ -30,6 +32,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make db-shell        PostgreSQL 터미널 접속' \
 		'  make collector-run   Go Collector 서버 실행' \
 		'  make collector-worker  RabbitMQ 검색 작업 처리 Worker 실행' \
+		'  make python-collector-test Python 비교 Collector 테스트 실행' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make web-dev         Next.js 개발 서버 실행' \
@@ -73,6 +76,12 @@ collector-worker-once: ## RabbitMQ 검색 작업 하나를 처리한 뒤 Go Work
 collector-test: ## Go Collector 전체 테스트를 실행한다.
 	cd $(COLLECTOR_DIR) && go test ./...
 
+python-collector-sync: ## uv.lock 기준으로 Python 비교 Collector 환경을 준비한다.
+	cd $(PYTHON_COLLECTOR_DIR) && uv sync --frozen
+
+python-collector-test: python-collector-sync ## Python Adapter, Contract와 checkpoint 테스트를 실행한다.
+	cd $(PYTHON_COLLECTOR_DIR) && uv run --frozen python -m unittest discover -s tests -v
+
 product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
 	cd $(PRODUCT_BACKEND_DIR) && ./gradlew bootRun
 
@@ -94,7 +103,7 @@ web-build: ## Next.js production build를 실행한다.
 docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
 	./scripts/check-document-sync.sh
 
-test: collector-test product-backend-test web-lint ## Go, Spring Boot, Next.js를 검증한다.
+test: collector-test python-collector-test product-backend-test web-lint ## Go, Python, Spring Boot, Next.js를 검증한다.
 
 check: docs-check ## 문서 동기화, Compose 설정, 테스트, Next.js production build를 모두 검증한다.
 	docker compose config --quiet

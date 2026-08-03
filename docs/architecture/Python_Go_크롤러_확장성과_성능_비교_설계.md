@@ -1,7 +1,11 @@
 # Python/Go 크롤러 확장성과 성능 비교 설계
 
 작성일: 2026-08-03
-상태: planned
+상태: 부분 구현
+
+현재 Python은 판매처별 JSON Adapter, pagination, 중복 제거, checkpoint, 요청 예산,
+안전 중단과 gzip NDJSON 저장까지 구현됐다. Go의 대량 수집 실행기와 두 언어 benchmark,
+단계별 실수집은 남아 있다.
 
 ## 1. 목표
 

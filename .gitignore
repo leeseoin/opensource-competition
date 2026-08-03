@@ -8,3 +8,8 @@
 
 # macOS Finder 메타데이터
 .DS_Store
+
+# Python 서비스별 로컬 가상환경
+.venv/
+__pycache__/
+*.py[cod]

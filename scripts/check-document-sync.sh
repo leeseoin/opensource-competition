@@ -35,7 +35,7 @@ if [[ -z "$changed_files" ]]; then
   exit 0
 fi
 
-dependency_pattern='(^|/)(go\.mod|go\.sum|package\.json|package-lock\.json|build\.gradle|build\.gradle\.kts|settings\.gradle|settings\.gradle\.kts|gradle\.properties|gradle-wrapper\.properties|compose\.ya?ml|Dockerfile[^/]*)$|^plugins/.*/(\.codex-plugin/plugin\.json|\.mcp\.json)$|(^|/)(models?|model-servers?)/'
+dependency_pattern='(^|/)(go\.mod|go\.sum|pyproject\.toml|uv\.lock|package\.json|package-lock\.json|build\.gradle|build\.gradle\.kts|settings\.gradle|settings\.gradle\.kts|gradle\.properties|gradle-wrapper\.properties|compose\.ya?ml|Dockerfile[^/]*)$|^plugins/.*/(\.codex-plugin/plugin\.json|\.mcp\.json)$|(^|/)(models?|model-servers?)/'
 ai_pattern='^plugins/|^services/mcp-server/|(^|/)(models?|model-servers?)/|(^|/)(ollama|llama-cpp|llama_cpp)(/|$)|^AGENTS\.md$|^\.agents/|^\.codex/'
 
 if printf '%s\n' "$changed_files" | grep -Eq "$dependency_pattern"; then

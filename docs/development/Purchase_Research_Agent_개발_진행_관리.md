@@ -981,6 +981,32 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 
+### 2026-08-03 OPS-004 Python 대량 수집 코어
+
+- 진행상황: `origin/dev-jw`의 Python ABC마트/29CM Adapter와 Contract 검증 책임만
+  선별 이식했다. 현재 구조에서는 두 판매처 모두 공개 검색 JSON을 사용하며, 최대
+  10,000개 고유 상품/pagination/중복 제거/checkpoint/요청 예산/timeout/retry/403 및
+  429 중단/gzip NDJSON 저장을 공통 실행기가 관리한다. 실제 100건 수집은 아직 실행 전이다.
+- 구현 위치:
+  - `services/python-collector/src/purchase_collector/runner.py:34` `CollectionRunner`: 수집 반복, 중복 제거, checkpoint, 요청 예산과 성능 지표
+  - `services/python-collector/src/purchase_collector/merchants/abcmart.py:109` `AbcMartAdapter`: ABC마트 공개 검색 JSON pagination과 비교 상품 변환
+  - `services/python-collector/src/purchase_collector/merchants/twentyninecm.py:84` `TwentyNineCmAdapter`: 29CM 공개 검색 JSON pagination과 비교 상품 변환
+  - `services/python-collector/src/purchase_collector/contract.py:29` `unified_validator`: 공통 Schema runtime 검증
+  - `services/python-collector/tests/test_runner.py:61` `CollectionRunnerTests`: 중복 제거/checkpoint 재개/429 중단 검증
+- 발생 문제: 기존 Python ABC마트 구현은 browser를 매 페이지 실행하고 HTML을 저장해,
+  현재 Go JSON Adapter와 요청 비용 및 parser 입력이 달랐다. 또한 중단 후 재개 상태와
+  요청 예산이 없었다.
+- 원인: 기존 구현은 소량 화면 검증 목적이었고 10,000건 성능 비교를 목표로 하지 않았다.
+- 해결: 판매처별 JSON 해석은 Adapter에 두고, 요청 반복/안전 상한/저장은 언어와
+  판매처에 독립적인 `CollectionRunner`로 분리했다. 새 실행은 401/403/429를 즉시
+  중단하며 일시 네트워크/5xx 오류만 설정 상한 안에서 재시도한다.
+- 남은 위험: 검색 JSON endpoint는 판매처가 외부 개발자용으로 보장한 API가 아니므로
+  구조가 바뀔 수 있다. 실수집 100건에서 접근 상태와 실제 pagination을 확인해야 한다.
+- 검증:
+  - `cd services/python-collector && uv run python -m unittest discover -s tests -v`: 7개 통과
+  - `python3 -m compileall -q src tests`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
