@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,6 +88,18 @@ type searchItem struct {
 			SmallCategoryName  string `json:"smallCategoryName"`
 		} `json:"eventProperties"`
 	} `json:"itemEvent"`
+}
+
+// ResponseError는 29CM 검색 JSON 해석 실패의 기존 API 상태와 오류 코드를 보존한다.
+type ResponseError struct {
+	Status  string
+	Code    string
+	Message string
+}
+
+// Error는 수집 결과에 기록할 한국어 오류 메시지를 반환한다.
+func (e *ResponseError) Error() string {
+	return e.Message
 }
 
 // NewSearcher는 timeout과 redirect 제한이 설정된 HTTP client로 29CM 검색기를 생성한다.
@@ -177,24 +190,68 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_TOO_LARGE", "29CM 검색 응답이 허용 크기를 넘었습니다", false, searchPageURL)
 	}
 
-	var payload searchResponse
-	if err := json.Unmarshal(responseBody, &payload); err != nil {
-		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_INVALID", fmt.Sprintf("29CM 검색 JSON 해석 실패: %v", err), false, searchPageURL)
+	products, totalCount, hasNext, err := ParseSearchResponse(responseBody, request, searchPageURL, collectedAt)
+	if err != nil {
+		status := collector.StatusUnsupported
+		code := "29CM_RESPONSE_INVALID"
+		var responseErr *ResponseError
+		if errors.As(err, &responseErr) {
+			status = responseErr.Status
+			code = responseErr.Code
+		}
+		return failedResult(result, status, code, err.Error(), false, searchPageURL)
 	}
-	if payload.Meta.Result != "SUCCESS" {
-		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_FAILED", "29CM 검색 응답이 성공 상태가 아닙니다", false, searchPageURL)
-	}
-	if payload.Data.Pagination == nil || payload.Data.Pagination.TotalCount == nil || payload.Data.Pagination.HasNext == nil {
-		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_INVALID", "29CM 검색 JSON에서 페이지 정보를 찾지 못했습니다", false, searchPageURL)
-	}
-	if *payload.Data.Pagination.TotalCount < 0 {
-		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_INVALID", "29CM 검색 JSON의 전체 상품 수가 음수입니다", false, searchPageURL)
-	}
-	totalCount := *payload.Data.Pagination.TotalCount
-	hasNext := *payload.Data.Pagination.HasNext
 	result.TotalCount = &totalCount
 	result.HasNext = &hasNext
+	result.Products = products
 
+	if len(request.Filters.Categories) > 0 || len(request.Filters.Sizes) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
+		result.Status = collector.StatusPartial
+		result.Warnings = append(result.Warnings, collector.Issue{
+			Code:      "FILTERS_PARTIALLY_SUPPORTED",
+			Message:   "현재 29CM 검색은 가격과 검색 단계 품절 조건만 지원합니다",
+			Retryable: false,
+		})
+	}
+
+	return result
+}
+
+// ParseSearchResponse는 29CM JSON bytes를 상품과 pagination으로 변환한다.
+// 실제 HTTP와 저장 fixture benchmark가 같은 decode/정규화 경로를 사용하도록 제공한다.
+func ParseSearchResponse(
+	body []byte,
+	request collector.SearchRequest,
+	sourceURL string,
+	collectedAt time.Time,
+) ([]collector.Product, int, bool, error) {
+	var payload searchResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, 0, false, &ResponseError{
+			Status: collector.StatusUnsupported, Code: "29CM_RESPONSE_INVALID",
+			Message: fmt.Sprintf("29CM 검색 JSON 해석 실패: %v", err),
+		}
+	}
+	if payload.Meta.Result != "SUCCESS" {
+		return nil, 0, false, &ResponseError{
+			Status: collector.StatusUnsupported, Code: "29CM_RESPONSE_FAILED",
+			Message: "29CM 검색 응답이 성공 상태가 아닙니다",
+		}
+	}
+	if payload.Data.Pagination == nil || payload.Data.Pagination.TotalCount == nil || payload.Data.Pagination.HasNext == nil {
+		return nil, 0, false, &ResponseError{
+			Status: collector.StatusUnsupported, Code: "29CM_RESPONSE_INVALID",
+			Message: "29CM 검색 JSON에서 페이지 정보를 찾지 못했습니다",
+		}
+	}
+	if *payload.Data.Pagination.TotalCount < 0 {
+		return nil, 0, false, &ResponseError{
+			Status: collector.StatusUnsupported, Code: "29CM_RESPONSE_INVALID",
+			Message: "29CM 검색 JSON의 전체 상품 수가 음수입니다",
+		}
+	}
+
+	products := make([]collector.Product, 0, min(len(payload.Data.List), request.Limit))
 	for _, item := range payload.Data.List {
 		if item.ItemType != "PRODUCT" || item.ItemID <= 0 || item.ItemInfo.ProductName == "" || item.ItemInfo.DisplayPrice < 0 {
 			continue
@@ -208,22 +265,12 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 		if request.Filters.PriceMax != nil && item.ItemInfo.DisplayPrice > *request.Filters.PriceMax {
 			continue
 		}
-		result.Products = append(result.Products, toProduct(item, searchPageURL, collectedAt))
-		if len(result.Products) >= request.Limit {
+		products = append(products, toProduct(item, sourceURL, collectedAt))
+		if len(products) >= request.Limit {
 			break
 		}
 	}
-
-	if len(request.Filters.Categories) > 0 || len(request.Filters.Sizes) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
-		result.Status = collector.StatusPartial
-		result.Warnings = append(result.Warnings, collector.Issue{
-			Code:      "FILTERS_PARTIALLY_SUPPORTED",
-			Message:   "현재 29CM 검색은 가격과 검색 단계 품절 조건만 지원합니다",
-			Retryable: false,
-		})
-	}
-
-	return result
+	return products, *payload.Data.Pagination.TotalCount, *payload.Data.Pagination.HasNext, nil
 }
 
 // waitForTurn은 한 Searcher가 29CM에 보내는 요청 사이에 최소 간격을 보장한다.

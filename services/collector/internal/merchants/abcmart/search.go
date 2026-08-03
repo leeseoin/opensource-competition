@@ -4,6 +4,7 @@ package abcmart
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,6 +80,17 @@ type sizeStock struct {
 	Quantity int
 }
 
+// ResponseError는 ABC마트 검색 JSON 해석 실패의 기존 API 오류 코드를 보존한다.
+type ResponseError struct {
+	Code    string
+	Message string
+}
+
+// Error는 수집 결과에 기록할 한국어 오류 메시지를 반환한다.
+func (e *ResponseError) Error() string {
+	return e.Message
+}
+
 // NewSearcher는 timeout과 redirect 제한이 설정된 HTTP client로 ABC마트 검색기를 생성한다.
 func NewSearcher(timeout time.Duration) *Searcher {
 	return NewSearcherWithClient(&http.Client{
@@ -146,29 +158,57 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 		return failedResult(result, "ABCMART_RESPONSE_TOO_LARGE", "ABC마트 검색 응답이 허용 크기를 넘었습니다", false, searchURL)
 	}
 
-	var payload searchResponse
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return failedResult(result, "ABCMART_RESPONSE_INVALID", fmt.Sprintf("ABC마트 검색 JSON 해석 실패: %v", err), false, searchURL)
+	products, totalCount, hasNext, err := ParseSearchResponse(body, request, page, searchURL, collectedAt)
+	if err != nil {
+		code := "ABCMART_RESPONSE_INVALID"
+		var responseErr *ResponseError
+		if errors.As(err, &responseErr) {
+			code = responseErr.Code
+		}
+		return failedResult(result, code, err.Error(), false, searchURL)
 	}
-	if payload.Search == nil {
-		return failedResult(result, "ABCMART_PAGE_CHANGED", "ABC마트 검색 JSON에서 SEARCH 목록을 찾지 못했습니다", false, searchURL)
-	}
-	if payload.SearchCount == nil || payload.Page == nil || payload.Page.FinalPageNo == nil {
-		return failedResult(result, "ABCMART_PAGE_CHANGED", "ABC마트 검색 JSON에서 페이지 정보를 찾지 못했습니다", false, searchURL)
-	}
-	if *payload.SearchCount < 0 || *payload.Page.FinalPageNo < 0 {
-		return failedResult(result, "ABCMART_RESPONSE_INVALID", "ABC마트 검색 JSON의 페이지 정보가 음수입니다", false, searchURL)
-	}
-
-	totalCount := *payload.SearchCount
-	hasNext := page < *payload.Page.FinalPageNo
 	result.TotalCount = &totalCount
 	result.HasNext = &hasNext
+	result.Products = products
 
+	if len(request.Filters.Categories) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
+		result.Status = collector.StatusPartial
+		result.Warnings = append(result.Warnings, collector.Issue{
+			Code: "FILTERS_PARTIALLY_SUPPORTED", Message: "현재 ABC마트 검색은 가격, 재고, 신발 사이즈 조건만 지원합니다",
+			Retryable: false, SourceURL: &searchURL,
+		})
+	}
+	return result
+}
+
+// ParseSearchResponse는 ABC마트 JSON bytes를 상품과 pagination으로 변환한다.
+// 실제 HTTP와 저장 fixture benchmark가 같은 decode/정규화 경로를 사용하도록 제공한다.
+func ParseSearchResponse(
+	body []byte,
+	request collector.SearchRequest,
+	page int,
+	sourceURL string,
+	collectedAt time.Time,
+) ([]collector.Product, int, bool, error) {
+	var payload searchResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, 0, false, &ResponseError{Code: "ABCMART_RESPONSE_INVALID", Message: fmt.Sprintf("ABC마트 검색 JSON 해석 실패: %v", err)}
+	}
+	if payload.Search == nil {
+		return nil, 0, false, &ResponseError{Code: "ABCMART_PAGE_CHANGED", Message: "ABC마트 검색 JSON에서 SEARCH 목록을 찾지 못했습니다"}
+	}
+	if payload.SearchCount == nil || payload.Page == nil || payload.Page.FinalPageNo == nil {
+		return nil, 0, false, &ResponseError{Code: "ABCMART_PAGE_CHANGED", Message: "ABC마트 검색 JSON에서 페이지 정보를 찾지 못했습니다"}
+	}
+	if *payload.SearchCount < 0 || *payload.Page.FinalPageNo < 0 {
+		return nil, 0, false, &ResponseError{Code: "ABCMART_RESPONSE_INVALID", Message: "ABC마트 검색 JSON의 페이지 정보가 음수입니다"}
+	}
+
+	products := make([]collector.Product, 0, min(len(payload.Search), request.Limit))
 	for _, rawItem := range payload.Search {
 		item, err := normalizeItem(rawItem)
 		if err != nil {
-			return failedResult(result, "ABCMART_RESPONSE_INVALID", err.Error(), false, searchURL)
+			return nil, 0, false, &ResponseError{Code: "ABCMART_RESPONSE_INVALID", Message: err.Error()}
 		}
 		if request.Filters.InStockOnly && item.IsSoldOut {
 			continue
@@ -182,20 +222,12 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 		if len(request.Filters.Sizes) > 0 && !hasAvailableRequestedSize(item.SizeStocks, request.Filters.Sizes) {
 			continue
 		}
-		result.Products = append(result.Products, toProduct(item, searchURL, collectedAt))
-		if len(result.Products) >= request.Limit {
+		products = append(products, toProduct(item, sourceURL, collectedAt))
+		if len(products) >= request.Limit {
 			break
 		}
 	}
-
-	if len(request.Filters.Categories) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
-		result.Status = collector.StatusPartial
-		result.Warnings = append(result.Warnings, collector.Issue{
-			Code: "FILTERS_PARTIALLY_SUPPORTED", Message: "현재 ABC마트 검색은 가격, 재고, 신발 사이즈 조건만 지원합니다",
-			Retryable: false, SourceURL: &searchURL,
-		})
-	}
-	return result
+	return products, *payload.SearchCount, page < *payload.Page.FinalPageNo, nil
 }
 
 // normalizeItem은 ABC마트 문자열 가격·리뷰 수·사이즈 재고를 검증 가능한 공통 값으로 바꾼다.

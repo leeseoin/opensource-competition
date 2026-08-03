@@ -112,6 +112,18 @@ go run ./cmd/batch \
 상품 수를 맞추기 위해 중복 상품이나 확인하지 않은 필드를 만들지 않는다. 중단된 같은
 작업은 동일 출력 경로와 `-resume`으로 이어서 실행할 수 있다.
 
+## 저장 fixture parser benchmark
+
+실제 네트워크 시간과 언어의 JSON decode/정규화 비용을 분리하기 위해 Python과 같은
+`testdata` fixture를 반복 처리한다. 측정 범위는 fixture bytes의 JSON decode, 판매처별
+운영 상품 변환, `v1-unified` 변환과 Contract 검증이다.
+
+```bash
+cd services/collector
+go run ./cmd/parser-benchmark -merchant abcmart -iterations 1000 -warmup 100
+go run ./cmd/parser-benchmark -merchant 29cm -iterations 1000 -warmup 100
+```
+
 ## RabbitMQ Worker 실행
 
 저장소 루트에서 RabbitMQ를 실행한 뒤 Worker를 시작한다.

@@ -73,6 +73,25 @@ func TestSearcherSearch(t *testing.T) {
 	}
 }
 
+// TestParseSearchResponse는 저장 fixture의 HTTP 없는 decode/정규화 경로를 검증한다.
+func TestParseSearchResponse(t *testing.T) {
+	collectedAt := time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC)
+	request := collector.SearchRequest{
+		RequestID: "parser-test", Merchant: "abcmart", Query: "구두",
+		RequestedAt: collectedAt, Limit: 50, Locale: "ko-KR", Currency: "KRW",
+		Filters: collector.SearchFilters{},
+	}
+	products, totalCount, hasNext, err := abcmart.ParseSearchResponse(
+		readABCFixture(t), request, 1, "https://abcmart.a-rt.com/search", collectedAt,
+	)
+	if err != nil {
+		t.Fatalf("ParseSearchResponse() error = %v", err)
+	}
+	if len(products) != 3 || totalCount != 1650 || !hasNext {
+		t.Fatalf("products=%d totalCount=%d hasNext=%t", len(products), totalCount, hasNext)
+	}
+}
+
 // TestSearcherReportsChangedPage는 SEARCH 목록이 사라진 JSON을 정상 결과로 숨기지 않는지 검증한다.
 func TestSearcherReportsChangedPage(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

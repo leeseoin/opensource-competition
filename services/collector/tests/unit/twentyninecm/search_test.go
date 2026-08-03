@@ -76,6 +76,20 @@ func TestSearcherSearch(t *testing.T) {
 	}
 }
 
+// TestParseSearchResponse는 저장 fixture의 HTTP 없는 decode/정규화 경로를 검증한다.
+func TestParseSearchResponse(t *testing.T) {
+	collectedAt := time.Date(2026, 8, 4, 0, 0, 0, 0, time.UTC)
+	products, totalCount, hasNext, err := twentyninecm.ParseSearchResponse(
+		readFixture(t), validRequest(), "https://www.29cm.co.kr/store/search", collectedAt,
+	)
+	if err != nil {
+		t.Fatalf("ParseSearchResponse() error = %v", err)
+	}
+	if len(products) != 2 || totalCount != 5452 || !hasNext {
+		t.Fatalf("products=%d totalCount=%d hasNext=%t", len(products), totalCount, hasNext)
+	}
+}
+
 // TestSearcherAppliesSupportedFilters는 가격과 품절 제외 조건을 검색 결과에 적용하는지 검증한다.
 func TestSearcherAppliesSupportedFilters(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

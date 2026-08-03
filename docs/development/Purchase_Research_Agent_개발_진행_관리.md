@@ -45,7 +45,7 @@
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
 | Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
-| Python/Go 크롤러 비교 | 부분 구현 | 비교 Contract/20건 예제/최대 10,000개 수집과 benchmark 설계 | 언어별 adapter, pagination/checkpoint와 단계별 실수집 |
+| Python/Go 크롤러 비교 | 부분 구현 | 공통 Contract, 양쪽 pagination/checkpoint, 단계별 실수집과 parser benchmark | 결과 비교 보고서와 코드트래커 검증 |
 
 ## 영역별 상세 체크리스트
 
@@ -1004,7 +1004,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 진행상황: 운영 `CollectorResult.Product`를 `v1-unified` 상품으로 변환하는 비교
   Adapter/validator와 최대 10,000개 순차 수집 실행기를 구현했다. 실행기는 여러 검색어,
   상품 ID 중복 제거, 요청 예산, timeout/retry 결과 판정, 401/403/429 중단, checkpoint
-  재개, gzip NDJSON과 summary 저장을 지원한다. 실제 100건 수집은 아직 실행 전이다.
+  재개, gzip NDJSON과 summary 저장을 지원한다. ABC마트와 29CM의 100건/1,000건/최대
+  10,000건 단계를 순차 실행했다.
 - 구현 위치:
   - `services/collector/internal/comparison/unified.go:15` `UnifiedProduct`: 비교 계약 자료형과 필드 validator
   - `services/collector/internal/comparison/unified.go:62` `FromCollectorProduct`: 운영 상품을 사실 생성 없이 비교 상품으로 변환
@@ -1020,11 +1021,43 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   않는다.
 - 남은 위험: 수동 validator는 현재 Schema의 필수 필드/문자열 길이/숫자 범위를
   검사한다. Schema 변경 시 Go 자료형/validator/20건 contract test를 함께 갱신해야 한다.
-  실제 100건에서 output 배열/null 형태와 외부 중단 상태를 다시 확인해야 한다.
+  실수집 endpoint는 외부 개발자용 안정 API가 아니므로 구조 변화 감지와 운영 허가
+  검토는 별도로 필요하다.
 - 검증:
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 전체 통과
   - Go 비교 계약: 전달받은 ABC마트 10건/29CM 10건 전체 통과
   - Go 대량 실행기: 중복 제거/checkpoint 재개/429 즉시 중단/gzip NDJSON 단위 테스트 통과
+  - Go ABC마트 100건/1,000건: 요청 2회/20회, 계약 실패와 오류/429 0
+  - Go 29CM 100건/1,000건: 요청 2회/21회, 계약 실패와 오류/429 0
+  - Go ABC마트 최대 단계: 고유 9,417건, 총 요청 420회, 오류/429 0, 검색어 소진으로 중단
+  - Go 29CM 최대 단계: 고유 10,000건, 요청 224회, 오류/429 0, wall 267.692초
+  - `uvx check-jsonschema`: Go 최대 단계 19,417건 전체 통과
+
+### 2026-08-04 OPS-004 Go 저장 fixture parser benchmark
+
+- 진행상황: Python과 같은 ABC마트/29CM 원본 JSON fixture를 대상으로 JSON decode,
+  운영 상품 정규화, `v1-unified` 변환과 Contract 검증을 반복하는 Go benchmark를
+  구현했다. 실제 HTTP 수집과 저장 fixture가 같은 순수 응답 변환 함수를 사용한다.
+- 구현 위치:
+  - `services/collector/internal/merchants/abcmart/search.go:186` `ParseSearchResponse`: ABC마트 JSON bytes 변환
+  - `services/collector/internal/merchants/twentyninecm/search.go:222` `ParseSearchResponse`: 29CM JSON bytes 변환
+  - `services/collector/cmd/parser-benchmark/main.go:76` `runBenchmark`: warmup과 wall/CPU/메모리/상품 처리량 측정
+  - `services/collector/tests/unit/abcmart/search_test.go:77` `TestParseSearchResponse`: ABC마트 순수 변환 검증
+  - `services/collector/tests/unit/twentyninecm/search_test.go:80` `TestParseSearchResponse`: 29CM 순수 변환 검증
+- 발생 문제: 기존 판매처 parser가 `SearchPage`의 HTTP 처리 안에 섞여 있어 네트워크
+  없이 같은 변환 경로만 반복할 공개 함수가 없었다.
+- 원인: 초기 구현은 HTTP 검색 정상 경로 검증을 우선했고 별도 성능 비교를 고려하지 않았다.
+- 해결: 응답 bytes/검색 조건/출처/시각을 입력받는 `ParseSearchResponse`를 분리하고,
+  실제 `SearchPage`도 이 함수를 호출하도록 바꿨다. 기존 오류 코드는 `ResponseError`로
+  유지했다.
+- 남은 위험: Python은 원본 JSON에서 비교 상품으로 바로 변환하지만 Go는 운영 상품을
+  거쳐 비교 상품으로 변환한다. Go 측정이 더 많은 변환 단계를 포함하므로 결과 보고서에
+  경계 차이를 명시해야 한다.
+- 검증:
+  - `GOCACHE=/private/tmp/purchase-go-build go test ./...`: 전체 통과
+  - `GOCACHE=/private/tmp/purchase-go-build go vet ./...`: 통과
+  - Go ABC마트 1,000회: 3,000개/0.028838초/104,028.655개/초
+  - Go 29CM 1,000회: 2,000개/0.019812초/100,951.254개/초
 
 ## 작업 기록 템플릿
 
