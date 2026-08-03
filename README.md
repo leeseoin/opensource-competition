@@ -2,7 +2,7 @@
 
 사용자의 자연어 구매 요청을 구체화하고 실제 판매처의 공개 상품과 리뷰 정보를 수집해 근거 기반으로 비교한 뒤, 선택 상품을 다시 검증하는 구매 조사 Agent PoC다.
 
-현재 ABC마트와 29CM 검색 Collector 및 RabbitMQ 검색 Worker가 구현되어 있다. Spring Boot Product Backend는 Flyway/JPA 기반 상품 저장, 수동 적재 API, RabbitMQ 결과 Consumer와 조회 API까지 구현됐으며, RabbitMQ 작업 발행, MCP Server와 Next.js 화면은 앞으로 구현한다.
+현재 ABC마트와 29CM 검색 Collector 및 RabbitMQ 검색 Worker가 구현되어 있다. Spring Boot Product Backend는 Flyway/JPA 기반 상품 저장, 수집 작업 발행 API, RabbitMQ 결과 Consumer와 조회 API까지 구현됐으며, 작업 상태 저장, MCP Server와 Next.js 화면은 앞으로 구현한다.
 
 ## 한눈에 보는 구조
 
@@ -32,7 +32,7 @@ Spring Boot Product Backend
 | Next.js Web | 사용자 채팅과 관리자 수집 화면 | 기본 scaffold |
 | Codex Plugin | 구매 질문 처리 순서와 MCP 도구 사용 방법 | 기본 구조 |
 | MCP Server | AI 도구 요청을 Product Backend REST API로 연결 | 폴더와 설명 문서만 생성 |
-| Product Backend | 상품 API, 수집 작업 생성, 결과 검증, PostgreSQL 저장 | Flyway/JPA 상품 저장과 조회 API 구현 |
+| Product Backend | 상품 API, 수집 작업 생성, 결과 검증, PostgreSQL 저장 | 검색 작업 발행, 결과 소비, Flyway/JPA 상품 저장과 조회 API 구현 |
 | Go Collector | 판매처 검색, parsing, 접근 제한, RabbitMQ 작업 처리 | ABC마트/29CM 검색 구현 |
 | Contracts | 서비스 사이의 JSON 요청과 응답 규격 | v1 초안 |
 
@@ -99,9 +99,9 @@ docker compose ps
 `compose.yaml`은 루트 `.env` 값을 읽고, 값이 없으면 `.env.example`과 같은 로컬 기본값을 사용한다. 운영 환경에서는 계정과 비밀번호를 반드시 변경한다.
 
 Product Backend를 실행하면 Flyway가 상품, 판매처 상품, 가격/재고 snapshot,
-옵션 및 근거 테이블을 자동 생성한다. 현재 Collector 결과를 직접 저장하는 서비스와
-상품 조회 API와 Collector JSON 수동 적재 API는 구현됐으며, RabbitMQ 결과 Queue를
-이 저장 서비스에 연결하는 consumer는 다음 구현 범위다.
+옵션 및 근거 테이블을 자동 생성한다. Collector JSON 수동 적재와 상품 조회뿐 아니라
+RabbitMQ 검색 작업 발행 및 결과 자동 저장 경로도 구현돼 있다. 작업별 진행 상태를
+PostgreSQL에 저장하는 기능은 아직 구현 전이다.
 
 ## 루트 개발 명령
 
@@ -133,7 +133,8 @@ Go Collector의 RabbitMQ Worker는 다음 명령으로 실행한다.
 make collector-worker
 ```
 
-현재 Product Backend의 RabbitMQ 작업 발행과 결과 저장 기능은 미구현이다. 따라서 이전 구조에서 가능했던 Queue 전체 흐름과 DB 적재는 Spring Boot로 다시 구현한 뒤 사용할 수 있다.
+Product Backend의 RabbitMQ 작업 발행과 결과 저장 코드는 구현됐다. 실제 판매처 전체
+흐름은 Product Backend와 Go Worker를 함께 실행한 opt-in 수동 검증이 남아 있다.
 
 기본 검증은 다음 명령으로 실행한다.
 

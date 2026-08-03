@@ -74,7 +74,7 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `QUEUE-001` | 검색 작업 계약과 Go Worker | 부분 구현 | P0 | RabbitMQ topology, 작업/결과 계약, Go 소비, retry와 DLQ | fixture 작업의 성공/실패/재시도/ACK/DLQ 통합 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | ACK/DLQ 통합 테스트와 복구 검증 |
-| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 부분 구현 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Go 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | 작업 발행 API와 실제 Queue E2E 구현 |
+| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Go 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | 실제 판매처 Queue E2E와 작업 상태 저장 검증 |
 | `QUEUE-003` | 여러 검색어와 페이지 수집 | 계획 | P1 | batch, pagination, request budget, priority와 Worker 수 제한 | 여러 판매처 작업이 상한 안에서 분배되고 결과 수량과 실패가 보고됨 | 데이터 수집과 DB 적재 설계 | pagination과 작업 예산 계약 |
 | `REDIS-001` | 속도 제한/중복 방지/짧은 상태 | 부분 구현 | P1 | 판매처 전체 limiter, 중복 key, 진행 상태와 cache | 여러 Worker에서도 요청 간격과 중복 차단이 일관되고 만료 정책 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | application adapter와 key 정책 구현 |
 
@@ -118,8 +118,7 @@
 
 ## 다음 우선순위
 
-1. `QUEUE-002` Spring Boot 작업 발행 API
-2. `BACKEND-001` 실제 전체 Queue 경로 PostgreSQL 적재 E2E
-3. `BACKEND-002` 수집 작업 영구 상태
-4. `MCP-001` 상품 검색 MCP 도구
-5. `WEB-002` 사용자 구매 채팅 화면
+1. `BACKEND-001` 실제 전체 Queue 경로 PostgreSQL 적재 E2E
+2. `BACKEND-002` 수집 작업 영구 상태
+3. `MCP-001` 상품 검색 MCP 도구
+4. `WEB-002` 사용자 구매 채팅 화면

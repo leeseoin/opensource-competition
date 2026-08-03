@@ -91,7 +91,13 @@ class CollectionResultConsumerIntegrationTests {
 	 */
 	@Test
 	void consumesSuccessfulResultAndStoresProducts() throws Exception {
-		String collectorResult = Files.readString(abcmartCollectorResultPath());
+		String collectorResult = Files.readString(abcmartCollectorResultPath())
+				.replace("""
+						  "filters": {
+						    "sizes": ["270"],
+						    "inStockOnly": true
+						  },
+						""", "  \"filters\": {},\n");
 		String envelope = successfulEnvelope(collectorResult);
 
 		publishResult(envelope);
@@ -103,7 +109,10 @@ class CollectionResultConsumerIntegrationTests {
 		assertThat(productOptionRepository.count()).isEqualTo(1);
 		assertThat(evidenceRepository.count()).isEqualTo(1);
 		assertThat(collectionSearchContextRepository.findById("backend-test-001"))
-				.hasValueSatisfying(context -> assertThat(context.getSearchQuery()).isEqualTo("구두"));
+				.hasValueSatisfying(context -> {
+					assertThat(context.getSearchQuery()).isEqualTo("구두");
+					assertThat(context.getFilters()).containsEntry("inStockOnly", false);
+				});
 	}
 
 	/**

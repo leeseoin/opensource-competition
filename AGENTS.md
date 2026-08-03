@@ -4,7 +4,7 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트/29CM 검색 Collector와 Go RabbitMQ Worker 구현, Spring Boot Product Backend의 Flyway/JPA 저장, 검색 문맥 조회와 RabbitMQ 결과 Consumer 구현, Spring 작업 발행과 MCP/Web은 planned
+- 현재 상태: ABC마트/29CM 검색 Collector와 Go RabbitMQ Worker 구현, Spring Boot Product Backend의 작업 발행/결과 소비/Flyway/JPA 저장 및 상품 조회 API 구현, 작업 상태 DB와 MCP/Web은 planned
 - 핵심 기술: Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
@@ -64,6 +64,7 @@
 - `main`은 안정 브랜치이며 검증된 `develop` PR만 반영한다.
 - 공유 브랜치에서 강제 push가 필요한 rebase보다 `origin/develop` 일반 merge를 우선한다.
 - 브랜치를 전환하기 전에 `git status --short`로 커밋되지 않은 사용자 변경을 확인한다.
+- Codex가 코드, 문서, 설계 또는 검증에 실질적으로 참여한 커밋에는 커밋 본문 마지막에 `Co-authored-by: OpenAI Codex <codex@openai.com>` trailer를 반드시 포함한다.
 
 ## 코드 주석 규칙
 
@@ -110,8 +111,9 @@
 
 PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
 Go consumer와 result publisher는 구현됐다. 기존 Python producer/result consumer와
-DB 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot producer/result
-consumer, Redis application adapter, 작업 상태 DB, MCP와 Agent Gateway는 구현 전이다.
+DB 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot의 검색 작업 producer,
+결과 consumer와 DB 적재는 구현됐으며 Redis application adapter, 작업 상태 DB, MCP와
+Agent Gateway는 구현 전이다.
 Spring Boot의 Flyway 초기 schema, CollectorResult 검증/JPA 적재 및 상품 조회 API는
 구현됐다.
 

@@ -18,6 +18,10 @@ spring:
     username: ${RABBITMQ_USER:purchase_research}
     password: ${RABBITMQ_PASSWORD:purchase_research}
     virtual-host: ${RABBITMQ_VHOST:purchase_research}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     listener:
       simple:
         acknowledge-mode: manual

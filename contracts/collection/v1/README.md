@@ -18,8 +18,8 @@ Product Backend Result Consumer
   └─ 계약 검증 후 PostgreSQL 저장
 ```
 
-현재 Go Worker와 Spring Boot 결과 Consumer 및 PostgreSQL 저장은 구현되어 있다.
-Spring Boot의 작업 발행 API와 작업 상태 저장은 아직 구현되지 않았다.
+현재 Spring Boot 작업 발행 API, Go Worker, Spring Boot 결과 Consumer 및 PostgreSQL
+저장은 구현되어 있다. 작업 상태의 PostgreSQL 영구 저장은 아직 구현되지 않았다.
 
 ## 현재 Contract 범위
 
@@ -45,7 +45,7 @@ Spring Boot의 작업 발행 API와 작업 상태 저장은 아직 구현되지 
 
 ## 멱등성 키
 
-Product Backend는 판매처, operation, 검색 payload를 정렬한 JSON으로 만든 뒤 SHA-256을 계산할 예정이다.
+Product Backend는 판매처, operation, 검색 payload를 정렬한 JSON으로 만든 뒤 SHA-256을 계산한다.
 
 ```text
 collection:v1:{sha256}

@@ -13,9 +13,10 @@ Spring Boot 기반 상품 데이터 서버다.
 - CollectorResult DTO 검증과 동일 판매처 상품 upsert/snapshot 추가 서비스 구현
 - Collector JSON을 직접 저장하는 내부 수동 적재 API 구현
 - RabbitMQ `CollectionResult` 검증, 수동 ACK, 결과 DLQ와 PostgreSQL 자동 저장 Consumer 구현
+- RabbitMQ `CollectionTask` 검색 작업 발행 API와 publisher confirm 구현
 - 저장된 최신 상품 검색 API 구현
 - OpenAPI JSON과 Swagger UI 기반 내부 API 수동 검증
-- RabbitMQ 작업 발행 API와 작업 상태 저장은 아직 구현 전
+- 수집 작업 상태의 PostgreSQL 저장은 아직 구현 전
 
 ## Package 구조
 
@@ -24,14 +25,14 @@ Spring Boot 기반 상품 데이터 서버다.
 ```text
 com.purchasesearch.product_backend
 ├── collection/
-│   ├── config/                      # RabbitMQ 결과 Queue와 DLQ topology
-│   ├── controller/                  # 수동 적재 내부 API
-│   ├── dto/                         # Go Collector와 Queue 결과 계약
+│   ├── config/                      # RabbitMQ 검색/결과 Queue와 DLQ topology
+│   ├── controller/                  # 수집 작업 발행과 수동 적재 내부 API
+│   ├── dto/                         # 수집 요청과 Go Collector Queue 계약
 │   ├── entity/                      # 요청별 검색어와 filters
 │   ├── exception/                   # 저장할 수 없는 결과와 Queue 계약 오류
 │   ├── messaging/                   # RabbitMQ 결과 Consumer와 이름
 │   ├── repository/                  # 검색 문맥 JPA repository
-│   └── service/                     # Queue 결과 검증과 DB 저장
+│   └── service/                     # 작업 발행, Queue 결과 검증과 DB 저장
 ├── product/
 │   ├── controller/                  # 상품 REST API
 │   ├── dto/                         # 상품 API 요청과 응답
@@ -91,6 +92,11 @@ Swagger UI에서 수동 적재는 다음 순서로 실행한다.
 4. `tmp/crawling-json-results/abcmart.json`의 전체 내용을 request body에 붙여 넣는다.
 5. `Execute`를 누르고 응답 코드 `200`과 저장 개수를 확인한다.
 6. `Products` 구역의 `GET /internal/v1/products`로 저장 결과를 조회한다.
+
+전체 Queue 흐름은 `Collection Tasks` 구역의
+`POST /internal/v1/collection-tasks`에서 시작한다. 요청이 `202`와 `QUEUED`를
+반환하면 RabbitMQ가 작업을 확인한 상태다. Go Worker가 실행 중이면 판매처 수집 후
+결과 Consumer가 PostgreSQL에 자동 저장한다.
 
 OpenAPI JSON 원문은 다음 주소에서 확인한다.
 

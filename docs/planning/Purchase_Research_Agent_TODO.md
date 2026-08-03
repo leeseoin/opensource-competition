@@ -134,7 +134,7 @@
 - [x] Docker Compose에 Redis 추가
 - [x] RabbitMQ·Redis health check와 영구 volume 구성
 - [x] `.env.example`에 RabbitMQ·Redis 접속 설정과 로컬 기본값 추가
-- [ ] 서비스가 환경 변수로 RabbitMQ/Redis 접속 정보를 주입받도록 구성 **(부분 구현: Go RabbitMQ URL 완료, Spring Boot와 Redis 접속 설정 미구현)**
+- [ ] 서비스가 환경 변수로 RabbitMQ/Redis 접속 정보를 주입받도록 구성 **(부분 구현: Go와 Spring Boot RabbitMQ 완료, Redis application 설정 미구현)**
 
 ### 4.2 작업 계약과 상태
 
@@ -150,6 +150,8 @@
 
 ### 4.3 수집 작업 생성
 
+- [x] 단일 판매처 검색 요청 API와 Spring Boot `CollectionTask` producer 구현
+- [x] persistent 메시지, priority와 RabbitMQ publisher confirm 적용
 - [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(부분 구현: page 필드 추가, 현재 page=1만 허용)**
 - [ ] `maxPages`, `maxProducts`, `requestBudget` 상한 추가
 - [ ] 여러 검색어와 판매처를 입력받는 batch collection use case 구현
@@ -183,7 +185,7 @@
 
 - [ ] RabbitMQ 없이 실행하는 fixture 기반 Go Processor/Java 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
-- [ ] RabbitMQ retry·ACK·Dead Letter Queue 통합 테스트
+- [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Go 작업 retry/DLQ와 Spring 결과 ACK/DLQ를 서비스별 검증)**
 - [ ] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
 - [ ] ABC마트 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test

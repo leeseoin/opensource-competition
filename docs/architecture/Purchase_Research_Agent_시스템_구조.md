@@ -221,20 +221,19 @@ com.purchasesearch.product_backend
 |---|---|---|
 | Go Collector | 부분 구현 | ABC마트/29CM 검색, Registry, RabbitMQ 작업 소비와 결과 발행 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
-| Product Backend | 부분 구현 | 환경설정, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 상품 조회 API |
+| Product Backend | 부분 구현 | 수집 작업 발행, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 상품 조회 API |
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 저장 검증 |
 | MCP Server | 계획 | 디렉토리와 책임 문서만 생성 |
 | Next.js Web | 초기화 | `frontend/purchase-web` 기본 scaffold |
-| RabbitMQ | 부분 구현 | Go Worker와 Spring 결과 소비/DLQ는 구현됐고 Spring 작업 발행은 미구현 |
+| RabbitMQ | 부분 구현 | Spring 작업 발행, Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |
 
 ## 9. 구현 순서
 
-1. 수집 작업 생성 API와 RabbitMQ producer를 구현한다.
-2. Product Backend부터 Go Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
-3. 수집 작업 상태를 PostgreSQL에 저장한다.
-4. MCP Server가 REST API를 호출하도록 연결한다.
-5. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다.
+1. Product Backend부터 Go Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
+2. 수집 작업 상태를 PostgreSQL에 저장한다.
+3. MCP Server가 REST API를 호출하도록 연결한다.
+4. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다.
 
 세부 체크박스와 완료 조건은 [구현 계획](../planning/Purchase_Research_Agent_TODO.md)과 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에서 관리한다.

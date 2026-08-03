@@ -108,7 +108,7 @@ public record CollectorResult(
 			List<@NotBlank @Size(max = 100) String> categories,
 			List<@NotBlank @Size(max = 100) String> sizes,
 			List<@NotBlank @Size(max = 100) String> colors,
-			boolean inStockOnly,
+			Boolean inStockOnly,
 			Map<@NotBlank @Size(max = 100) String, Object> attributes) {
 
 		/**
@@ -127,7 +127,7 @@ public record CollectorResult(
 			putNonEmpty(values, "categories", categories);
 			putNonEmpty(values, "sizes", sizes);
 			putNonEmpty(values, "colors", colors);
-			values.put("inStockOnly", inStockOnly);
+			values.put("inStockOnly", Boolean.TRUE.equals(inStockOnly));
 			if (attributes != null && !attributes.isEmpty()) {
 				values.put("attributes", attributes);
 			}

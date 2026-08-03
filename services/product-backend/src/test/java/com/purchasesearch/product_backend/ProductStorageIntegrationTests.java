@@ -101,6 +101,32 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * Go Collector가 false 기본 필드를 생략해 빈 filters 객체를 보내도 false로 정규화해 저장하는지 검증한다.
+	 *
+	 * @throws Exception fixture 읽기 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void storesCollectorResultWithEmptyFilters() throws Exception {
+		String collectorResultJson = Files.readString(abcmartFixturePath())
+				.replace("""
+						  "filters": {
+						    "sizes": ["270"],
+						    "inStockOnly": true
+						  },
+						""", "  \"filters\": {},\n");
+
+		mockMvc.perform(post("/internal/v1/collection-results")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(collectorResultJson))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.productCount").value(1));
+
+		assertThat(collectionSearchContextRepository.findById("backend-test-001"))
+				.hasValueSatisfying(context -> assertThat(context.getFilters())
+						.containsEntry("inStockOnly", false));
+	}
+
+	/**
 	 * 저장 대상이 아닌 차단 상태의 CollectorResult는 상품을 저장하지 않고 400 오류를
 	 * 반환하는지 검증한다.
 	 *

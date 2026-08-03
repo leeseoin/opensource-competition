@@ -167,7 +167,7 @@ products
 4. [완료] 도메인별 JPA entity와 repository
 5. [완료] `merchant + externalId` upsert와 snapshot 추가 transaction
 6. [완료] 저장된 최신 상품 검색 REST API
-7. [예정] RabbitMQ `CollectionTask` producer
+7. [완료] RabbitMQ `CollectionTask` producer와 publisher confirm
 8. [완료] `CollectionResult` consumer와 계약 위반 결과 DLQ 처리
 9. [완료] ABC마트와 29CM 실제 결과 수동 적재 및 PostgreSQL 행 검증
 10. [완료] 수집 요청 검색어와 적용 filters를 별도 검색 문맥에 저장하고 상품 조회에 연결
@@ -187,6 +187,6 @@ products
 
 ## 7. 다음 구현 순서
 
-다음 작업은 수집 요청 API와 RabbitMQ `CollectionTask` producer를 구현하는 것이다.
-그 뒤 Product Backend → RabbitMQ → Go Worker → RabbitMQ → Product Backend →
-PostgreSQL 전체 E2E를 실제 ABC마트와 29CM 요청으로 검증한다.
+다음 작업은 Product Backend → RabbitMQ → Go Worker → RabbitMQ → Product Backend →
+PostgreSQL 전체 E2E를 실제 ABC마트와 29CM 요청으로 검증하는 것이다. 그 뒤 작업 상태를
+PostgreSQL에 저장하고 Redis 중복 차단을 연결한다.
