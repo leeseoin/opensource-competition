@@ -51,6 +51,45 @@ func TestHealthRoute(t *testing.T) {
 	})
 }
 
+// TestSwaggerRoutes는 OpenAPI JSON, Swagger UI와 표준 경로 redirect를 검증한다.
+func TestSwaggerRoutes(t *testing.T) {
+	handler := testHandler(searcherFunc(func(context.Context, collector.SearchRequest) collector.SearchResult {
+		return collector.SearchResult{}
+	}))
+
+	openAPIRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(openAPIRecorder, httptest.NewRequest(stdhttp.MethodGet, "/openapi.json", nil))
+	if openAPIRecorder.Code != stdhttp.StatusOK || !strings.Contains(openAPIRecorder.Header().Get("Content-Type"), "application/json") {
+		t.Fatalf("OpenAPI response = %#v", openAPIRecorder.Result())
+	}
+	var document map[string]any
+	if err := json.NewDecoder(openAPIRecorder.Body).Decode(&document); err != nil {
+		t.Fatalf("OpenAPI decode error = %v", err)
+	}
+	paths, ok := document["paths"].(map[string]any)
+	if !ok || paths["/internal/v1/collect/search"] == nil {
+		t.Fatalf("OpenAPI paths = %#v", document["paths"])
+	}
+
+	redirectRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(redirectRecorder, httptest.NewRequest(stdhttp.MethodGet, "/swagger-ui", nil))
+	if redirectRecorder.Code != stdhttp.StatusTemporaryRedirect || redirectRecorder.Header().Get("Location") != "/swagger-ui/" {
+		t.Fatalf("Swagger redirect = %#v", redirectRecorder.Result())
+	}
+
+	uiRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(uiRecorder, httptest.NewRequest(stdhttp.MethodGet, "/swagger-ui/", nil))
+	if uiRecorder.Code != stdhttp.StatusOK || !strings.Contains(uiRecorder.Body.String(), "/swagger-ui/swagger-initializer.js") {
+		t.Fatalf("Swagger UI status = %d, body = %s", uiRecorder.Code, uiRecorder.Body.String())
+	}
+
+	initializerRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(initializerRecorder, httptest.NewRequest(stdhttp.MethodGet, "/swagger-ui/swagger-initializer.js", nil))
+	if initializerRecorder.Code != stdhttp.StatusOK || !strings.Contains(initializerRecorder.Body.String(), "SwaggerUIBundle") {
+		t.Fatalf("Swagger initializer status = %d, body = %s", initializerRecorder.Code, initializerRecorder.Body.String())
+	}
+}
+
 // TestSearchRoute는 검색 요청 기본값과 JSON 응답을 공개 route에서 검증한다.
 func TestSearchRoute(t *testing.T) {
 	searcher := searcherFunc(func(_ context.Context, request collector.SearchRequest) collector.SearchResult {

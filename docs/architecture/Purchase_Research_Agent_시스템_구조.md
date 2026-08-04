@@ -96,6 +96,9 @@ DB에서 조건 검색
 - `sourceUrl`, `collectedAt`, `collectorVersion` 포함
 
 Go Collector는 DB에 저장하거나 최종 추천을 판단하지 않는다.
+개발자는 Go Collector의 `/swagger-ui/`에서 판매처 Adapter와 교차 검증 응답을 직접
+확인할 수 있다. 이 화면은 내부 개발용이며 최종 사용자는 Spring Boot와 Next.js 경로만
+사용한다.
 
 ### Spring Boot Product Backend
 

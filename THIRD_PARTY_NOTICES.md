@@ -24,6 +24,7 @@
 | Go | 1.25 | Collector 개발 및 실행 | [go.dev](https://go.dev/) | BSD-3-Clause |
 | RabbitMQ AMQP 0-9-1 Go Client | 1.10.0 | RabbitMQ 작업과 결과 메시지 처리 | [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) | BSD-3-Clause |
 | Google Chrome 또는 Chromium | 시스템 설치 버전 | ABC마트 공개 검색 화면의 JavaScript rendering HTML 검증 | [Chromium](https://www.chromium.org/) / [Chrome 약관](https://www.google.com/chrome/terms/) | Chromium BSD-3-Clause 기반 / Chrome 배포물은 Google 약관 적용 |
+| Swagger UI | 5.32.6 | Go Collector OpenAPI 브라우저 테스트 화면 | [swagger-api/swagger-ui](https://github.com/swagger-api/swagger-ui/tree/v5.32.6) | Apache-2.0 |
 
 정확한 Go 모듈 해석 결과는 `services/collector/go.mod`와 `services/collector/go.sum`에서 확인한다.
 

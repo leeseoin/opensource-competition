@@ -1,0 +1,220 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Purchase Research Go Collector API",
+    "version": "0.1.0",
+    "description": "ABC마트와 29CM의 공개 상품 검색 및 JSON/HTML 교차 검증을 직접 확인하는 내부 개발 API입니다."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8090",
+      "description": "로컬 Go Collector"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Collector 실행 상태 확인"
+    },
+    {
+      "name": "Collection",
+      "description": "판매처 공개 상품 검색과 교차 검증"
+    }
+  ],
+  "paths": {
+    "/internal/v1/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Collector 상태 확인",
+        "responses": {
+          "200": {
+            "description": "Collector 실행 중",
+            "content": {
+              "application/json": {
+                "example": {"status": "ok"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/collect/search": {
+      "post": {
+        "tags": ["Collection"],
+        "summary": "판매처 상품 검색과 JSON/HTML 검증",
+        "description": "요청이 끝날 때까지 기다린 뒤 상품과 verificationSummary를 반환합니다. 29CM는 상품별 상세 페이지를 1초 간격으로 확인하므로 ABC마트보다 오래 걸릴 수 있습니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/SearchRequest"},
+              "examples": {
+                "abcmart": {
+                  "summary": "ABC마트 구두 3개",
+                  "value": {
+                    "requestId": "manual-abc-001",
+                    "merchant": "abcmart",
+                    "query": "구두",
+                    "requestedAt": "2026-08-05T01:00:00+09:00",
+                    "limit": 3
+                  }
+                },
+                "29cm": {
+                  "summary": "29CM 구두 3개",
+                  "value": {
+                    "requestId": "manual-29cm-001",
+                    "merchant": "29cm",
+                    "query": "구두",
+                    "requestedAt": "2026-08-05T01:00:00+09:00",
+                    "limit": 3
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수집과 검증 완료 또는 판매처 오류 결과",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SearchResult"}
+              }
+            }
+          },
+          "400": {
+            "description": "요청 JSON 또는 검색 조건 오류",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/APIError"}
+              }
+            }
+          },
+          "405": {
+            "description": "POST 외 method 사용",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/APIError"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requestId", "merchant", "query", "requestedAt"],
+        "properties": {
+          "requestId": {"type": "string", "example": "manual-abc-001"},
+          "merchant": {"type": "string", "enum": ["abcmart", "29cm"], "example": "abcmart"},
+          "query": {"type": "string", "example": "구두"},
+          "requestedAt": {"type": "string", "format": "date-time", "example": "2026-08-05T01:00:00+09:00"},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10, "example": 3},
+          "locale": {"type": "string", "default": "ko-KR"},
+          "currency": {"type": "string", "default": "KRW"},
+          "filters": {"$ref": "#/components/schemas/SearchFilters"}
+        }
+      },
+      "SearchFilters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "priceMin": {"type": "integer", "minimum": 0},
+          "priceMax": {"type": "integer", "minimum": 0},
+          "categories": {"type": "array", "items": {"type": "string"}},
+          "sizes": {"type": "array", "items": {"type": "string"}},
+          "colors": {"type": "array", "items": {"type": "string"}},
+          "inStockOnly": {"type": "boolean", "default": false},
+          "attributes": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "required": ["requestId", "operation", "status", "merchant", "products", "warnings", "errors"],
+        "properties": {
+          "requestId": {"type": "string"},
+          "operation": {"type": "string", "const": "search"},
+          "status": {"type": "string", "enum": ["success", "partial", "blocked", "unsupported", "temporarily_unavailable"]},
+          "merchant": {"type": "string"},
+          "query": {"type": "string"},
+          "totalCount": {"type": ["integer", "null"]},
+          "hasNext": {"type": ["boolean", "null"]},
+          "collectedAt": {"type": "string", "format": "date-time"},
+          "collectorVersion": {"type": "string"},
+          "verificationSummary": {"$ref": "#/components/schemas/VerificationSummary"},
+          "products": {"type": "array", "items": {"$ref": "#/components/schemas/Product"}},
+          "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/Issue"}},
+          "errors": {"type": "array", "items": {"$ref": "#/components/schemas/Issue"}}
+        }
+      },
+      "VerificationSummary": {
+        "type": "object",
+        "required": ["total", "matched", "mismatched", "failed", "missingInHtml", "missingInJson", "pending"],
+        "properties": {
+          "total": {"type": "integer", "minimum": 0, "example": 3},
+          "matched": {"type": "integer", "minimum": 0, "example": 3},
+          "mismatched": {"type": "integer", "minimum": 0, "example": 0},
+          "failed": {"type": "integer", "minimum": 0, "example": 0},
+          "missingInHtml": {"type": "integer", "minimum": 0, "example": 0},
+          "missingInJson": {"type": "integer", "minimum": 0, "example": 0},
+          "pending": {"type": "integer", "minimum": 0, "example": 0}
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "externalId": {"type": "string"},
+          "name": {"type": "string"},
+          "brand": {"type": ["string", "null"]},
+          "productUrl": {"type": "string", "format": "uri"},
+          "price": {"type": ["object", "null"], "additionalProperties": true},
+          "stockStatus": {"type": "string"},
+          "verification": {"$ref": "#/components/schemas/Verification"}
+        },
+        "additionalProperties": true
+      },
+      "Verification": {
+        "type": "object",
+        "required": ["status", "comparedFields", "differences", "jsonSourceUrl", "htmlSourceUrl", "verifiedAt"],
+        "properties": {
+          "status": {"type": "string", "enum": ["PENDING", "MATCHED", "MISMATCH", "MISSING_IN_HTML", "MISSING_IN_JSON", "FAILED"]},
+          "comparedFields": {"type": "array", "items": {"type": "string"}},
+          "differences": {"type": "array", "items": {"$ref": "#/components/schemas/VerificationDifference"}},
+          "jsonSourceUrl": {"type": "string", "format": "uri"},
+          "htmlSourceUrl": {"type": "string", "format": "uri"},
+          "verifiedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "VerificationDifference": {
+        "type": "object",
+        "required": ["field", "jsonValue", "htmlValue"],
+        "properties": {
+          "field": {"type": "string", "example": "price"},
+          "jsonValue": {"type": ["string", "null"], "example": "69000"},
+          "htmlValue": {"type": ["string", "null"], "example": "59000"}
+        }
+      },
+      "Issue": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"},
+          "sourceUrl": {"type": ["string", "null"], "format": "uri"}
+        }
+      },
+      "APIError": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    }
+  }
+}

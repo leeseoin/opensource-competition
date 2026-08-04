@@ -25,7 +25,7 @@ func (r staticRenderer) Render(context.Context, string) ([]byte, error) {
 func TestParseSearchHTML(t *testing.T) {
 	html := []byte(`<ul><li class="col-list-item prod-item" data-product-no="1010110882">
 <a class="prod-link" href="/product?prdtNo=1010110882"></a>
-<span class="prod-brand">호킨스</span><span class="prod-name">페니 로퍼</span>
+<span class="prod-brand">호킨스</span><span class="prod-name"><span class="badge-gender" aria-label="남성">남성</span>페니 로퍼</span>
 <span class="price-cost">69,000</span><span class="price-unit">원</span>
 <div class="img-wrap"><img src="https://image.a-rt.com/art/product/example-1010110882.jpg?shrink=590:590"></div>
 </li></ul>`)

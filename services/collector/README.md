@@ -14,6 +14,8 @@ Go 기반 판매처 데이터 수집 서비스다.
 - 응답 최상위 `verificationSummary`에서 일치/불일치/실패 개수 제공
 - `POST /internal/v1/collect/search`
 - `GET /internal/v1/health`
+- `GET /openapi.json`
+- `GET /swagger-ui/`
 - RabbitMQ `CollectionTask` 검색 작업 consumer와 `CollectionResult` publisher
 - 5초 retry Queue와 재시도 소진·계약 오류 Dead Letter Queue
 - 판매처 Registry와 지원하지 않는 판매처 상태 반환
@@ -42,6 +44,13 @@ Go 기반 판매처 데이터 수집 서비스다.
 - Spring Boot Product Backend의 Collector API 호출
 
 DB에 쓰거나 상품 추천을 수행하지 않는다.
+
+Collector 실행 후 브라우저에서 `http://localhost:8090/swagger-ui/`에 접속하면 curl 없이
+ABC마트와 29CM 예시 요청을 선택해 실행할 수 있다. 응답 최상위
+`verificationSummary`에서 전체 일치/불일치/실패 개수를 확인하고
+`products[].verification.differences`에서 상품별 차이를 확인한다. Swagger UI 정적
+자원은 공식 `swagger-ui-dist` 5.32.6 CDN을 사용하므로 화면을 처음 열 때 인터넷 연결이
+필요하다. API 명세 JSON은 인터넷 없이 `/openapi.json`에서 확인할 수 있다.
 
 ## 현재 구조
 

@@ -85,6 +85,7 @@
 - [x] configuration 잘못된 값·빈 주소 실패 테스트
 - [x] HTTP server와 route mux 생성
 - [x] health GET 정상 응답 구현
+- [x] Go Collector OpenAPI JSON과 Swagger UI route
 - [x] health 비허용 method 405 응답 구현
 - [x] health handler 정상·실패 테스트
 - [x] signal context와 graceful shutdown 구현
@@ -345,7 +346,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 기존 Go 한국어 주석 | 완료 | `services/collector/cmd/server/main.go`, `internal/config`, `internal/transport/http`의 기존 type/function/test | `gofmt`, `go test`, `go vet` 통과 |
 | 검색 공통 DTO와 검증 | 완료 | `services/collector/internal/collector/search.go:38` `Searcher`, `:43` `SearchRequest`, `:55` `ApplyDefaults`, `:68` `Validate` | `services/collector/tests/unit/collector/search_test.go`; test·race·vet 통과 |
 | ABC마트 실제 검색 adapter | 완료 | `services/collector/internal/merchants/abcmart/search.go:101` `Searcher.Search`, `:187` `normalizeItem`, `:224` `parseSizeStocks` | 저장 JSON 단위 테스트와 실제 검색 통과; `totalCount=1650`, `hasNext=true` 확인 |
-| `COLLECTOR-006` JSON/HTML 상품 교차 검증 | 구현 완료/검증 필요 | `services/collector/internal/collector/search.go:167` `SummarizeVerifications`; `internal/verification/product.go:37` `Compare`; `internal/merchants/abcmart/verification.go:24` `verifySearchPage`; `internal/merchants/twentyninecm/verification.go:24` `verifyProducts`; `internal/artifact/store.go:25` `SaveJSON`; `internal/render/chrome.go:41` `ChromeRenderer.Render` | Go 전체 test/vet와 판매처별 fixture 검증 통과 / 실제 ABC마트/29CM 소량 smoke test 남음 |
+| `COLLECTOR-006` JSON/HTML 상품 교차 검증 | 완료 | `services/collector/internal/collector/search.go:167` `SummarizeVerifications`; `internal/verification/product.go:37` `Compare`; `internal/merchants/abcmart/verification.go:24` `verifySearchPage`; `internal/merchants/twentyninecm/verification.go:24` `verifyProducts`; `internal/artifact/store.go:25` `SaveJSON`; `internal/render/chrome.go:41` `ChromeRenderer.Render` | Go 전체 test/vet와 판매처별 fixture 검증 통과 / ABC마트와 29CM 실제 상품 각 3개 모두 `MATCHED` 확인 |
 | ABC마트 요청 간격 제한 | 완료 | `services/collector/internal/merchants/abcmart/search.go:160` `Searcher.waitForTurn` | `services/collector/tests/unit/abcmart/search_test.go:90`; test·race 통과 |
 | ABC마트 검색 HTTP endpoint | 완료 | `services/collector/internal/transport/http/search.go:17` `searchHandler`, `:33` `ServeHTTP`, `internal/transport/http/server.go:47` route | `services/collector/tests/unit/http/server_test.go:55`; test·race·vet 통과 |
 | 판매처 Search Registry | 완료 | `services/collector/internal/collector/registry.go:8` `SearchRegistry`, `:34` `Search` | `services/collector/tests/unit/collector/registry_test.go:19`, `:35`; 테스트 통과 |
@@ -381,6 +382,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-07-31 | 검증 명령 | 첫 문서 검사에서 `rg`, `make`, `git`을 찾지 못함 | zsh의 특수 변수 `path`를 반복 변수로 사용해 해당 shell의 명령 검색 경로를 덮어씀 | 반복 변수명을 `doc_file`로 변경하고 전체 검증을 다시 실행 | 해결 |
 | 2026-07-31 | Product Backend 실행 | Flyway가 비어 있지 않은 `public` schema와 없는 `flyway_schema_history`를 감지해 서버 시작을 중단 | 이전 Python/Alembic 테이블과 데이터가 PostgreSQL Docker Volume에 남아 있음 | 로컬 schema를 정리한 뒤 Flyway V1 적용과 서버 실행 성공 / `flyway_schema_history` 존재, `alembic_version` 없음, Swagger 실제 적재 확인 | 해결 |
 | 2026-08-04 | Swagger 수동 테스트 | 다중 페이지 요청 예시에 선택 필드와 무작위 문자열이 모두 표시돼 손 테스트 입력이 어려움 | OpenAPI가 validation 제약만 보고 record 전체의 예시를 자동 생성함 | `/pages` 요청 본문에 ABC마트/구두/1페이지/3개의 명시적 최소 예시를 추가하고 OpenAPI JSON 통합 테스트로 고정 | 해결 |
+| 2026-08-05 | Go 로컬 실행 | `.env`에 Collector HTTP 설정이 없으면 `make collector-run`이 빈 환경변수를 전달해 서버 시작이 실패함 | Make가 이름만 export한 빈 변수를 Go 설정의 기본값보다 우선 적용함 | Make에서 빈 값도 기본값으로 치환하고 `.env.example`에 HTTP lifecycle 설정을 추가 | 해결 |
+| 2026-08-05 | ABC마트 HTML 검증 | 실제 상품 3개가 모두 상품명 차이로 `MISMATCH` 판정됨 | 상품명 요소 안의 성별 badge 중첩 `span`을 상품명으로 잘못 추출함 | 성별 badge를 건너뛴 뒤 실제 상품명 텍스트를 읽도록 parser와 fixture 테스트를 수정 / 재실행 결과 3개 모두 `MATCHED` | 해결 |
 | 2026-07-31 | Spring Boot 검증 | 최종 Gradle 재실행이 사용자 Gradle cache의 lock 파일 접근 권한 때문에 실패 | 격리 실행 환경이 workspace 밖의 `~/.gradle` lock 파일 쓰기를 제한 | 승인된 프로젝트 Gradle Wrapper 명령으로 재실행해 전체 테스트 통과 | 해결 |
 | 2026-08-02 | 29CM 저장 상품 검색 | DB에는 29CM 상품 3개가 있지만 `merchant=29cm&query=구두` 조회 결과가 0개 | Product Backend가 상품명과 브랜드만 검색했고 CollectorResult와 DB에 요청 검색어가 없었음 | CollectorResult에 query/filters를 추가하고 `collection_search_contexts`와 snapshot을 requestId로 연결 / 수집 검색어 조회 통합 테스트 통과 | 해결 |
 | 2026-07-16 | 판매처 정책 | 무신사 검색 구현 후 일반 Collector user-agent가 robots에서 전체 차단됨을 확인 | 무신사 `robots.txt`의 `User-agent: * / Disallow: /` 정책 | 무신사 구현을 제거하고 `User-agent: * / Allow: /`인 ABC마트로 전환 | 해결 |
@@ -1138,7 +1141,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 진행상황: Go Collector가 검색 JSON을 기본 상품값으로 유지하면서 ABC마트 렌더링
   검색 HTML 및 29CM 상세 Product JSON-LD를 선택 상품 전체에 대해 비교한다. 원본
   JSON/HTML과 상품별 상태/차이 필드를 남기며 Spring Boot가 이를 PostgreSQL에 저장한다.
-  자동 테스트는 완료했고 실제 판매처 소량 smoke test는 남아 있다.
+  자동 테스트와 실제 판매처별 상품 3개 소량 smoke test를 완료했다.
 - 구현 위치:
   - `services/collector/internal/collector/search.go:156` `VerificationSummary`: 최상위 검증 상태 개수
   - `services/collector/internal/collector/search.go:167` `SummarizeVerifications`: 상품별 결과 집계
@@ -1163,13 +1166,41 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   추가하지 않았다.
 - 남은 위험: 배포 환경에 Chrome 실행 파일이 없으면 ABC마트 검증은 `FAILED`로 기록된다.
   29CM는 최대 50개 검증에 약 50초 이상 걸릴 수 있다. 판매처 HTML/JSON-LD 변경에 대한
-  실제 소량 smoke test와 Collector Result JSON Schema 직접 검증이 남아 있다.
+  주기적인 감지와 Collector Result JSON Schema 직접 검증이 남아 있다.
 - 검증:
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 통과
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go vet ./...`: 통과
   - `cd services/product-backend && ./gradlew test`: 통과, PostgreSQL Testcontainers 포함
   - `make docs-check`: 통과
   - `uvx check-jsonschema`: 현재 실행 환경의 `uvx` panic으로 미검증
+  - 실제 ABC마트 `구두` 3개: `status=success`, `matched=3`, `mismatched=0`
+  - 실제 29CM `구두` 3개: `status=success`, `matched=3`, `mismatched=0`
+  - `services/collector/output/raw_json/{merchant}`와 `raw_html/{merchant}`: 두 판매처 원본 생성 확인
+
+### 2026-08-05 Go Collector Swagger UI
+
+- 진행상황: Go Collector의 health와 실제 검색 API를 브라우저에서 이해하고 호출할 수 있도록
+  OpenAPI 3.1 문서와 Swagger UI를 추가했다. ABC마트와 29CM의 최소 요청 예시 및 검증
+  결과 Schema를 같은 문서에 포함했다.
+- 구현 위치:
+  - `services/collector/internal/transport/http/swagger.go:10` `swaggerAssets`: OpenAPI와 UI HTML 내장
+  - `services/collector/internal/transport/http/swagger.go:15` `openAPIHandler`: OpenAPI JSON 제공
+  - `services/collector/internal/transport/http/swagger.go:40` `swaggerUIHandler`: Swagger UI 제공
+  - `services/collector/internal/transport/http/openapi.json:1` `Purchase Research Go Collector API`: API 계약과 실행 예시
+  - `services/collector/tests/unit/http/server_test.go:142` `TestSwaggerRoutes`: 문서와 UI route 검증
+- 발생 문제: 루트 Make 실행 시 빈 Collector 환경변수가 Go 기본값을 덮어 서버가 시작되지
+  않았고, Swagger UI를 `HEAD`로 확인하면 의도한 method 제한에 따라 405가 반환됐다.
+- 원인: Make의 빈 export 처리와 Swagger handler가 문서 조회를 `GET`으로만 제한한 동작을
+  혼동했다.
+- 해결: Make에서 빈 값까지 기본값으로 치환하고 `.env.example`에 설정 예시를 추가했다.
+  Swagger UI 실제 검증은 지원하는 `GET` 요청으로 수행했다.
+- 남은 위험: Swagger UI 정적 자원은 공식 CDN을 사용하므로 최초 화면 로딩에 인터넷 연결이
+  필요하다. 운영 배포 전에는 인증 적용 또는 route 비활성화가 필요하다.
+- 검증:
+  - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 통과
+  - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go vet ./...`: 통과
+  - `GET /openapi.json`: OpenAPI 3.1 문서 반환 확인
+  - `GET /swagger-ui/`: HTTP 200과 `text/html` 확인
 
 ## 작업 기록 템플릿
 
@@ -1197,4 +1228,4 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
 - 여러 검색어 batch와 request budget
-- `COLLECTOR-006` ABC마트/29CM 실제 소량 smoke test
+- Go Collector Swagger UI의 운영 환경 인증 또는 비활성화

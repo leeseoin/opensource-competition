@@ -63,6 +63,7 @@
 - [x] Collector configuration 구성과 단위 테스트
 - [x] internal HTTP router와 health endpoint
 - [x] HTTP server lifecycle과 graceful shutdown 테스트
+- [x] Go Collector OpenAPI JSON과 Swagger UI
 - [x] 기존 Go type/function의 한국어 주석 규칙 정비
 - [ ] 도메인 allowlist와 URL 검증
 - [ ] 공통 HTTP client, timeout, retry, rate limiter **(부분 구현: ABC마트 timeout·응답 제한·요청 간격 적용)**

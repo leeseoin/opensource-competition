@@ -18,6 +18,7 @@ var (
 	productItemPattern = regexp.MustCompile(`(?is)<li\b[^>]*>.*?</li>`)
 	tagPattern         = regexp.MustCompile(`(?is)<[^>]+>`)
 	discountPattern    = regexp.MustCompile(`\d+`)
+	productNamePattern = regexp.MustCompile(`(?is)<span\b[^>]*class=["'][^"']*\bprod-name\b[^"']*["'][^>]*>\s*(?:<span\b[^>]*class=["'][^"']*\bbadge-gender\b[^"']*["'][^>]*>.*?</span>)?\s*([^<]*)</span>`)
 )
 
 // verifySearchPage는 검색 JSON 상품 전체를 JavaScript rendering HTML과 ID 기준으로 대조한다.
@@ -132,13 +133,11 @@ func hasClassToken(classNames, target string) bool {
 
 // productNameFromHTML은 상품명 요소의 성별 badge를 제거하고 실제 상품명만 반환한다.
 func productNameFromHTML(body string) string {
-	pattern := regexp.MustCompile(`(?is)<[^>]*class=["'][^"']*\bprod-name\b[^"']*["'][^>]*>(.*?)</[^>]+>`)
-	match := pattern.FindStringSubmatch(body)
+	match := productNamePattern.FindStringSubmatch(body)
 	if len(match) != 2 {
 		return ""
 	}
-	badgePattern := regexp.MustCompile(`(?is)<[^>]*class=["'][^"']*\bbadge-gender\b[^"']*["'][^>]*>.*?</[^>]+>`)
-	return cleanText(badgePattern.ReplaceAllString(match[1], " "))
+	return cleanText(match[1])
 }
 
 // parseVerificationCandidates는 ABC마트 검색 JSON을 상품 ID별 비교 값으로 변환한다.

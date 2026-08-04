@@ -45,6 +45,9 @@ func NewServerWithSearcher(
 	mux := stdhttp.NewServeMux()
 	mux.HandleFunc("/internal/v1/health", healthHandler)
 	mux.Handle("/internal/v1/collect/search", &searchHandler{searcher: searcher})
+	mux.HandleFunc("/openapi.json", openAPIHandler)
+	mux.HandleFunc("/swagger-ui", swaggerRedirectHandler)
+	mux.HandleFunc("/swagger-ui/", swaggerUIHandler)
 
 	return &Server{
 		server: &stdhttp.Server{
