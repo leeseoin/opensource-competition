@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from ..base import SiteCrawler
+from .detail_fetcher import Cm29DetailFetcher
 from .verification import verify_products
 
 _LISTING_URL = "https://display-bff-api.29cm.co.kr/api/v1/listing/items?colorchipVariant=treatment"
@@ -113,6 +114,13 @@ class Cm29Crawler(SiteCrawler):
     ) -> tuple[list[dict], list[str]]:
         """29CM 카테고리 코드 매핑은 아직 조사하지 않았다 — 검색(crawl)만 지원한다."""
         return [], ["29CM 카테고리 크롤링은 아직 미구현 (키워드 검색만 지원)"]
+
+    async def attach_details(
+        self, products: list[dict], limit: int, review_limit: int = 0
+    ) -> tuple[list[dict], list[str]]:
+        """상위 limit개 상품에 상세 페이지 데이터(평점·리뷰수·다중이미지·카테고리·옵션·리뷰)를 추가.
+        review_limit이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다."""
+        return await Cm29DetailFetcher().attach(products, limit=limit, review_limit=review_limit)
 
     def _dedup(self, items: list[dict], seen: set[str]) -> list[dict]:
         """이미 수집한 29CM 상품 ID를 제외하고 새 상품만 반환한다."""
