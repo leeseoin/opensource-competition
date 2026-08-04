@@ -76,8 +76,8 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `QUEUE-001` | 검색 작업 계약과 Go Worker | 부분 구현 | P0 | RabbitMQ topology, 작업/결과 계약, Go 소비, retry와 DLQ | fixture 작업의 성공/실패/재시도/ACK/DLQ 통합 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | ACK/DLQ 통합 테스트와 복구 검증 |
-| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 완료 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Go 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | 29CM 회귀 검증과 작업 상태는 별도 기능으로 유지 |
-| `QUEUE-003` | 여러 검색어와 페이지 수집 | 부분 구현 | P1 | batch, pagination, request budget, priority와 Worker 수 제한 | 여러 판매처 작업이 상한 안에서 분배되고 결과 수량과 실패가 보고됨 | 데이터 수집과 DB 적재 설계 / 현재 DB 저장 흐름 | 여러 검색어 batch, 작업 예산, 작업 상태와 실제 판매처 E2E |
+| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 완료 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Go 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | ABC마트/29CM 실제 E2E와 job 상태 조회 완료 / 결과 중복 방지는 별도 기능으로 유지 |
+| `QUEUE-003` | 여러 검색어와 페이지 수집 | 부분 구현 | P1 | batch, pagination, request budget, priority와 Worker 수 제한 | 여러 판매처 작업이 상한 안에서 분배되고 결과 수량과 실패가 보고됨 | 데이터 수집과 DB 적재 설계 / 현재 DB 저장 흐름 | 여러 검색어 batch와 작업 예산 구현 |
 | `REDIS-001` | 속도 제한/중복 방지/짧은 상태 | 부분 구현 | P1 | 판매처 전체 limiter, 중복 key, 진행 상태와 cache | 여러 Worker에서도 요청 간격과 중복 차단이 일관되고 만료 정책 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | application adapter와 key 정책 구현 |
 
 ### Product Backend와 PostgreSQL
@@ -85,7 +85,7 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 요청별 검색어/filters, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가되고 수집 검색어로 조회됨 | 시스템 구조 / 현재 DB 저장 흐름 | 동시 최초 저장 충돌 처리 후 Queue 결과 PostgreSQL 적재 E2E |
-| `BACKEND-002` | 수집 작업 영구 상태 관리 | 계획 | P0 | collection job/task, 상태 전이, 성공/실패 수량과 소요시간 | 장애 후에도 PostgreSQL 기준 최종 상태를 복구하고 Redis 상태와 일치함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 상태 전이와 Flyway schema 작성 |
+| `BACKEND-002` | 수집 작업 영구 상태 관리 | 부분 구현 | P0 | collection job/task, 상태 전이, 성공/실패 수량과 소요시간 | 장애 후에도 PostgreSQL 기준 최종 상태를 복구하고 Redis 상태와 일치함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 실제 RUNNING event, Redis 상태 일치와 장애 복구 검증 |
 
 ### MCP와 AI 실행
 

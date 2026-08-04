@@ -1,7 +1,7 @@
 # 현재 수집 데이터와 DB 저장 흐름
 
 작성일: 2026-07-26
-최종 수정일: 2026-08-04
+최종 수정일: 2026-08-05
 대상: 프로젝트를 처음 보는 개발자
 
 ## 1. 먼저 알아야 할 현재 상태
@@ -11,8 +11,8 @@ Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색
 구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, RabbitMQ 결과
 Consumer가 같은 저장 서비스를 호출하는 자동 저장 경로도 통합 테스트를 완료했다.
 Spring Boot의 단일 페이지 및 여러 페이지 수집 작업 발행 API도 구현돼 현재 작업
-생성부터 결과 저장까지의 코드 경로가 연결됐다. ABC마트 실제 Queue E2E는 검증했고,
-29CM 실제 Queue E2E와 작업 상태 영구 저장은 남아 있다.
+생성부터 결과 저장 및 job 상태 조회까지 코드 경로가 연결됐다. ABC마트와 29CM 실제
+Queue E2E에서 각각 상품 3개 저장 및 JSON/HTML `MATCHED` 3개를 확인했다.
 
 검색 상품은 JSON을 기본값으로 사용한다. `COLLECTOR-006`은 같은 상품을 화면에서
 확인 가능한 HTML 또는 상세 페이지의 JSON-LD와 다시 비교한다. 상품별 검증 상태와
@@ -28,11 +28,11 @@ RabbitMQ CollectionResult → Spring Boot Consumer → PostgreSQL 자동 저장
 Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
 연속 페이지 요청 → 페이지별 Queue 작업 → 결과별 PostgreSQL 누적 저장
 JSON 기본값 ↔ HTML/JSON-LD 표시값 비교 → 상품별 검증 결과 저장
+jobId 조회 → 페이지별 상태/상품 수/verificationSummary 확인
 
 현재 미구현:
-수집 작업의 PostgreSQL 상태 저장과 Redis 진행 상태
+Redis 짧은 진행 상태와 중복 등록 차단
 여러 검색어를 한 번에 받는 batch 작업
-29CM 실제 전체 Queue E2E 검증
 ```
 
 Product Backend와 Go Worker를 함께 실행하면 Swagger에서 만든 작업 결과가 자동으로
@@ -135,9 +135,9 @@ PostgreSQL
         └── product_verifications
 ```
 
-DTO 검증, JPA transaction, RabbitMQ 단일/다중 페이지 작업 발행, 결과 Consumer와
-PostgreSQL 저장은 Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 실제 판매처
-전체 Queue 흐름과 작업 상태를 추가하는 것이다.
+DTO 검증, JPA transaction, RabbitMQ 단일/다중 페이지 작업 발행, 결과 Consumer,
+PostgreSQL 저장과 job 상태 조회는 Testcontainers 통합 테스트까지 구현됐다. 실제
+ABC마트와 29CM의 소량 Queue 흐름도 검증했다.
 
 ### 여러 페이지는 어떻게 처리하는가
 
@@ -157,9 +157,10 @@ RabbitMQ 작업 3개를 만든다.
 - 각 결과의 `requestId`는 해당 `taskId`와 같아야 한다.
 - Spring Boot는 결과 한 건마다 별도 transaction으로 DB에 저장한다.
 
-페이지 하나가 실패하면 이미 성공한 다른 페이지의 DB 데이터는 유지된다. 현재는 작업
-상태 테이블이 없어서 `jobId`별 성공 페이지와 실패 페이지를 API로 조회할 수 없다. 이는
-`BACKEND-002`에서 구현할 범위다.
+페이지 하나가 실패하면 이미 성공한 다른 페이지의 DB 데이터는 유지된다.
+`GET /internal/v1/collection-jobs/{jobId}`에서 성공/부분 성공/실패 페이지, 처리 상품 수와
+검증 집계를 확인할 수 있다. Worker 실행 시작 event와 Redis의 짧은 진행 상태는 후속
+범위다.
 
 ### Swagger에서 여러 페이지를 요청하는 예시
 
@@ -293,6 +294,6 @@ products
 
 ## 7. 다음 구현 순서
 
-ABC마트는 Product Backend와 Go Worker를 직접 실행한 환경에서 구두 2페이지와 상품
-6개가 PostgreSQL에 저장되는 흐름을 검증했다. 다음 작업은 같은 방식으로 29CM을
-검증한 뒤 작업 상태를 PostgreSQL에 저장하고 Redis 중복 차단을 연결하는 것이다.
+ABC마트는 구두 2페이지와 상품 6개 적재를 검증했고, ABC마트와 29CM 각각 구두 1페이지
+상품 3개에 대해서는 job 완료 상태와 `matched=3`까지 검증했다. 다음 작업은 Redis 중복
+차단과 짧은 진행 상태를 연결하는 것이다.

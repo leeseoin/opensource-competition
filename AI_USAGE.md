@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-04
+최종 갱신일: 2026-08-05
 
 ## 이 문서를 공개하는 이유
 
@@ -64,3 +64,4 @@
 | 2026-08-03 | Codex를 사용해 Go ABC마트/29CM Adapter에 대량 수집 전용 `SearchPage` 경계를 추가 | 기존 Search와 RabbitMQ Queue v1의 page=1 계약을 유지하고 저장 fixture 기반 전체 Go 테스트로 page=2 요청과 회귀를 검증 |
 | 2026-08-03 | Codex를 사용해 Go `v1-unified` 비교 Adapter/validator와 최대 10,000개 대량 수집 실행기를 구현 | 전달받은 20건 예제, 운영 상품 변환, 중복 제거/checkpoint 재개/429 중단/gzip NDJSON 저장을 단위 테스트와 전체 Go 테스트로 검증 |
 | 2026-08-04 | Codex를 사용해 Python/Go 저장 fixture parser benchmark, 단계별 최대 실수집과 성능 비교 보고서를 구현 | 사용자가 정한 판매처/검색어/안전 상한을 적용하고 Go 전체/race/vet, Python 10개 테스트, 최대 결과 38,834개 Schema 검증 및 실제 오류/429 0을 확인 |
+| 2026-08-05 | Codex를 사용해 Go Collector Swagger UI와 Spring Boot 수집 job 영구 상태 및 조회 API를 구현 | Go 전체 test/vet, Java PostgreSQL/RabbitMQ Testcontainers, Flyway V4 실제 적용 및 ABC마트/29CM 각각 상품 3개 Queue E2E에서 `COMPLETED`와 `matched=3`을 확인 |

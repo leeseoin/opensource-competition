@@ -499,8 +499,8 @@ Spring Boot Product Backend
 | 테이블 | 저장 내용 |
 |---|---|
 | `research_sessions` | 사용자의 질문과 정리된 구매 조건 |
-| `collection_jobs` | 수집 작업 상태, 진행 개수, 실패 개수(planned) |
-| `collection_tasks` | 검색 페이지·상품 상세·리뷰·재검증 단위 작업(planned) |
+| `collection_jobs` | 수집 job 상태, 전체 작업 수와 페이지 범위 |
+| `collection_tasks` | 검색 페이지별 상태, 상품/검증 개수, 소요시간과 오류 |
 | `products` | 판매처와 무관하게 정리한 상품 기본정보 |
 | `merchant_products` | 판매처 상품번호, 상품 URL, 판매처 이름 |
 | `offer_snapshots` | 특정 시각의 가격·배송·재고 상태 |

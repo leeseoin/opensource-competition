@@ -16,7 +16,7 @@ Spring Boot 기반 상품 데이터 서버다.
 - RabbitMQ `CollectionTask` 검색 작업 발행 API와 publisher confirm 구현
 - 저장된 최신 상품 검색 API 구현
 - OpenAPI JSON과 Swagger UI 기반 내부 API 수동 검증
-- 수집 작업 상태의 PostgreSQL 저장은 아직 구현 전
+- `collection_jobs`/`collection_tasks` PostgreSQL 상태 저장과 job 결과 조회 API 구현
 
 ## Package 구조
 
@@ -96,7 +96,10 @@ Swagger UI에서 수동 적재는 다음 순서로 실행한다.
 전체 Queue 흐름은 `Collection Tasks` 구역의
 `POST /internal/v1/collection-tasks`에서 시작한다. 요청이 `202`와 `QUEUED`를
 반환하면 RabbitMQ가 작업을 확인한 상태다. Go Worker가 실행 중이면 판매처 수집 후
-결과 Consumer가 PostgreSQL에 자동 저장한다.
+결과 Consumer가 PostgreSQL에 자동 저장한다. 응답의 `jobId`를 복사한 뒤
+`Collection Jobs` 구역의 `GET /internal/v1/collection-jobs/{jobId}`를 실행하면
+`QUEUED`/`PROCESSING`/`COMPLETED`/`PARTIAL`/`FAILED` 상태, 페이지별 결과,
+저장 상품 수와 `verificationSummary`를 확인할 수 있다.
 
 OpenAPI JSON 원문은 다음 주소에서 확인한다.
 

@@ -237,9 +237,9 @@ com.purchasesearch.product_backend
 
 ## 9. 구현 순서
 
-1. Product Backend부터 Go Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
-2. 수집 작업 상태를 PostgreSQL에 저장한다.
-3. MCP Server가 REST API를 호출하도록 연결한다.
-4. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다.
+1. Redis로 판매처별 요청 간격과 중복 작업을 조정한다.
+2. MCP Server가 Product Backend REST API를 호출하도록 연결한다.
+3. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다.
+4. 장애 복구와 실제 `RUNNING` 상태 event를 보강한다.
 
 세부 체크박스와 완료 조건은 [구현 계획](../planning/Purchase_Research_Agent_TODO.md)과 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에서 관리한다.

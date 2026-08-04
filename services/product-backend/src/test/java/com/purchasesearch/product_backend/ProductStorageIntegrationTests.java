@@ -303,6 +303,8 @@ class ProductStorageIntegrationTests {
 						.exists())
 				.andExpect(jsonPath("$.paths['/internal/v1/products'].get")
 						.exists())
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-jobs/{jobId}'].get")
+						.exists())
 				.andExpect(jsonPath("$.paths['/internal/v1/collection-tasks/pages'].post"
 						+ ".requestBody.content['application/json'].examples"
 						+ "['ABC마트 1페이지 소량 수집'].value.merchant")

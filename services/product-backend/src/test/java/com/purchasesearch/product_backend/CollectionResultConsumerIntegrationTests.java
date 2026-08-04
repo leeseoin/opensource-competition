@@ -21,9 +21,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
+import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
+import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionResultMessageException;
 import com.purchasesearch.product_backend.collection.messaging.CollectionQueueNames;
+import com.purchasesearch.product_backend.collection.repository.CollectionJobRepository;
 import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
+import com.purchasesearch.product_backend.collection.repository.CollectionTaskRepository;
+import com.purchasesearch.product_backend.collection.service.CollectionJobService;
 import com.purchasesearch.product_backend.collection.service.CollectionResultMessageService;
 import com.purchasesearch.product_backend.collection.service.CollectionResultMessageService.ProcessingOutcome;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
@@ -31,6 +36,8 @@ import com.purchasesearch.product_backend.product.repository.MerchantProductRepo
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
 import com.purchasesearch.product_backend.product.repository.ProductRepository;
+
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * CollectionResultConsumerIntegrationTests는 실제 RabbitMQ와 PostgreSQL에서 결과 ACK, 저장과 DLQ 흐름을 검증한다.
@@ -47,6 +54,18 @@ class CollectionResultConsumerIntegrationTests {
 
 	@Autowired
 	private CollectionResultMessageService messageService;
+
+	@Autowired
+	private CollectionJobService collectionJobService;
+
+	@Autowired
+	private CollectionTaskRepository collectionTaskRepository;
+
+	@Autowired
+	private CollectionJobRepository collectionJobRepository;
+
+	@Autowired
+	private ObjectMapper objectMapper;
 
 	@Autowired
 	private CollectionSearchContextRepository collectionSearchContextRepository;
@@ -116,6 +135,63 @@ class CollectionResultConsumerIntegrationTests {
 	}
 
 	/**
+	 * 추적 중인 성공 결과가 job 완료 상태, 상품 수와 verificationSummary에 반영되는지 검증한다.
+	 *
+	 * @throws Exception Queue 계약 fixture를 읽거나 결과를 처리하지 못한 경우
+	 */
+	@Test
+	void updatesTrackedJobWithStoredProductAndVerificationCounts() throws Exception {
+		CollectionTaskMessage task = trackedTask("backend-test-001", "queue-test-job-001");
+		collectionJobService.register(java.util.List.of(task));
+
+		ProcessingOutcome outcome = messageService.process(
+				successfulEnvelope(normalizedCollectorResult(), task.taskId())
+						.getBytes(StandardCharsets.UTF_8));
+		CollectionJobResponse job = collectionJobService.get(task.jobId());
+
+		assertThat(outcome).isEqualTo(ProcessingOutcome.STORED);
+		assertThat(job.status()).isEqualTo("COMPLETED");
+		assertThat(job.queuedTaskCount()).isZero();
+		assertThat(job.succeededTaskCount()).isEqualTo(1);
+		assertThat(job.productCount()).isEqualTo(1);
+		assertThat(job.verificationSummary().total()).isEqualTo(1);
+		assertThat(job.verificationSummary().matched()).isEqualTo(1);
+		assertThat(job.tasks()).singleElement().satisfies(taskStatus -> {
+			assertThat(taskStatus.status()).isEqualTo("SUCCESS");
+			assertThat(taskStatus.productCount()).isEqualTo(1);
+		});
+	}
+
+	/**
+	 * 여러 페이지 중 한 작업의 발행이 실패하고 다른 작업이 성공하면 job이 PARTIAL로 종료되는지 검증한다.
+	 *
+	 * @throws Exception Queue 계약 fixture를 읽거나 성공 결과를 처리하지 못한 경우
+	 */
+	@Test
+	void completesJobAsPartialWhenOnePageCouldNotBePublished() throws Exception {
+		String jobId = "queue-test-job-partial";
+		CollectionTaskMessage first = trackedTask("backend-test-001", jobId, 1);
+		CollectionTaskMessage second = trackedTask("backend-test-002", jobId, 2);
+		collectionJobService.register(java.util.List.of(first, second));
+		collectionJobService.markPublishFailed(
+				java.util.List.of(second.taskId()),
+				"RabbitMQ 확인 실패");
+
+		assertThat(collectionJobService.get(jobId).status()).isEqualTo("PROCESSING");
+		messageService.process(
+				successfulEnvelope(normalizedCollectorResult(), first.taskId(), jobId)
+						.getBytes(StandardCharsets.UTF_8));
+		CollectionJobResponse job = collectionJobService.get(jobId);
+
+		assertThat(job.status()).isEqualTo("PARTIAL");
+		assertThat(job.succeededTaskCount()).isEqualTo(1);
+		assertThat(job.failedTaskCount()).isEqualTo(1);
+		assertThat(job.productCount()).isEqualTo(1);
+		assertThat(job.tasks().get(1).status()).isEqualTo("PUBLISH_FAILED");
+		assertThat(job.tasks().get(1).error().code()).isEqualTo("RABBITMQ_PUBLISH_FAILED");
+	}
+
+	/**
 	 * 같은 검색어의 서로 다른 페이지 결과가 각각의 요청 문맥과 상품 snapshot으로 누적 저장되는지 검증한다.
 	 *
 	 * @throws Exception fixture 읽기 또는 결과 JSON 처리에 실패한 경우
@@ -168,12 +244,18 @@ class CollectionResultConsumerIntegrationTests {
 	 */
 	@Test
 	void acknowledgesValidFailedResultWithoutSavingProducts() throws Exception {
+		CollectionTaskMessage task = trackedTask("task-20260726-001", "job-20260726-001");
+		collectionJobService.register(java.util.List.of(task));
 		byte[] failedEnvelope = Files.readAllBytes(collectionFailedResultPath());
 
 		ProcessingOutcome outcome = messageService.process(failedEnvelope);
+		CollectionJobResponse job = collectionJobService.get(task.jobId());
 
 		assertThat(outcome).isEqualTo(ProcessingOutcome.TASK_FAILED);
 		assertThat(offerSnapshotRepository.count()).isZero();
+		assertThat(job.status()).isEqualTo("FAILED");
+		assertThat(job.failedTaskCount()).isEqualTo(1);
+		assertThat(job.tasks().getFirst().error().code()).isEqualTo("COLLECTOR_TIMEOUT");
 	}
 
 	/**
@@ -191,6 +273,27 @@ class CollectionResultConsumerIntegrationTests {
 				.isInstanceOf(InvalidCollectionResultMessageException.class)
 				.hasMessageContaining("taskId");
 		assertThat(offerSnapshotRepository.count()).isZero();
+	}
+
+	/**
+	 * 등록된 taskId가 같아도 결과의 jobId가 다르면 상품과 상태를 함께 저장하지 않는지 검증한다.
+	 *
+	 * @throws Exception CollectorResult fixture 읽기 또는 작업 등록에 실패한 경우
+	 */
+	@Test
+	void rejectsResultWithMismatchedTrackedJobIdentifier() throws Exception {
+		CollectionTaskMessage task = trackedTask("backend-test-001", "queue-test-job-001");
+		collectionJobService.register(java.util.List.of(task));
+		String envelope = successfulEnvelope(
+				normalizedCollectorResult(),
+				task.taskId(),
+				"different-job");
+
+		assertThatThrownBy(() -> messageService.process(envelope.getBytes(StandardCharsets.UTF_8)))
+				.isInstanceOf(InvalidCollectionResultMessageException.class)
+				.hasMessageContaining("jobId");
+		assertThat(offerSnapshotRepository.count()).isZero();
+		assertThat(collectionJobService.get(task.jobId()).status()).isEqualTo("QUEUED");
 	}
 
 	/**
@@ -227,11 +330,23 @@ class CollectionResultConsumerIntegrationTests {
 	 * @return RabbitMQ에 발행하거나 직접 처리할 성공 결과 JSON
 	 */
 	private String successfulEnvelope(String collectorResult, String taskId) {
+		return successfulEnvelope(collectorResult, taskId, "queue-test-job-001");
+	}
+
+	/**
+	 * 지정한 taskId와 jobId에 일치하는 성공 Queue 봉투를 생성한다.
+	 *
+	 * @param collectorResult 공통 CollectorResult JSON
+	 * @param taskId Queue 작업과 Collector requestId에 함께 사용할 식별자
+	 * @param jobId 추적 중인 상위 job 식별자
+	 * @return RabbitMQ에 발행하거나 직접 처리할 성공 결과 JSON
+	 */
+	private String successfulEnvelope(String collectorResult, String taskId, String jobId) {
 		return """
 				{
 				  "schemaVersion":"1",
 				  "taskId":"%s",
-				  "jobId":"queue-test-job-001",
+				  "jobId":"%s",
 				  "status":"success",
 				  "startedAt":"2026-08-02T16:00:00+09:00",
 				  "completedAt":"2026-08-02T16:00:01+09:00",
@@ -239,7 +354,7 @@ class CollectionResultConsumerIntegrationTests {
 				  "collectorResult":%s,
 				  "error":null
 				}
-				""".formatted(taskId, collectorResult);
+				""".formatted(taskId, jobId, collectorResult);
 	}
 
 	/**
@@ -256,6 +371,35 @@ class CollectionResultConsumerIntegrationTests {
 					    "inStockOnly": true
 					  },
 					""", "  \"filters\": {},\n");
+	}
+
+	/**
+	 * Queue 작업 fixture를 지정한 taskId와 jobId의 추적 작업으로 변환한다.
+	 *
+	 * @param taskId 결과 봉투와 맞출 작업 식별자
+	 * @param jobId 상위 job 식별자
+	 * @return 작업 상태 DB에 등록할 Queue 메시지
+	 * @throws Exception fixture 읽기 또는 JSON 해석에 실패한 경우
+	 */
+	private CollectionTaskMessage trackedTask(String taskId, String jobId) throws Exception {
+		return trackedTask(taskId, jobId, 1);
+	}
+
+	/**
+	 * Queue 작업 fixture를 지정한 식별자와 페이지의 추적 작업으로 변환한다.
+	 *
+	 * @param taskId 결과 봉투와 맞출 작업 식별자
+	 * @param jobId 상위 job 식별자
+	 * @param page 검색 페이지
+	 * @return 작업 상태 DB에 등록할 Queue 메시지
+	 * @throws Exception fixture 읽기 또는 JSON 해석에 실패한 경우
+	 */
+	private CollectionTaskMessage trackedTask(String taskId, String jobId, int page) throws Exception {
+		String json = Files.readString(collectionTaskPath())
+				.replace("task-20260726-001", taskId)
+				.replace("job-20260726-001", jobId)
+				.replace("\"page\": 1", "\"page\": " + page);
+		return objectMapper.readValue(json, CollectionTaskMessage.class);
 	}
 
 	/**
@@ -294,6 +438,8 @@ class CollectionResultConsumerIntegrationTests {
 		merchantProductRepository.deleteAllInBatch();
 		productRepository.deleteAllInBatch();
 		collectionSearchContextRepository.deleteAllInBatch();
+		collectionTaskRepository.deleteAllInBatch();
+		collectionJobRepository.deleteAllInBatch();
 	}
 
 	/**
@@ -312,6 +458,15 @@ class CollectionResultConsumerIntegrationTests {
 	 */
 	private Path collectionFailedResultPath() {
 		return repositoryPath("contracts", "collection", "v1", "examples", "collection-result.failed.json");
+	}
+
+	/**
+	 * 성공 및 실패 job 상태 테스트에 사용할 CollectionTask fixture 경로를 반환한다.
+	 *
+	 * @return 검색 작업 계약 예제 경로
+	 */
+	private Path collectionTaskPath() {
+		return repositoryPath("contracts", "collection", "v1", "examples", "collection-task.search.json");
 	}
 
 	/**

@@ -1,6 +1,7 @@
 package com.purchasesearch.product_backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,9 +21,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
+import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.messaging.CollectionQueueNames;
+import com.purchasesearch.product_backend.collection.repository.CollectionJobRepository;
+import com.purchasesearch.product_backend.collection.repository.CollectionTaskRepository;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,12 +51,19 @@ class CollectionTaskPublisherIntegrationTests {
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	@Autowired
+	private CollectionTaskRepository collectionTaskRepository;
+
+	@Autowired
+	private CollectionJobRepository collectionJobRepository;
+
 	/**
 	 * 각 테스트 전에 검색 Queue와 DLQ에 남은 메시지를 제거한다.
 	 */
 	@BeforeEach
 	void prepareQueues() {
 		purgeQueues();
+		deleteTrackedJobs();
 	}
 
 	/**
@@ -60,6 +72,7 @@ class CollectionTaskPublisherIntegrationTests {
 	@AfterEach
 	void cleanQueues() {
 		purgeQueues();
+		deleteTrackedJobs();
 	}
 
 	/**
@@ -69,7 +82,7 @@ class CollectionTaskPublisherIntegrationTests {
 	 */
 	@Test
 	void publishesSearchTaskThroughHttpEndpoint() throws Exception {
-		mockMvc.perform(post("/internal/v1/collection-tasks")
+		MvcResult result = mockMvc.perform(post("/internal/v1/collection-tasks")
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(minimalRequest()))
 				.andExpect(status().isAccepted())
@@ -77,7 +90,20 @@ class CollectionTaskPublisherIntegrationTests {
 				.andExpect(jsonPath("$.merchant").value("29cm"))
 				.andExpect(jsonPath("$.operation").value("search"))
 				.andExpect(jsonPath("$.taskId").isNotEmpty())
-				.andExpect(jsonPath("$.jobId").isNotEmpty());
+				.andExpect(jsonPath("$.jobId").isNotEmpty())
+				.andReturn();
+		CollectionTaskResponse response = objectMapper.readValue(
+				result.getResponse().getContentAsByteArray(),
+				CollectionTaskResponse.class);
+
+		mockMvc.perform(get("/internal/v1/collection-jobs/{jobId}", response.jobId()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("QUEUED"))
+				.andExpect(jsonPath("$.taskCount").value(1))
+				.andExpect(jsonPath("$.queuedTaskCount").value(1))
+				.andExpect(jsonPath("$.productCount").value(0))
+				.andExpect(jsonPath("$.verificationSummary.total").value(0))
+				.andExpect(jsonPath("$.tasks[0].taskId").value(response.taskId()));
 
 		Message message = receiveSearchTask();
 		CollectionTaskMessage task = objectMapper.readValue(message.getBody(), CollectionTaskMessage.class);
@@ -213,6 +239,18 @@ class CollectionTaskPublisherIntegrationTests {
 	}
 
 	/**
+	 * 존재하지 않는 jobId를 조회하면 안전한 오류 코드와 404를 반환하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 조회에 실패한 경우
+	 */
+	@Test
+	void returnsNotFoundForUnknownJob() throws Exception {
+		mockMvc.perform(get("/internal/v1/collection-jobs/{jobId}", "job-does-not-exist"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("COLLECTION_JOB_NOT_FOUND"));
+	}
+
+	/**
 	 * 최소 검색 작업 API 요청 JSON을 반환한다.
 	 *
 	 * @return 29CM 구두 검색과 270 재고 필터 JSON
@@ -262,5 +300,13 @@ class CollectionTaskPublisherIntegrationTests {
 		rabbitAdmin.purgeQueue(CollectionQueueNames.SEARCH_TASK_QUEUE, true);
 		rabbitAdmin.purgeQueue(CollectionQueueNames.SEARCH_RETRY_QUEUE, true);
 		rabbitAdmin.purgeQueue(CollectionQueueNames.SEARCH_DEAD_LETTER_QUEUE, true);
+	}
+
+	/**
+	 * 외래키 순서에 맞춰 테스트에서 등록한 작업 추적 행을 제거한다.
+	 */
+	private void deleteTrackedJobs() {
+		collectionTaskRepository.deleteAllInBatch();
+		collectionJobRepository.deleteAllInBatch();
 	}
 }

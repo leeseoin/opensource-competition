@@ -61,8 +61,9 @@ Product Backend의 `POST /internal/v1/collection-tasks/pages`는 같은 검색 �
 `jobId`를 공유한다. `startPage + pageCount - 1`은 200을 넘을 수 없고 페이지당
 상품 수는 최대 50개이므로 한 번의 요청은 최대 10,000개 범위를 표현할 수 있다.
 
-RabbitMQ 발행 도중 실패하면 앞에서 확인된 작업은 이미 Queue에 남을 수 있다. 현재는
-응답 오류에 접수된 작업 수를 표시하며, 작업 상태 DB와 Redis 중복 차단은 후속 구현 범위다.
+RabbitMQ 발행 도중 실패하면 앞에서 확인된 작업은 이미 Queue에 남을 수 있다. Product
+Backend는 `collection_jobs`와 `collection_tasks`에 발행 실패 및 완료 결과를 남기며,
+Redis 중복 차단은 후속 구현 범위다.
 
 ## 검증
 

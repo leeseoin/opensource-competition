@@ -132,7 +132,7 @@
 - [x] 수집 요청 검색어와 적용 filters를 `collection_search_contexts`에 저장하고
   `requestId`로 snapshot 및 상품 검색 API에 연결
 - [x] 현재 수집 필드·DB 저장 필드·미저장 필드 입문 문서 작성
-- [ ] 조사 세션과 작업 상태
+- [ ] 조사 세션과 작업 상태 **(부분 구현: collection job/task 영구 상태와 조회 API 완료, 조사 세션 미구현)**
 
 참고: 이전 Python/SQLAlchemy/Alembic 적재 구현은 Spring Boot 전환 전에 검증한 과거 작업이다. 현재 브랜치에서는 제거됐으며 위 Java/Flyway/JPA 항목을 완료해야 DB 적재를 다시 사용할 수 있다.
 
@@ -150,7 +150,7 @@
 
 ### 4.2 작업 계약과 상태
 
-- [ ] `CollectionJob` 공통 계약 정의
+- [ ] `CollectionJob` 공통 계약 정의 **(부분 구현: Spring REST 응답 DTO와 OpenAPI 완료, 서비스 공통 JSON Schema 미구현)**
 - [x] 검색 `CollectionTask`와 `CollectionResult` Queue 계약 정의
 - [x] `taskId`, `jobId`, `merchant`, `operation`, `priority`, `attempt`, `requestedAt`, `payload` 필드 확정
 - [x] 임의 `targetUrl`을 받지 않고 Go Adapter가 URL을 만드는 경계 확정
@@ -158,7 +158,7 @@
 - [x] RabbitMQ exchange, queue, routing key 이름과 version 정책 정의
 - [x] retry 가능 오류와 즉시 실패 오류 구분
 - [x] 최초 실행 포함 최대 2회와 Dead Letter Queue 이동 규칙 정의
-- [ ] `pending`, `running`, `success`, `partial`, `failed`, `cancelled` 상태 전이 정의
+- [ ] `pending`, `running`, `success`, `partial`, `failed`, `cancelled` 상태 전이 정의 **(부분 구현: QUEUED/PROCESSING/COMPLETED/PARTIAL/FAILED 및 페이지 결과 상태 완료, cancelled 미구현)**
 
 ### 4.3 수집 작업 생성
 
@@ -187,9 +187,10 @@
 - [x] RabbitMQ의 `CollectorResult`를 소비하는 Spring Boot Worker 구현
 - [x] Contract 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
 - [x] 검증된 결과를 JPA transaction으로 저장
-- [ ] `collection_jobs`, `collection_tasks` JPA entity 작성
-- [ ] `collection_jobs`, `collection_tasks` Flyway migration 작성
-- [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록
+- [x] `collection_jobs`, `collection_tasks` JPA entity 작성
+- [x] `collection_jobs`, `collection_tasks` Flyway migration 작성
+- [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록 **(부분 구현: 성공/부분 성공/실패/발행 실패, 상품 수, 검증 집계와 소요시간 완료, 중복 수 미구현)**
+- [x] `jobId` 기반 전체 상태/페이지별 결과/상품 수/verificationSummary 조회 API
 - [ ] Redis에 짧은 수집 진행 상태를 저장하고 PostgreSQL에 최종 상태 보존
 - [ ] Worker 또는 Backend 장애 후 작업 상태 복구 정책 구현
 
@@ -199,6 +200,7 @@
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
 - [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Go 작업 retry/DLQ와 Spring 결과 ACK/DLQ를 서비스별 검증)**
 - [x] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
+- [x] 29CM 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
 - [ ] ABC마트 여러 검색어와 여러 페이지 batch 수집 opt-in smoke test **(부분 구현: 구두 한 검색어 2페이지 및 상품 6개 적재 통과)**
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 동일 상품 재수집 시 상품 중복 없이 snapshot만 증가하는 DB 검증

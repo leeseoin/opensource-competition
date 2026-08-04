@@ -54,16 +54,22 @@ public class CollectionTaskPublisher {
 
 	private final RabbitTemplate rabbitTemplate;
 	private final ObjectMapper objectMapper;
+	private final CollectionJobService collectionJobService;
 
 	/**
 	 * 작업 JSON 생성과 RabbitMQ 발행에 필요한 의존성을 연결한다.
 	 *
 	 * @param rabbitTemplate Spring AMQP 발행 도구
 	 * @param objectMapper Spring Boot 공통 JSON mapper
+	 * @param collectionJobService Queue 발행 전후 작업 상태 저장 서비스
 	 */
-	public CollectionTaskPublisher(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
+	public CollectionTaskPublisher(
+			RabbitTemplate rabbitTemplate,
+			ObjectMapper objectMapper,
+			CollectionJobService collectionJobService) {
 		this.rabbitTemplate = rabbitTemplate;
 		this.objectMapper = objectMapper;
+		this.collectionJobService = collectionJobService;
 	}
 
 	/**
@@ -76,7 +82,13 @@ public class CollectionTaskPublisher {
 	 */
 	public CollectionTaskResponse publish(CollectionTaskRequest request) {
 		CollectionTaskMessage task = createTask(request);
-		publishTask(task);
+		collectionJobService.register(List.of(task));
+		try {
+			publishTask(task);
+		} catch (CollectionTaskPublishException exception) {
+			collectionJobService.markPublishFailed(List.of(task.taskId()), exception.getMessage());
+			throw exception;
+		}
 		return CollectionTaskResponse.queued(task);
 	}
 
@@ -99,13 +111,22 @@ public class CollectionTaskPublisher {
 		int endPage = (int) endPageValue;
 		String jobId = "job-" + UUID.randomUUID();
 		OffsetDateTime requestedAt = OffsetDateTime.now(ZoneOffset.UTC);
-		int publishedCount = 0;
+		List<CollectionTaskMessage> tasks = new ArrayList<>(pageCount);
 		for (int page = startPage; page <= endPage; page++) {
-			CollectionTaskMessage task = createTask(request.toPageRequest(page), jobId, requestedAt);
+			tasks.add(createTask(request.toPageRequest(page), jobId, requestedAt));
+		}
+		collectionJobService.register(tasks);
+
+		int publishedCount = 0;
+		for (int index = 0; index < tasks.size(); index++) {
+			CollectionTaskMessage task = tasks.get(index);
 			try {
 				publishTask(task);
 				publishedCount++;
 			} catch (CollectionTaskPublishException exception) {
+				collectionJobService.markPublishFailed(
+						tasks.subList(index, tasks.size()).stream().map(CollectionTaskMessage::taskId).toList(),
+						exception.getMessage());
 				throw new CollectionTaskPublishException(
 						"전체 " + pageCount + "개 중 " + publishedCount
 								+ "개 작업만 접수된 뒤 RabbitMQ 발행이 실패했습니다.",

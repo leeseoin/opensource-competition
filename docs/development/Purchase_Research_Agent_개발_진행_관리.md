@@ -39,8 +39,8 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 API, ABC마트 Queue E2E | 작업 상태 DB, 동시 저장 보강, 29CM Queue E2E |
-| Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring 단일/다중 페이지 producer, Go 페이지 Worker, Spring 결과 Consumer, ABC마트 E2E 및 retry/DLQ | 29CM Queue E2E, Redis limiter, 여러 검색어 batch와 작업 상태 |
+| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 및 job 상태 API, ABC마트/29CM Queue E2E | 조사 세션, 동시 저장 보강 |
+| Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring 단일/다중 페이지 producer, Go 페이지 Worker, Spring 결과 Consumer, ABC마트/29CM E2E, PostgreSQL job 상태 및 retry/DLQ | Redis limiter/중복 차단, 여러 검색어 batch |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
 | Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
@@ -177,7 +177,7 @@
 - [x] 수집 요청 검색어와 적용 filters 저장 및 조회
 - [x] 상품 snapshot과 연결된 교차 검증 결과 저장
 - [x] Flyway V3 `product_verifications` schema와 JPA 통합 테스트
-- [ ] 조사 세션과 작업 상태
+- [ ] 조사 세션과 작업 상태 **(job/task 영구 상태와 조회 완료, 조사 세션 미구현)**
 
 완료 조건: fixture Collector 결과가 Java Contract로 검증되고 PostgreSQL에 중복 없이 재현 가능하게 저장되어야 한다.
 
@@ -193,7 +193,7 @@
 - [x] Redis·RabbitMQ 환경 변수 예제 작성
 - [x] Redis 인증 ping 실제 검증
 - [x] RabbitMQ broker 실행 상태와 관리 화면 HTTP 응답 실제 검증
-- [ ] `CollectionJob` 영구 상태 계약
+- [ ] `CollectionJob` 영구 상태 계약 **(Spring DTO/OpenAPI와 PostgreSQL 상태 완료, 공통 JSON Schema 미구현)**
 - [x] 검색 `CollectionTask`, `CollectionResult` JSON Schema와 Go 계약
 - [x] RabbitMQ exchange, queue, routing key, 5초 retry·DLQ topology
 - [x] Go consumer·result publisher와 작업 timeout
@@ -207,6 +207,9 @@
 - [x] 계약 위반 결과 reject와 결과 DLQ 이동
 - [x] 성공/부분 성공 결과의 JPA transaction 저장 연결
 - [x] 실제 ABC마트 `구두` 2페이지 상품 6개 Queue 수집과 DB 저장 검증
+- [x] `collection_jobs`/`collection_tasks` Flyway V4와 JPA 상태 저장
+- [x] `jobId` 기반 상태/상품 수/verificationSummary 조회 API
+- [x] 실제 29CM `구두` 1페이지 상품 3개 Queue 수집과 DB 저장 검증
 - [ ] Redis rate limiter·중복 방지·진행 상태 adapter
 
 완료 조건: Product Backend가 등록한 수집 작업을 Go Worker가 안전하게 소비하고 결과를 다시
@@ -359,10 +362,11 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | Go RabbitMQ 검색 Worker | 지정 페이지 처리 완료/실제 다중 페이지 검증 필요 | `services/collector/internal/collector/search.go:47` `PageSearcher`; `internal/collector/registry.go:40` `SearchPage`; `internal/messaging/processor.go:31` `Process`; `internal/messaging/contracts.go:25` `MaxSearchPage`; `rabbitmq.go:55` `RabbitWorker.Run` | Go 전체 테스트와 page=2 단위 테스트 통과 / 실제 다중 페이지 작업 검증 남음 |
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
-| `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌과 Queue E2E 남음 |
+| `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 및 Queue 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌 남음 |
 | `COLLECTOR-006` 검증 결과 PostgreSQL 저장 | 구현 완료/검증 필요 | `services/product-backend/src/main/resources/db/migration/V3__add_product_verifications.sql:1` `product_verifications`; `collection/dto/CollectorResult.java:90` `VerificationSummary`; `:252` `Verification`; `collection/service/CollectorResultStoreService.java:123` `saveVerification`; `evidence/entity/ProductVerification.java:35` `ProductVerification` | `./gradlew test` 통과, 검증 결과 1건 저장 확인 / 실제 새 CollectorResult 수동 적재 남음 |
-| `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java:73` `publish`, `:101` `publishPages`; `collection/service/CollectionTaskPublisher.java:91` `publishPages`, `:133` `publishTask`; `collection/config/RabbitCollectionConfiguration.java:48` `collectionSearchTaskQueue`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:154` `publishesConsecutivePagesWithSharedJobIdentifier`; `CollectionResultConsumerIntegrationTests.java:124` `storesProductsFromMultiplePageTasks` | RabbitMQ/PostgreSQL Testcontainers와 실제 ABC마트 구두 2페이지 상품 6개 PostgreSQL 적재 통과 / 29CM 회귀 검증과 작업 상태는 별도 기능으로 유지 |
-| `QUEUE-003` 여러 검색어와 페이지 수집 | 부분 구현 | Go `services/collector/internal/collector/search.go:47` `PageSearcher`, `internal/messaging/processor.go:31` `Process`; Java `collection/dto/BulkCollectionTaskRequest.java:25` `BulkCollectionTaskRequest`, `collection/controller/CollectionTaskController.java:101` `publishPages`, `collection/service/CollectionTaskPublisher.java:91` `publishPages` | page 1부터 200, 페이지당 최대 50개, 공통 jobId와 페이지별 taskId, 범위 초과 사전 거절 및 DB 누적 저장 테스트 통과 / 여러 검색어, request budget, 상태/실패 수량 보고 남음 |
+| `BACKEND-002` 수집 job 영구 상태와 조회 | 부분 구현 | `services/product-backend/src/main/resources/db/migration/V4__add_collection_job_tracking.sql:1` `collection_jobs/collection_tasks`; `collection/entity/CollectionJob.java:25` `CollectionJob`; `collection/entity/CollectionTask.java:30` `CollectionTask`; `collection/service/CollectionJobService.java:23` `CollectionJobService`; `collection/controller/CollectionJobController.java:29` `CollectionJobController`; `collection/dto/CollectionJobResponse.java:30` `CollectionJobResponse` | Java 전체 통합 테스트 통과 / Flyway V4 실제 적용 / ABC마트와 29CM 각각 상품 3개 E2E에서 `COMPLETED`, `matched=3` 확인 / Redis 상태 일치와 장애 복구 남음 |
+| `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java:73` `publish`, `:101` `publishPages`; `collection/service/CollectionTaskPublisher.java:91` `publishPages`, `:133` `publishTask`; `collection/config/RabbitCollectionConfiguration.java:48` `collectionSearchTaskQueue`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:154` `publishesConsecutivePagesWithSharedJobIdentifier`; `CollectionResultConsumerIntegrationTests.java:124` `storesProductsFromMultiplePageTasks` | RabbitMQ/PostgreSQL Testcontainers와 실제 ABC마트/29CM 수집, PostgreSQL 적재 및 job 완료 상태 조회 통과 |
+| `QUEUE-003` 여러 검색어와 페이지 수집 | 부분 구현 | Go `services/collector/internal/collector/search.go:47` `PageSearcher`, `internal/messaging/processor.go:31` `Process`; Java `collection/dto/BulkCollectionTaskRequest.java:25` `BulkCollectionTaskRequest`, `collection/controller/CollectionTaskController.java:101` `publishPages`, `collection/service/CollectionTaskPublisher.java:91` `publishPages`; `collection/service/CollectionJobService.java:145` `refreshJobStatus` | page 1부터 200, 페이지당 최대 50개, 공통 jobId와 페이지별 taskId, 범위 초과 사전 거절, DB 누적 저장 및 상태/실패 수량 보고 통과 / 여러 검색어와 request budget 남음 |
 | `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
 | `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
@@ -384,6 +388,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-08-04 | Swagger 수동 테스트 | 다중 페이지 요청 예시에 선택 필드와 무작위 문자열이 모두 표시돼 손 테스트 입력이 어려움 | OpenAPI가 validation 제약만 보고 record 전체의 예시를 자동 생성함 | `/pages` 요청 본문에 ABC마트/구두/1페이지/3개의 명시적 최소 예시를 추가하고 OpenAPI JSON 통합 테스트로 고정 | 해결 |
 | 2026-08-05 | Go 로컬 실행 | `.env`에 Collector HTTP 설정이 없으면 `make collector-run`이 빈 환경변수를 전달해 서버 시작이 실패함 | Make가 이름만 export한 빈 변수를 Go 설정의 기본값보다 우선 적용함 | Make에서 빈 값도 기본값으로 치환하고 `.env.example`에 HTTP lifecycle 설정을 추가 | 해결 |
 | 2026-08-05 | ABC마트 HTML 검증 | 실제 상품 3개가 모두 상품명 차이로 `MISMATCH` 판정됨 | 상품명 요소 안의 성별 badge 중첩 `span`을 상품명으로 잘못 추출함 | 성별 badge를 건너뛴 뒤 실제 상품명 텍스트를 읽도록 parser와 fixture 테스트를 수정 / 재실행 결과 3개 모두 `MATCHED` | 해결 |
+| 2026-08-05 | 수집 job 결과 연결 | 같은 `taskId`에 다른 `jobId`가 포함된 결과도 상태 갱신 후보가 될 수 있음 | 기존 결과 의미 검증은 `taskId`와 Collector `requestId`만 비교하고 저장된 상위 job을 확인하지 않음 | 상태 갱신 전에 등록된 task의 jobId와 결과 jobId를 비교하고 transaction 전체 rollback 통합 테스트 추가 | 해결 |
 | 2026-07-31 | Spring Boot 검증 | 최종 Gradle 재실행이 사용자 Gradle cache의 lock 파일 접근 권한 때문에 실패 | 격리 실행 환경이 workspace 밖의 `~/.gradle` lock 파일 쓰기를 제한 | 승인된 프로젝트 Gradle Wrapper 명령으로 재실행해 전체 테스트 통과 | 해결 |
 | 2026-08-02 | 29CM 저장 상품 검색 | DB에는 29CM 상품 3개가 있지만 `merchant=29cm&query=구두` 조회 결과가 0개 | Product Backend가 상품명과 브랜드만 검색했고 CollectorResult와 DB에 요청 검색어가 없었음 | CollectorResult에 query/filters를 추가하고 `collection_search_contexts`와 snapshot을 requestId로 연결 / 수집 검색어 조회 통합 테스트 통과 | 해결 |
 | 2026-07-16 | 판매처 정책 | 무신사 검색 구현 후 일반 Collector user-agent가 robots에서 전체 차단됨을 확인 | 무신사 `robots.txt`의 `User-agent: * / Disallow: /` 정책 | 무신사 구현을 제거하고 `User-agent: * / Allow: /`인 ABC마트로 전환 | 해결 |
@@ -917,7 +922,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 해결: 성공/부분 성공은 저장 후 ACK하고, 정상 `failed` 결과는 상품을 저장하지 않고
   ACK한다. JSON/계약 위반과 DB 저장 예외는 requeue 없이 reject해 결과 DLQ로 보낸다.
 - 남은 위험: DB의 일시 장애도 현재는 결과 DLQ로 이동한다. 결과 Queue retry 정책과
-  `collection_jobs`/`collection_tasks` 실패 상태 저장은 후속 구현이 필요하다. 실제
+  당시 `collection_jobs`/`collection_tasks` 실패 상태 저장은 후속 구현이 필요했으며
+  2026-08-05 `BACKEND-002`에서 보강했다. 실제
   Product Backend 시작점부터 판매처와 PostgreSQL까지의 전체 E2E도 아직 남아 있다.
 - 검증:
   - `./gradlew test --tests com.purchasesearch.product_backend.CollectionResultConsumerIntegrationTests --rerun-tasks`: 4개 통합 테스트 통과
@@ -1202,6 +1208,36 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `GET /openapi.json`: OpenAPI 3.1 문서 반환 확인
   - `GET /swagger-ui/`: HTTP 200과 `text/html` 확인
 
+### 2026-08-05 BACKEND-002 수집 job 영구 상태와 조회
+
+- 진행상황: Spring Boot가 RabbitMQ 발행 전에 `collection_jobs`와 `collection_tasks`를
+  `QUEUED`로 저장하고, Go 결과를 소비한 같은 transaction에서 페이지 결과와 상위 job
+  상태를 갱신한다. `jobId` 조회 API는 전체 상태, 페이지별 상태, 처리 상품 수 및
+  `verificationSummary`를 반환한다.
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V4__add_collection_job_tracking.sql:1` `collection_jobs/collection_tasks`: 영구 상태 schema
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/entity/CollectionJob.java:25` `CollectionJob`: 상위 요청 상태
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/entity/CollectionTask.java:30` `CollectionTask`: 페이지 결과와 오류
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionJobService.java:42` `register`: 발행 전 상태 생성
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionJobService.java:98` `recordCompleted`: 성공/부분 성공 결과 반영
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionJobService.java:145` `refreshJobStatus`: 하위 작업 기반 상위 상태 계산
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionJobController.java:60` `get`: job 결과 조회 API
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:143` `updatesTrackedJobWithStoredProductAndVerificationCounts`: 결과 집계 통합 검증
+- 발생 문제: 기존 RabbitMQ 결과 테스트와 migration 이전에 생성된 메시지는 대응하는
+  `collection_tasks` 행이 없어 상태를 연결할 수 없다.
+- 원인: 작업 상태 저장보다 Queue 발행 및 결과 저장 기능이 먼저 운영됐기 때문이다.
+- 해결: 새 작업은 반드시 발행 전에 상태 행을 만들고, 과거 미추적 결과는 상품 저장을
+  유지하되 상태 갱신만 건너뛰도록 호환 경계를 뒀다.
+- 남은 위험: Worker가 결과를 처리 중일 때는 별도 시작 event가 없어 `QUEUED`로 보이다가
+  완료 결과에서 바로 종료 상태가 된다. 실제 `RUNNING` 표시, Redis 짧은 상태, 취소 및
+  중복 결과 방지는 후속 범위다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test`: 통과, PostgreSQL/RabbitMQ Testcontainers 포함
+  - 로컬 Flyway: V4 `add collection job tracking` 적용 성공
+  - ABC마트 job `job-0ac41449-8c28-4c92-95a3-f0613cf6a7c2`: `COMPLETED`, 상품 3개, `matched=3`
+  - 29CM job `job-a54f7dfd-9fb9-458a-bc9d-bc0226f69df1`: `COMPLETED`, 상품 3개, `matched=3`
+  - `GET /internal/v1/collection-jobs/{jobId}`: 페이지별 `SUCCESS`, 상품 수와 검증 집계 확인
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -1224,8 +1260,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 ## 다음 갱신 대상
 
 - RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
-- `collection_jobs`와 `collection_tasks` 작업 상태 저장
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
 - 여러 검색어 batch와 request budget
 - Go Collector Swagger UI의 운영 환경 인증 또는 비활성화
+- Redis 짧은 진행 상태, 중복 차단 및 실제 `RUNNING` event

@@ -3,6 +3,7 @@ package com.purchasesearch.product_backend.collection.service;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.purchasesearch.product_backend.collection.dto.CollectionResultEnvelope;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionResultMessageException;
@@ -21,6 +22,7 @@ public class CollectionResultMessageService {
 	private final ObjectMapper objectMapper;
 	private final Validator validator;
 	private final CollectorResultStoreService collectorResultStoreService;
+	private final CollectionJobService collectionJobService;
 
 	/**
 	 * Queue JSON 처리에 필요한 JSON mapper, validator와 저장 서비스를 연결한다.
@@ -28,14 +30,17 @@ public class CollectionResultMessageService {
 	 * @param objectMapper Spring Boot 공통 JSON mapper
 	 * @param validator Jakarta Bean Validation validator
 	 * @param collectorResultStoreService 검증된 Collector 결과 저장 서비스
+	 * @param collectionJobService 추적 중인 작업의 결과 상태 저장 서비스
 	 */
 	public CollectionResultMessageService(
 			ObjectMapper objectMapper,
 			Validator validator,
-			CollectorResultStoreService collectorResultStoreService) {
+			CollectorResultStoreService collectorResultStoreService,
+			CollectionJobService collectionJobService) {
 		this.objectMapper = objectMapper;
 		this.validator = validator;
 		this.collectorResultStoreService = collectorResultStoreService;
+		this.collectionJobService = collectionJobService;
 	}
 
 	/**
@@ -46,6 +51,7 @@ public class CollectionResultMessageService {
 	 * @throws InvalidCollectionResultMessageException JSON 해석이나 상태 의미 검증에 실패한 경우
 	 * @throws ConstraintViolationException Queue 또는 CollectorResult 필드 제약을 위반한 경우
 	 */
+	@Transactional
 	public ProcessingOutcome process(byte[] body) {
 		CollectionResultEnvelope envelope = decode(body);
 		Set<ConstraintViolation<CollectionResultEnvelope>> violations = validator.validate(envelope);
@@ -55,9 +61,11 @@ public class CollectionResultMessageService {
 		envelope.validateSemantics();
 
 		if ("failed".equals(envelope.status())) {
+			collectionJobService.recordFailed(envelope);
 			return ProcessingOutcome.TASK_FAILED;
 		}
-		collectorResultStoreService.store(envelope.collectorResult());
+		CollectorResultStoreService.StoreReport report = collectorResultStoreService.store(envelope.collectorResult());
+		collectionJobService.recordCompleted(envelope, report.productCount());
 		return ProcessingOutcome.STORED;
 	}
 
