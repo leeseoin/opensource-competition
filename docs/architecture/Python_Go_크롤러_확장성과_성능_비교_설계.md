@@ -3,9 +3,19 @@
 작성일: 2026-08-03
 상태: 부분 구현
 
-현재 Python은 판매처별 JSON Adapter, pagination, 중복 제거, checkpoint, 요청 예산,
-안전 중단과 gzip NDJSON 저장까지 구현됐다. Go의 대량 수집 실행기와 두 언어 benchmark,
-단계별 실수집은 남아 있다.
+현재 `origin/dev-jw@e2d863c`의 Python ABC마트/29CM 크롤러와 ABC마트 Contract를 원본
+그대로 선별 이식했다. 별도 Python 비교 구현은 판매처별 JSON Adapter, pagination,
+중복 제거, checkpoint, 요청 예산, 안전 중단과 gzip NDJSON 저장까지 구현됐다. 두 Python
+구현의 차이는 `docs/reports/2026-08-04_dev-jw_Python_크롤러_가져오기와_차이_분석.md`에
+기록했다. 정우님 Python 결과를 현재 Spring Boot `CollectorResult`로 변환해 수동
+PostgreSQL 적재 API로 보내는 연결은 구현했다. 이 연결은 DB 저장 확인용이며
+`v1-unified` 성능 비교 Adapter와는 별개다. Python ABC마트 검색은 JSON을
+기본 저장값으로 사용하고 같은 검색어와 페이지의 렌더링 HTML을 모든 상품에
+대해 대조한다. 비교 상태와 필드별 차이는 Product Backend를 통해
+`product_verifications`에 저장하도록 구현했다. 29CM은 검색 HTML에 상품이 없으므로
+검색 JSON으로 수집한 모든 상품의 공개 상세 HTML을 요청하고 Product JSON-LD를
+비교하도록 구현했다. Go의 동일 수집/비교/저장 기능과
+최종 성능 보고서는 Python 수동 E2E 확인 후 구현한다.
 
 ## 1. 목표
 
@@ -28,7 +38,7 @@ ABC마트와 29CM의 공개 상품을 Python과 Go로 같은 조건에서 수집
 sandbox/ls
   └── Go Collector 확장과 운영 CollectorResult 유지
 
-sandbox-python-croller/ls
+sandbox-python-crawler/ls
   └── origin/dev-jw의 Python ABC마트/29CM 크롤러와 Contract만 선별 이식
 ```
 
@@ -52,6 +62,27 @@ Product Backend 저장 경계를 따라야 한다.
 각 언어의 판매처 Adapter는 운영 모델을 만들고, 별도 비교 Adapter가 이를
 `v1-unified`로 변환한다. 비교를 위해 운영 모델의 가격 단위나 출처 구조를 약하게
 바꾸지 않는다.
+
+### JSON 기본 수집과 HTML 전수 검증
+
+ABC마트에서 JSON 검색 응답은 상품 ID, 가격, 재고 수량과 페이지 정보를
+구조화해 제공하므로 기본 수집 경로로 사용한다. 동일한 검색 페이지를 browser로
+렌더링한 HTML은 사용자에게 실제로 보이는 상품 정보와 JSON이 일치하는지
+검사하는 두 번째 경로로 사용한다.
+
+비교는 표본 추출이 아니라 해당 실행에서 수집한 모든 JSON 상품을 대상으로 한다.
+상품 ID로 JSON과 HTML을 연결하고 상품명, 브랜드, 가격, 정상가, 할인율, 이미지와
+상품 URL을 비교한다. 색상과 스타일 코드는 JSON에는 있지만 검색 HTML에 노출되지
+않으므로 JSON 상품값으로만 저장하고 HTML 비교 필드에서는 제외한다. HTML 로드
+실패나 상품 누락도
+성공으로 간주하지 않고 `FAILED` 또는 `MISSING_IN_HTML`로 저장한다.
+
+29CM 검색 페이지는 JavaScript 실행 전과 후 모두 비교할 상품 정보를 HTML에
+유지하지 않았다. 반면 공개 상품 상세 HTML은 SEO를 위한 `Product` JSON-LD에
+상품 ID, 상품명, 브랜드, 현재가, 정상가, 이미지와 재고 상태를 포함한다.
+따라서 29CM은 검색 JSON 상품 하나당 상세 HTML 요청 하나를 순차 실행한다.
+이 방식은 브라우저가 필요 없지만 ABC마트의 페이지 단위 비교보다 요청 수와
+소요 시간이 크다.
 
 ## 4. 10,000개 수집 방식
 

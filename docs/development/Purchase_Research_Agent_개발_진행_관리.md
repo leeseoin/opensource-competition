@@ -1047,6 +1047,134 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - Python 29CM 1,000회: 2,000개/0.143613초/13,926.292개/초
   - `uv run python -m compileall -q src tests`: 통과
 
+### 2026-08-04 OPS-004 dev-jw Python 원본 기준선 이식과 비교
+
+- 진행상황: `origin/dev-jw@e2d863c`에서 Python ABC마트/29CM 크롤러와 ABC마트
+  Contract 관련 파일만 `sandbox-python-crawler/ls`에 원본 그대로 선별 이식했다.
+  기존 `services/python-collector`와 수집 방식 및 실행 책임을 비교했다. 원본 실행과
+  공통 Adapter 연결은 진행 전이다.
+- 구현 위치:
+  - `purchase-research-agent/app/crawlers/abcmart/crawler.py:67` `AbcMartCrawler`: Crawl4AI와 BeautifulSoup 기반 ABC마트 검색/카테고리 수집 원본
+  - `purchase-research-agent/app/crawlers/cm29/crawler.py:23` `Cm29Crawler`: HTTPX와 29CM JSON 응답 기반 검색 수집 원본
+  - `purchase-research-agent/app/services/crawler_service.py:12` `CrawlerService`: 판매처 선택/상세 연결/ABC마트 Contract 검증 원본
+  - `contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json:1` `ABC마트 크롤러 상품 항목 v1-abcmart`: 정우님 ABC마트 원본 결과 계약
+  - `contracts/collector/v1-abcmart/product-batch-request.schema.json:1` `Product Batch Request`: 당시 Spring Boot/MySQL 배치 요청 계약
+  - `docs/reports/2026-08-04_dev-jw_Python_크롤러_가져오기와_차이_분석.md:1` `dev-jw Python 크롤러 가져오기와 차이 분석`: 이식 범위와 기존 Python 구현 차이
+- 발생 문제: 아직 Git이 추적하지 않는 파일에 일반 `git diff origin/dev-jw`를 사용하자
+  원본 브랜치 쪽 파일이 삭제된 것처럼 표시됐다. 또한 sandbox에서 `uvx`가 사용자 cache에
+  접근하지 못해 Contract 검사가 처음 실패했다.
+- 원인: 일반 Git diff는 현재 index에 없는 untracked 파일을 비교 대상으로 처리하지
+  않았고, uv cache는 현재 workspace 밖에 있다.
+- 해결: 각 로컬 파일의 `git hash-object`와 `origin/dev-jw:<path>` object ID를 비교해
+  byte 동일성을 확인했다. Contract 검사는 승인된 `uvx check-jsonschema` cache 접근으로
+  다시 실행했다.
+- 남은 위험: 정우님 ABC마트 원본은 browser/HTML을 사용하고 기존 Python/Go 비교 구현은
+  JSON을 사용한다. 이 E2E 시간을 언어 성능 차이로 직접 해석하면 안 된다. 또한 원본
+  `requirements.txt`는 최소 version만 지정해 재현 가능한 lock 파일이 필요하다.
+- 검증:
+  - 가져온 로컬 파일과 `origin/dev-jw@e2d863c` object ID 비교: 모두 동일
+  - `python3 -m compileall -q purchase-research-agent/app purchase-research-agent/scripts`: 통과
+  - `uvx check-jsonschema` ABC마트 crawl 정상 예제: 통과
+  - `uvx check-jsonschema` batch request 정상 예제: 통과
+  - `make docs-check`: 통과
+
+### 2026-08-04 OPS-004 dev-jw Python 수집 결과 PostgreSQL 수동 적재 연결
+
+- 진행상황: Swagger에서 Python ABC마트/29CM 수집과 현재 Spring Boot Product Backend
+  저장을 한 번에 실행하는 `POST /api/v1/collect-and-store`를 구현했다. Python 원본
+  상품을 현재 `CollectorResult`로 변환하고 Product Backend만 PostgreSQL을 쓰는 기존
+  책임 경계를 유지했다. API는 최대 500개를 받고 Spring Boot 계약 상한에 맞춰 50개씩
+  나눠 순차 저장한다.
+- 구현 위치:
+  - `purchase-research-agent/app/api/endpoints/store.py:18` `CollectAndStoreRequest`: 판매처/검색어/수집 상한/상세 상한 입력 검증
+  - `purchase-research-agent/app/api/endpoints/store.py:37` `collect_and_store`: Python 수집/변환/Spring Boot 저장 연결
+  - `purchase-research-agent/app/services/collector_result_adapter.py:25` `build_collector_result`: 정우님 원본 상품을 현재 공통 저장 계약으로 변환
+  - `purchase-research-agent/app/services/collector_result_adapter.py` `build_collector_result_batches`: 최대 500개 결과를 50개 이하 저장 batch로 분할
+  - `purchase-research-agent/app/services/backend_store_service.py:15` `BackendStoreService`: Product Backend 수동 적재 API 호출
+  - `purchase-research-agent/tests/test_collector_result_adapter.py:8` `CollectorResultAdapterTests`: 가격/옵션/리뷰/부분 성공 변환 검증
+  - `Makefile` `python-crawler-setup`, `python-crawler-run`, `python-crawler-test`: 루트에서 가상환경 준비/서버 실행/검증
+- 발생 문제: 정우님 Python 상품은 가격을 원화 문자열로 표현하고 `source_product_id`,
+  `title`, `link` 필드를 사용하지만 현재 Spring Boot는 정수 Money, `externalId`, `name`,
+  `productUrl`, `provenance`를 요구한다. Python compileall은 macOS 사용자 cache가 sandbox
+  밖에 있어 첫 실행이 실패했다.
+- 원인: 정우님 원본 Contract와 현재 운영 `CollectorResult`의 목적 및 필드 구조가
+  다르며 Python 3.14가 기본 bytecode cache를 사용자 Library 아래에 만들려고 했다.
+- 해결: 원본 크롤러를 수정하지 않고 별도 Adapter에서 가격/옵션/리뷰/출처를 변환했다.
+  확인할 수 없는 재고와 옵션 재고는 `unknown`으로 저장하고 판매처가 주지 않은
+  pagination의 `hasNext`는 `null`로 보존했다. compileall은
+  `PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache`로 다시 실행했다.
+- 남은 위험: ABC마트 원본 옵션은 size와 color의 실제 조합 및 재고를 제공하지 않으므로
+  Adapter가 조합을 추측하지 않는다. size만 개별 옵션으로 저장하며 stock status는
+  `unknown`이다. 실제 판매처/PostgreSQL 수직 검증은 사용자가 세 서비스를 실행한 뒤
+  Swagger로 확인해야 한다.
+- 검증:
+  - `python3 -m unittest discover -s tests -v`: 3개 통과
+  - `PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache python3 -m compileall -q app scripts tests`: 통과
+  - 생성한 Python 변환 결과와 `contracts/collector/v1/collector-result.schema.json`: 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-04 OPS-004 Python ABC마트/29CM JSON/HTML 전수 대조와 DB 저장
+
+- 진행상황: ABC마트 JSON 검색 응답을 기본 수집값으로 사용하고 동일한
+  검색어와 페이지의 렌더링 HTML을 수집한 모든 상품과 대조하도록
+  구현했다. 상품별 검증 상태와 필드별 차이는 Spring Boot를 통해
+  PostgreSQL에 저장한다. ABC마트 자동 테스트와 실제 판매처/DB 수동 E2E는
+  통과했다. 29CM은 검색 JSON 적재는 통과했고 상세 HTML JSON-LD 전수 비교
+  코드와 자동 테스트를 추가했으며 수동 E2E 재확인이 남아 있다.
+- 구현 위치:
+  - `purchase-research-agent/app/crawlers/abcmart/json_fetcher.py:27` `AbcJsonFetcher`: 공개 검색 JSON pagination, 원본 저장과 Python 상품 변환
+  - `purchase-research-agent/app/crawlers/abcmart/crawler.py:71` `AbcMartCrawler.crawl`: 같은 페이지의 JSON/HTML 수집과 전수 대조 흐름
+  - `purchase-research-agent/app/crawlers/abcmart/verification.py:23` `reconcile_page`: 상품 ID 기준 필드 비교와 상태 분류
+  - `purchase-research-agent/app/crawlers/cm29/crawler.py:36` `Cm29Crawler.crawl`: 검색 JSON 수집과 선택한 모든 상품의 상세 HTML 검증 연결
+  - `purchase-research-agent/app/crawlers/cm29/verification.py:28` `verify_products`: 상품별 상세 HTML 저장, JSON-LD 파싱과 순차 비교
+  - `purchase-research-agent/app/crawlers/cm29/verification.py:86` `parse_product_json_ld`: SEO Product JSON-LD의 상품/가격/이미지 변환
+  - `purchase-research-agent/app/services/collector_result_adapter.py:166` `_convert_verification`: Python 검증 결과를 운영 `CollectorResult` 계약으로 변환
+  - `services/product-backend/src/main/resources/db/migration/V3__add_product_verifications.sql:1` `product_verifications`: 상품 snapshot별 검증 결과 schema
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/evidence/entity/ProductVerification.java:35` `ProductVerification`: 상태, 비교 필드와 차이 저장 entity
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:123` `saveVerification`: 검증 결과 transaction 저장
+  - `purchase-research-agent/tests/test_abcmart_verification.py:11` `test_marks_every_json_product_with_verification_status`: JSON 상품 전체 상태 부여 검증
+  - `purchase-research-agent/tests/test_cm29_verification.py:9` `Cm29VerificationTests`: 29CM JSON-LD 파싱, 일치와 가격 차이 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:87` `storesCollectorResultThroughHttpEndpoint`: Contract 입력의 검증 결과 DB 저장 검증
+- 발생 문제: JSON 전용 수집은 구조화된 대량 수집에 유리하지만 실제 화면에
+  노출된 값과 동일한지 확인할 경로가 없었다. HTML 표본 검사만으로는 검사하지
+  않은 상품의 품질을 설명할 수 없었다.
+- 원인: JSON 수집과 browser/HTML 수집이 서로 다른 구현으로 나뉘어 있었고
+  검증 결과를 표현하는 Contract와 DB schema가 없었다.
+- 해결: JSON을 기본값으로 유지하되 모든 수집 페이지의 HTML을 렌더링했다.
+  상품 ID로 연결해 `MATCHED`, `MISMATCH`, `MISSING_IN_HTML`, `FAILED`를
+  상품별로 기록하고 검사한 필드와 양쪽 값을 JSONB로 저장하도록 했다.
+- 수동 E2E 문제와 해결: `limit: 3`을 요청했지만 한 페이지 30개의 경고가 반환되고
+  저장한 3개가 모두 `color`, `style_code` 불일치로 표시됐다. ABC마트 검색
+  HTML은 두 필드를 노출하지 않으므로 실제 값 차이가 아닌 비교 대상 오류였다.
+  HTML에 노출되는 필드만 비교하고, 무할인 상품의 정상가와 0% 할인율 생략을
+  의미상 일치로 처리했다. 또한 실제 `limit` 안에 저장할 상품만 대조 경고에
+  포함하도록 수정했다.
+- 29CM 문제와 해결: 기존 29CM은 검색 JSON만 저장해 `PENDING`이었고
+  `verificationCount`가 0이었다. 검색 페이지는 browser 렌더링 후에도 비교할
+  상품 정보가 HTML에 없었지만 공개 상세 HTML의 Product JSON-LD에는 구조화된
+  상품 정보가 있었다. browser 없이 상품별 상세 HTML을 요청하고 JSON-LD를
+  파싱해 검색 JSON과 전수 대조하도록 수정했다.
+- 29CM 수동 E2E 문제와 해결: 최초 재검증은 3개 모두 `discount_percent`
+  불일치였다. 검색 JSON은 `sellPrice`와 쿠폰 적용 `displayPrice`를 모두 주며
+  `saleRate`는 `displayPrice`를 기준으로 했다. 기존 Python은 저장 가격은 `sellPrice`,
+  할인율은 `saleRate`를 사용해 서로 기준이 달랐다. HTML JSON-LD와 같게
+  정상가와 일반 판매가로 할인율을 계산하도록 수정했다.
+- 원본 파일 정리: JSON과 HTML 원본을 각각
+  `output/raw_json/{merchant}`와 `output/raw_html/{merchant}`에 판매처별로 저장하도록
+  통일했다. 기존 실행 파일도 삭제하지 않고 같은 하위 디렉토리로 옮겼다.
+- 남은 위험: browser 렌더링은 JSON 전용 수집보다 느리고 페이지 스크립트 변경에
+  민감하다. 검증 경고가 많은 실행의 응답 크기와 DB 용량 상한도 추가로
+  정해야 한다. Python 실제 판매처/PostgreSQL 수동 E2E 통과 후에만 Go 동일
+  기능을 `sandbox/ls`에 구현한다.
+- 검증:
+  - `purchase-research-agent/.venv/bin/python -m unittest discover -s tests -v`: 12개 통과
+  - 수동 E2E에서 저장한 ABC마트 1페이지 JSON/HTML fixture 30개 재비교: `MATCHED` 30개, 경고 0개
+  - ABC마트 Swagger 수동 E2E 3개: `MATCHED` 3개, `verificationCount` 3개, 경고 0개
+  - `services/product-backend/./gradlew test`: `BUILD SUCCESSFUL`
+  - `uvx check-jsonschema --schemafile contracts/collector/v1/collector-result.schema.json contracts/collector/v1/examples/collector-result.abcmart-success.json`: 통과
+  - `uvx check-jsonschema --schemafile contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json contracts/collector/v1-abcmart/examples/abcmart-crawl-item.valid.json`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

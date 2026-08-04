@@ -451,9 +451,47 @@
           },
           "maxItems": 1000
         },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        },
         "provenance": {
           "$ref": "#/$defs/provenance"
         }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "comparedFields", "differences", "jsonSourceUrl", "htmlSourceUrl", "verifiedAt"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "MATCHED", "MISMATCH", "MISSING_IN_HTML", "MISSING_IN_JSON", "FAILED"]
+        },
+        "comparedFields": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 100},
+          "uniqueItems": true,
+          "maxItems": 50
+        },
+        "differences": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/verificationDifference"},
+          "maxItems": 50
+        },
+        "jsonSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "htmlSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "verifiedAt": {"$ref": "#/$defs/dateTime"}
+      }
+    },
+    "verificationDifference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "jsonValue", "htmlValue"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "jsonValue": {"type": ["string", "null"], "maxLength": 2000},
+        "htmlValue": {"type": ["string", "null"], "maxLength": 2000}
       }
     }
   }

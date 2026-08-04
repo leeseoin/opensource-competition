@@ -305,6 +305,11 @@
 ### Python/Go 크롤러 확장성과 성능 비교
 
 - [x] `origin/dev-jw` Python ABC마트/29CM 크롤러와 Contract 선별 이식
+- [x] 정우님 Python 결과를 현재 Spring Boot `CollectorResult`로 변환하고 최대 500개를 50개 batch로 나누는 수동 PostgreSQL 적재 API 연결
+- [x] Python ABC마트 JSON 기본 수집/HTML 전수 대조/상품별 DB 검증 결과 저장
+- [ ] Python 29CM 검색 JSON 기본 수집/상품별 상세 HTML JSON-LD 전수 대조/DB 검증 결과 저장 **(구현 완료 및 검증 필요: 자동 테스트 통과, 수동 판매처 E2E 남음)**
+- [ ] Go ABC마트에 Python과 동일한 JSON 기본 수집/HTML 전수 대조/DB 검증 저장 구현
+- [ ] Go 29CM에 Python과 동일한 검색 JSON 기본 수집/상세 HTML JSON-LD 전수 대조/DB 검증 저장 구현
 - [ ] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
 - [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산 **(진행 중: Python 완료, Go 남음)**
 - [ ] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장 **(진행 중: Python 완료, Go 남음)**

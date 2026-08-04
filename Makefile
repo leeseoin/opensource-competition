@@ -6,17 +6,20 @@ COLLECTOR_DIR := services/collector
 PRODUCT_BACKEND_DIR := services/product-backend
 MCP_SERVER_DIR := services/mcp-server
 PYTHON_COLLECTOR_DIR := services/python-collector
+PYTHON_CRAWLER_DIR := purchase-research-agent
 WEB_DIR := frontend/purchase-web
 
 MERCHANT ?= abcmart
 QUERY ?= 구두
 LIMIT ?= 3
 WEB_PORT ?= 3000
+PYTHON_CRAWLER_PORT ?= 8012
 RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBITMQ_URL),amqp://purchase_research:purchase_research@127.0.0.1:35672/purchase_research)
 
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
 	python-collector-sync python-collector-test \
+	python-crawler-env python-crawler-setup python-crawler-run python-crawler-test \
 	product-backend-run product-backend-test \
 	web-install web-dev web-lint web-build docs-check test check
 
@@ -33,6 +36,9 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make collector-run   Go Collector 서버 실행' \
 		'  make collector-worker  RabbitMQ 검색 작업 처리 Worker 실행' \
 		'  make python-collector-test Python 비교 Collector 테스트 실행' \
+		'  make python-crawler-setup 정우님 Python 크롤러 환경과 Chromium 준비' \
+		'  make python-crawler-run 정우님 Python 크롤러와 DB 적재 API 실행' \
+		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make web-dev         Next.js 개발 서버 실행' \
@@ -43,6 +49,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'실행 예시:' \
 		'  make collector-run' \
 		'  make product-backend-run' \
+		'  make python-crawler-run' \
 		'  make web-dev WEB_PORT=2500'
 
 env: ## 루트 .env가 없을 때만 예제 설정을 복사한다.
@@ -81,6 +88,23 @@ python-collector-sync: ## uv.lock 기준으로 Python 비교 Collector 환경을
 
 python-collector-test: python-collector-sync ## Python Adapter, Contract와 checkpoint 테스트를 실행한다.
 	cd $(PYTHON_COLLECTOR_DIR) && uv run --frozen python -m unittest discover -s tests -v
+
+python-crawler-env: ## 정우님 Python 크롤러의 로컬 .env를 없을 때만 생성한다.
+	@test -f $(PYTHON_CRAWLER_DIR)/.env || cp $(PYTHON_CRAWLER_DIR)/.env.example $(PYTHON_CRAWLER_DIR)/.env
+	@printf '%s\n' 'Python 크롤러 .env 준비 완료'
+
+python-crawler-setup: python-crawler-env ## 정우님 Python 크롤러 가상환경, 의존성과 Chromium을 준비한다.
+	@test -x $(PYTHON_CRAWLER_DIR)/.venv/bin/python || python3 -m venv $(PYTHON_CRAWLER_DIR)/.venv
+	$(PYTHON_CRAWLER_DIR)/.venv/bin/python -m pip install -r $(PYTHON_CRAWLER_DIR)/requirements.txt
+	$(PYTHON_CRAWLER_DIR)/.venv/bin/python -m playwright install chromium
+
+python-crawler-run: python-crawler-env ## 정우님 Python 크롤러와 Spring Boot DB 적재 연결 API를 실행한다.
+	@test -x $(PYTHON_CRAWLER_DIR)/.venv/bin/uvicorn || (printf '%s\n' '먼저 make python-crawler-setup을 실행하세요.'; exit 1)
+	cd $(PYTHON_CRAWLER_DIR) && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $(PYTHON_CRAWLER_PORT) --env-file .env
+
+python-crawler-test: ## 정우님 Python 결과의 CollectorResult 변환 단위 테스트를 실행한다.
+	@test -x $(PYTHON_CRAWLER_DIR)/.venv/bin/python || (printf '%s\n' '먼저 make python-crawler-setup을 실행하세요.'; exit 1)
+	cd $(PYTHON_CRAWLER_DIR) && PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache .venv/bin/python -m unittest discover -s tests -v
 
 product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
 	cd $(PRODUCT_BACKEND_DIR) && ./gradlew bootRun

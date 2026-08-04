@@ -165,6 +165,7 @@ public record CollectorResult(
 	 * @param options 수집된 옵션 목록
 	 * @param measurements 수집된 실측값
 	 * @param reviews 작성자 식별정보를 제외한 리뷰 목록
+	 * @param verification JSON과 렌더링 HTML의 상품별 비교 결과
 	 * @param provenance 상품 사실의 출처
 	 */
 	public record Product(
@@ -207,9 +208,58 @@ public record CollectorResult(
 			@NotNull
 			@Size(max = 1000)
 			List<@Valid Review> reviews,
+			@Valid
+			Verification verification,
 			@NotNull
 			@Valid
 			Provenance provenance) {
+	}
+
+	/**
+	 * Verification은 JSON 기본 수집값과 HTML 표시값의 상품별 비교 결과를 표현한다.
+	 *
+	 * @param status 비교 완료 상태
+	 * @param comparedFields 비교한 필드 목록
+	 * @param differences 불일치 필드와 양쪽 값
+	 * @param jsonSourceUrl JSON 응답 URL
+	 * @param htmlSourceUrl 렌더링 HTML URL
+	 * @param verifiedAt 비교 완료 시각
+	 */
+	public record Verification(
+			@NotBlank
+			@Pattern(regexp = "^(PENDING|MATCHED|MISMATCH|MISSING_IN_HTML|MISSING_IN_JSON|FAILED)$")
+			String status,
+			@NotNull
+			@Size(max = 50)
+			List<@NotBlank @Size(max = 100) String> comparedFields,
+			@NotNull
+			@Size(max = 50)
+			List<@Valid VerificationDifference> differences,
+			@NotBlank
+			@Size(max = 2048)
+			String jsonSourceUrl,
+			@NotBlank
+			@Size(max = 2048)
+			String htmlSourceUrl,
+			@NotNull
+			OffsetDateTime verifiedAt) {
+	}
+
+	/**
+	 * VerificationDifference는 하나의 JSON/HTML 불일치 필드와 양쪽 값을 표현한다.
+	 *
+	 * @param field 불일치 필드 이름
+	 * @param jsonValue JSON에서 정규화 전 확인한 값
+	 * @param htmlValue HTML에서 정규화 전 확인한 값
+	 */
+	public record VerificationDifference(
+			@NotBlank
+			@Size(max = 100)
+			String field,
+			@Size(max = 2000)
+			String jsonValue,
+			@Size(max = 2000)
+			String htmlValue) {
 	}
 
 	/**

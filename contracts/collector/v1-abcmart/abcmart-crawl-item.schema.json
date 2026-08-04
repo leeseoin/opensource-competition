@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json",
+  "title": "ABC마트 크롤러 상품 항목 v1-abcmart",
+  "description": "purchase-research-agent의 AbcMartCrawler(app/crawlers/abcmart/crawler.py)가 반환하는 상품 dict 1건의 실제 모양을 정의한다. JSON 기본 수집값과 렌더링 HTML 전수 대조 결과를 포함할 수 있으며, 운영 저장 계약인 contracts/collector/v1/collector-result.schema.json으로는 별도 Adapter가 변환한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_product_id",
+    "title",
+    "brand",
+    "price",
+    "price_original",
+    "discount_percent",
+    "image_url",
+    "color",
+    "style_code",
+    "link",
+    "site"
+  ],
+  "properties": {
+    "site": {
+      "const": "abcmart"
+    },
+    "source_product_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "description": "DB product.source_product_id VARCHAR(50) NOT NULL. 빈 문자열이면 ProductPayload.sourceProductId @NotBlank에 걸린다."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "description": "DB product.title VARCHAR(300) NOT NULL."
+    },
+    "brand": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "DB product.brand VARCHAR(100). 크롤러는 미발견 시 빈 문자열을 넣는다(null 아님)."
+    },
+    "price": {
+      "$ref": "#/$defs/priceString"
+    },
+    "price_original": {
+      "$ref": "#/$defs/priceString"
+    },
+    "discount_percent": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "image_url": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "DB product.image_url VARCHAR(500). 빈 문자열 가능."
+    },
+    "color": {
+      "type": "string",
+      "description": "목록 페이지에서 설정된 대표 색상. ProductPayload/DDL에는 별도 컬럼이 없고 CrawlTriggerService.toPayload()가 이 값을 실제로 썬지 않는다(없어지는 필드)."
+    },
+    "style_code": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "DB product.style_code VARCHAR(50)."
+    },
+    "link": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^https://abcmart\\.a-rt\\.com/product\\?prdtNo=\\d+$|^https://www\\.abcmart\\.co\\.kr/.*$",
+      "description": "DB product.link VARCHAR(500) NOT NULL. product.site + source_product_id가 UNIQUE KEY이므로 source_product_id가 link에서 추출된 값과 일치해야 한다."
+    },
+    "review_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "attach_details()로 상세를 붙인 상위 detail_limit개 상품에만 존재한다."
+    },
+    "reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/review" },
+      "description": "attach_details()가 붙인 리뷰 목록. 현재 CrawlTriggerService.toPayload()는 이 필드를 backend로 넘기지 않으므로(reviews=null 고정) DB에는 아직 안 들어간다 — README의 '발견된 연결 누락' 참조."
+    },
+    "options": {
+      "$ref": "#/$defs/options"
+    },
+    "verification": {
+      "$ref": "#/$defs/verification"
+    }
+  },
+  "$defs": {
+    "priceString": {
+      "type": "string",
+      "pattern": "^$|^[0-9,]+원$",
+      "description": "빈 문자열 또는 '89,000원' 형태. CrawlTriggerService.parsePrice()가 숫자만 추출해 Integer로 변환한다."
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_source_id", "content", "score", "date", "size"],
+      "properties": {
+        "review_source_id": {
+          "type": ["string", "null"],
+          "maxLength": 50,
+          "description": "null이면 DB product_review.review_source_id VARCHAR(50) NOT NULL / ReviewPayload.reviewSourceId @NotBlank에 위반된다 — prdtRvwSeq가 없는 리뷰가 있을 수 있으므로 이 항목이 대부분의 실패 원인이 된다."
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "score": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "date": {
+          "type": "string",
+          "description": "DetailFetcher._parse_review()가 'date' 키로 반환하지만 ReviewPayload.reviewDate와 이름이 다르다 — 직접 매핑하려면 변환 단계에서 키를 바꿀 필요."
+        },
+        "size": {
+          "type": "string"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 50 }
+        },
+        "sizes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 50 }
+        }
+      },
+      "description": "OptionsPayload(colors, sizes)와 필드명이 그대로 일치한다. DB product_option.option_value가 VARCHAR(50)이므로 각 항목도 50자 이하여야 한다."
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "compared_fields",
+        "differences",
+        "json_source_url",
+        "html_source_url",
+        "verified_at"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["PENDING", "MATCHED", "MISMATCH", "MISSING_IN_HTML", "MISSING_IN_JSON", "FAILED"]
+        },
+        "compared_fields": {
+          "type": "array",
+          "items": {"type": "string", "maxLength": 100},
+          "uniqueItems": true
+        },
+        "differences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "json_value", "html_value"],
+            "properties": {
+              "field": {"type": "string", "maxLength": 100},
+              "json_value": {"type": ["string", "null"], "maxLength": 2000},
+              "html_value": {"type": ["string", "null"], "maxLength": 2000}
+            }
+          }
+        },
+        "json_source_url": {"type": "string", "format": "uri", "maxLength": 2048},
+        "html_source_url": {"type": "string", "format": "uri", "maxLength": 2048},
+        "verified_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

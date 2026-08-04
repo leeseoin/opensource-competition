@@ -25,6 +25,7 @@ import com.purchasesearch.product_backend.collection.repository.CollectionSearch
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
+import com.purchasesearch.product_backend.evidence.repository.ProductVerificationRepository;
 import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
@@ -68,6 +69,9 @@ class ProductStorageIntegrationTests {
 	private EvidenceRepository evidenceRepository;
 
 	@Autowired
+	private ProductVerificationRepository productVerificationRepository;
+
+	@Autowired
 	private MockMvc mockMvc;
 
 	@Autowired
@@ -90,7 +94,8 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.productCount").value(1))
 				.andExpect(jsonPath("$.snapshotCount").value(1))
 				.andExpect(jsonPath("$.optionCount").value(1))
-				.andExpect(jsonPath("$.evidenceCount").value(1));
+				.andExpect(jsonPath("$.evidenceCount").value(1))
+				.andExpect(jsonPath("$.verificationCount").value(1));
 
 		assertThat(productRepository.count()).isEqualTo(1);
 		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
@@ -98,6 +103,14 @@ class ProductStorageIntegrationTests {
 		assertThat(offerSnapshotRepository.count()).isEqualTo(1);
 		assertThat(productOptionRepository.count()).isEqualTo(1);
 		assertThat(evidenceRepository.count()).isEqualTo(1);
+		assertThat(productVerificationRepository.count()).isEqualTo(1);
+		assertThat(productVerificationRepository.findAll())
+				.singleElement()
+				.satisfies(verification -> {
+					assertThat(verification.getStatus()).isEqualTo("MATCHED");
+					assertThat(verification.getComparedFields()).contains("title", "price");
+					assertThat(verification.getDifferences()).isEmpty();
+				});
 	}
 
 	/**
@@ -186,6 +199,7 @@ class ProductStorageIntegrationTests {
 		assertThat(firstReport.snapshotCount()).isEqualTo(1);
 		assertThat(firstReport.optionCount()).isEqualTo(1);
 		assertThat(firstReport.evidenceCount()).isEqualTo(1);
+		assertThat(firstReport.verificationCount()).isEqualTo(1);
 		assertThat(secondReport).isEqualTo(firstReport);
 		assertThat(productRepository.count()).isEqualTo(1);
 		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
@@ -193,6 +207,7 @@ class ProductStorageIntegrationTests {
 		assertThat(offerSnapshotRepository.count()).isEqualTo(2);
 		assertThat(productOptionRepository.count()).isEqualTo(2);
 		assertThat(evidenceRepository.count()).isEqualTo(2);
+		assertThat(productVerificationRepository.count()).isEqualTo(2);
 
 		mockMvc.perform(get("/internal/v1/products")
 						.param("merchant", "abcmart")

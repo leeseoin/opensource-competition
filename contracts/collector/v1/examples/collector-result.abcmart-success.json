@@ -58,6 +58,20 @@
       ],
       "measurements": {},
       "reviews": [],
+      "verification": {
+        "status": "MATCHED",
+        "comparedFields": [
+          "title",
+          "brand",
+          "price",
+          "image_url",
+          "link"
+        ],
+        "differences": [],
+        "jsonSourceUrl": "https://abcmart.a-rt.com/display/search-word/result-total/list?searchWord=%EA%B5%AC%EB%91%90&page=1",
+        "htmlSourceUrl": "https://abcmart.a-rt.com/display/search-word/result?searchWord=%EA%B5%AC%EB%91%90&page=1",
+        "verifiedAt": "2026-07-30T15:00:01+09:00"
+      },
       "provenance": {
         "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
         "collectedAt": "2026-07-30T15:00:00+09:00",
