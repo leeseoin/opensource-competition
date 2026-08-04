@@ -8,6 +8,10 @@ Go 기반 판매처 데이터 수집 서비스다.
 - 상품 번호, 상품명, 브랜드, 가격, 카테고리, 리뷰 수, 상품 URL 수집
 - 검색 결과에 공개된 사이즈와 사이즈별 재고 수집
 - ABC마트·29CM 검색 결과의 `totalCount`, `hasNext` 수집
+- ABC마트 검색 JSON과 Chrome rendering HTML의 선택 상품 전수 교차 검증
+- 29CM 검색 JSON과 상품 상세 HTML Product JSON-LD의 선택 상품 전수 교차 검증
+- 검증 결과 `MATCHED`/`MISMATCH`/`FAILED`와 원본 JSON/HTML 판매처별 저장
+- 응답 최상위 `verificationSummary`에서 일치/불일치/실패 개수 제공
 - `POST /internal/v1/collect/search`
 - `GET /internal/v1/health`
 - RabbitMQ `CollectionTask` 검색 작업 consumer와 `CollectionResult` publisher
@@ -202,7 +206,35 @@ props.pageProps.dehydratedState.queries[].state.data.pages[].items[]
 }
 ```
 
-상품 상세·옵션과 리뷰 수집은 아직 구현 전이다. 리뷰는 상품 단위 작업 큐와 제한된 Worker Pool로 구현할 예정이다.
+검증을 위한 상세 HTML은 수집하지만 29CM 옵션과 리뷰 본문 수집은 아직 구현 전이다. 리뷰는 상품 단위 작업 Queue와 제한된 Worker Pool로 구현할 예정이다.
+
+## JSON/HTML 교차 검증
+
+Go Collector는 JSON을 DB에 저장할 기본값으로 사용하고 HTML은 화면에 같은 상품 정보가 표시되는지 검증하는 데 사용한다.
+
+- ABC마트: 검색 페이지를 headless Chrome으로 rendering한 후 상품 카드를 비교한다.
+- 29CM: browser를 띄우지 않고 각 상품의 공개 상세 HTML에 있는 Product JSON-LD를 비교한다.
+- 원본은 Collector 실행 기준 `output/raw_json/{merchant}`와 `output/raw_html/{merchant}`에 저장된다.
+- Chrome을 자동으로 찾지 못하면 `.env`의 `COLLECTOR_CHROME_BIN`에 실행 파일 경로를 입력한다.
+- 29CM은 상품별 상세 요청 사이에 최소 1초 간격을 유지한다.
+
+응답의 `verificationSummary`를 보면 상품 상세 배열을 펼치지 않고도 검증 결과를 확인할 수 있다.
+
+```json
+{
+  "verificationSummary": {
+    "total": 3,
+    "matched": 3,
+    "mismatched": 0,
+    "failed": 0,
+    "missingInHtml": 0,
+    "missingInJson": 0,
+    "pending": 0
+  }
+}
+```
+
+50개 29CM 상품 검증은 최소 약 50초가 필요하므로 기본 `COLLECTOR_WRITE_TIMEOUT`과 `COLLECTOR_WORKER_TIMEOUT`은 90초다.
 
 ## 29CM 검색 수집 범위
 

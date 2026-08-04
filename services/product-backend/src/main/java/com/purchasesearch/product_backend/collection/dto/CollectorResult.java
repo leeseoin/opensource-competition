@@ -32,6 +32,7 @@ import jakarta.validation.constraints.Size;
  * @param hasNext 다음 페이지 존재 여부
  * @param collectedAt 결과 수집 완료 시각
  * @param collectorVersion Collector 구현 버전
+ * @param verificationSummary 상품별 JSON/HTML 검증 상태 집계
  * @param products 공통 상품 목록
  * @param warnings 수집 경고 목록
  * @param errors 수집 오류 목록
@@ -63,6 +64,8 @@ public record CollectorResult(
 		@NotBlank
 		@Size(max = 100)
 		String collectorVersion,
+		@Valid
+		VerificationSummary verificationSummary,
 		@NotNull
 		@Size(max = 50)
 		List<@Valid Product> products,
@@ -72,6 +75,27 @@ public record CollectorResult(
 		List<@Valid Issue> errors) {
 
 	private static final Set<String> STORABLE_STATUSES = Set.of("success", "partial");
+
+	/**
+	 * VerificationSummary는 응답 상품들의 JSON/HTML 검증 상태별 개수를 표현한다.
+	 *
+	 * @param total 검증 결과가 있는 전체 상품 수
+	 * @param matched 일치 상품 수
+	 * @param mismatched 불일치 상품 수
+	 * @param failed 검증 실패 상품 수
+	 * @param missingInHtml HTML에서 찾지 못한 상품 수
+	 * @param missingInJson JSON에서 찾지 못한 상품 수
+	 * @param pending 아직 검증하지 않은 상품 수
+	 */
+	public record VerificationSummary(
+			@Min(0) int total,
+			@Min(0) int matched,
+			@Min(0) int mismatched,
+			@Min(0) int failed,
+			@Min(0) int missingInHtml,
+			@Min(0) int missingInJson,
+			@Min(0) int pending) {
+	}
 
 	/**
 	 * 저장 가능한 정상 또는 부분 성공 결과인지 확인한다.
@@ -165,6 +189,7 @@ public record CollectorResult(
 	 * @param options 수집된 옵션 목록
 	 * @param measurements 수집된 실측값
 	 * @param reviews 작성자 식별정보를 제외한 리뷰 목록
+	 * @param verification JSON과 렌더링 HTML의 상품별 비교 결과
 	 * @param provenance 상품 사실의 출처
 	 */
 	public record Product(
@@ -207,9 +232,58 @@ public record CollectorResult(
 			@NotNull
 			@Size(max = 1000)
 			List<@Valid Review> reviews,
+			@Valid
+			Verification verification,
 			@NotNull
 			@Valid
 			Provenance provenance) {
+	}
+
+	/**
+	 * Verification은 JSON 기본 수집값과 HTML 표시값의 상품별 비교 결과를 표현한다.
+	 *
+	 * @param status 비교 완료 상태
+	 * @param comparedFields 비교한 필드 목록
+	 * @param differences 불일치 필드와 양쪽 값
+	 * @param jsonSourceUrl JSON 응답 URL
+	 * @param htmlSourceUrl 렌더링 HTML URL
+	 * @param verifiedAt 비교 완료 시각
+	 */
+	public record Verification(
+			@NotBlank
+			@Pattern(regexp = "^(PENDING|MATCHED|MISMATCH|MISSING_IN_HTML|MISSING_IN_JSON|FAILED)$")
+			String status,
+			@NotNull
+			@Size(max = 50)
+			List<@NotBlank @Size(max = 100) String> comparedFields,
+			@NotNull
+			@Size(max = 50)
+			List<@Valid VerificationDifference> differences,
+			@NotBlank
+			@Size(max = 2048)
+			String jsonSourceUrl,
+			@NotBlank
+			@Size(max = 2048)
+			String htmlSourceUrl,
+			@NotNull
+			OffsetDateTime verifiedAt) {
+	}
+
+	/**
+	 * VerificationDifference는 하나의 JSON/HTML 불일치 필드와 양쪽 값을 표현한다.
+	 *
+	 * @param field 불일치 필드 이름
+	 * @param jsonValue JSON에서 정규화 전 확인한 값
+	 * @param htmlValue HTML에서 정규화 전 확인한 값
+	 */
+	public record VerificationDifference(
+			@NotBlank
+			@Size(max = 100)
+			String field,
+			@Size(max = 2000)
+			String jsonValue,
+			@Size(max = 2000)
+			String htmlValue) {
 	}
 
 	/**

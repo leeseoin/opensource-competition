@@ -478,9 +478,10 @@ Go Collector는 PostgreSQL에 직접 쓰지 않는다.
 
 ```text
 Go Collector
-  → 판매처 원본을 공통 CollectorResult로 변환
+  → 판매처 JSON을 공통 CollectorResult로 변환
+  → HTML 또는 JSON-LD와 상품별 교차 검증
 
-Python Research Backend
+Spring Boot Product Backend
   → Contract 검사
   → 중복 정리와 정규화
   → PostgreSQL transaction
@@ -489,7 +490,7 @@ Python Research Backend
 이렇게 나누는 이유:
 
 - Go 파서가 실패해도 DB가 반쯤 저장되는 것을 막는다.
-- ABC마트와 29CM의 서로 다른 데이터를 Python에서 같은 기준으로 정리한다.
+- ABC마트와 29CM의 서로 다른 데이터를 Spring Boot에서 같은 기준으로 저장한다.
 - 수집 결과 Contract를 통과한 데이터만 저장한다.
 - 추천 로직과 실제 크롤링 코드를 분리한다.
 
@@ -507,6 +508,7 @@ Python Research Backend
 | `review_snapshots` | 개인정보를 제외한 공개 리뷰 최소 필드 |
 | `review_signals` | 사이즈감·착화감·품질 등 리뷰 분석 결과 |
 | `evidence` | source URL, 수집 시각, Collector 버전 |
+| `product_verifications` | JSON 기본값과 HTML/JSON-LD 표시값의 상품별 비교 결과 |
 | `verification_results` | 추천 당시 값과 구매 직전 값의 차이 |
 
 ### 9.3 같은 상품 가격이 바뀌었을 때

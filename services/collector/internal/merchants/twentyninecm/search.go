@@ -11,15 +11,17 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/leeseoin/opensource-competition/services/collector/internal/artifact"
 	"github.com/leeseoin/opensource-competition/services/collector/internal/collector"
 )
 
 const (
 	merchantName       = "29cm"
-	collectorVersion   = "29cm-search-v1"
+	collectorVersion   = "29cm-search-v2"
 	searchPageEndpoint = "https://www.29cm.co.kr/store/search"
 	searchAPIEndpoint  = "https://display-bff-api.29cm.co.kr/api/v1/listing/items?colorchipVariant=control"
 	maxSearchBodyBytes = 4 * 1024 * 1024
@@ -31,6 +33,8 @@ type Searcher struct {
 	client          *http.Client
 	now             func() time.Time
 	minInterval     time.Duration
+	verifyDetails   bool
+	artifacts       *artifact.Store
 	rateMu          sync.Mutex
 	nextRequestTime time.Time
 }
@@ -73,13 +77,15 @@ type searchItem struct {
 		WebLink string `json:"webLink"`
 	} `json:"itemUrl"`
 	ItemInfo struct {
-		ProductName  string  `json:"productName"`
-		ThumbnailURL string  `json:"thumbnailUrl"`
-		IsSoldOut    bool    `json:"isSoldOut"`
-		DisplayPrice int     `json:"displayPrice"`
-		BrandName    string  `json:"brandName"`
-		ReviewScore  float64 `json:"reviewScore"`
-		ReviewCount  int     `json:"reviewCount"`
+		ProductName   string  `json:"productName"`
+		ThumbnailURL  string  `json:"thumbnailUrl"`
+		IsSoldOut     bool    `json:"isSoldOut"`
+		DisplayPrice  int     `json:"displayPrice"`
+		SellPrice     int     `json:"sellPrice"`
+		OriginalPrice int     `json:"originalPrice"`
+		BrandName     string  `json:"brandName"`
+		ReviewScore   float64 `json:"reviewScore"`
+		ReviewCount   int     `json:"reviewCount"`
 	} `json:"itemInfo"`
 	ItemEvent struct {
 		EventProperties struct {
@@ -104,21 +110,35 @@ func (e *ResponseError) Error() string {
 
 // NewSearcher는 timeout과 redirect 제한이 설정된 HTTP client로 29CM 검색기를 생성한다.
 func NewSearcher(timeout time.Duration) *Searcher {
-	return NewSearcherWithClient(&http.Client{
+	return NewSearcherWithDependencies(&http.Client{
 		Timeout:       timeout,
 		CheckRedirect: checkRedirect,
-	}, time.Now, minRequestInterval)
+	}, time.Now, minRequestInterval, true, artifact.NewStore("output"))
 }
 
 // NewSearcherWithClient는 테스트용 HTTP client, 시계, 요청 간격을 주입해 29CM 검색기를 생성한다.
 func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterval time.Duration) *Searcher {
+	return NewSearcherWithDependencies(client, now, minInterval, false, nil)
+}
+
+// NewSearcherWithDependencies는 HTTP client, 시계, 요청 간격, 상세 HTML 검증 여부와 원본 저장소를 주입해 29CM 검색기를 생성한다.
+func NewSearcherWithDependencies(
+	client *http.Client,
+	now func() time.Time,
+	minInterval time.Duration,
+	verifyDetails bool,
+	artifacts *artifact.Store,
+) *Searcher {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second, CheckRedirect: checkRedirect}
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &Searcher{client: client, now: now, minInterval: minInterval}
+	return &Searcher{
+		client: client, now: now, minInterval: minInterval,
+		verifyDetails: verifyDetails, artifacts: artifacts,
+	}
 }
 
 // Search는 검색어를 29CM 공개 검색 데이터 요청으로 전달하고 상품 기본정보를 공통 결과로 변환한다.
@@ -189,6 +209,10 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 	if len(responseBody) > maxSearchBodyBytes {
 		return failedResult(result, collector.StatusUnsupported, "29CM_RESPONSE_TOO_LARGE", "29CM 검색 응답이 허용 크기를 넘었습니다", false, searchPageURL)
 	}
+	jsonSourceURL := searchAPIEndpoint
+	if response.Request != nil && response.Request.URL != nil {
+		jsonSourceURL = response.Request.URL.String()
+	}
 
 	products, totalCount, hasNext, err := ParseSearchResponse(responseBody, request, searchPageURL, collectedAt)
 	if err != nil {
@@ -204,6 +228,24 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 	result.TotalCount = &totalCount
 	result.HasNext = &hasNext
 	result.Products = products
+	if s.artifacts != nil {
+		label := artifactLabel(request.RequestID, page, collectedAt)
+		if saveErr := s.artifacts.SaveJSON(merchantName, label, responseBody); saveErr != nil {
+			result.Status = collector.StatusPartial
+			result.Warnings = append(result.Warnings, collector.Issue{
+				Code: "29CM_RAW_JSON_SAVE_FAILED", Message: saveErr.Error(), Retryable: false, SourceURL: &searchPageURL,
+			})
+		}
+	}
+	if s.verifyDetails && len(result.Products) > 0 {
+		verifiedProducts, warnings := s.verifyProducts(ctx, responseBody, result.Products, jsonSourceURL, collectedAt)
+		result.Products = verifiedProducts
+		result.VerificationSummary = collector.SummarizeVerifications(result.Products)
+		if len(warnings) > 0 {
+			result.Status = collector.StatusPartial
+			result.Warnings = append(result.Warnings, warnings...)
+		}
+	}
 
 	if len(request.Filters.Categories) > 0 || len(request.Filters.Sizes) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
 		result.Status = collector.StatusPartial
@@ -253,16 +295,17 @@ func ParseSearchResponse(
 
 	products := make([]collector.Product, 0, min(len(payload.Data.List), request.Limit))
 	for _, item := range payload.Data.List {
-		if item.ItemType != "PRODUCT" || item.ItemID <= 0 || item.ItemInfo.ProductName == "" || item.ItemInfo.DisplayPrice < 0 {
+		price := effectiveSellPrice(item)
+		if item.ItemType != "PRODUCT" || item.ItemID <= 0 || item.ItemInfo.ProductName == "" || price < 0 {
 			continue
 		}
 		if request.Filters.InStockOnly && item.ItemInfo.IsSoldOut {
 			continue
 		}
-		if request.Filters.PriceMin != nil && item.ItemInfo.DisplayPrice < *request.Filters.PriceMin {
+		if request.Filters.PriceMin != nil && price < *request.Filters.PriceMin {
 			continue
 		}
-		if request.Filters.PriceMax != nil && item.ItemInfo.DisplayPrice > *request.Filters.PriceMax {
+		if request.Filters.PriceMax != nil && price > *request.Filters.PriceMax {
 			continue
 		}
 		products = append(products, toProduct(item, sourceURL, collectedAt))
@@ -314,7 +357,8 @@ func checkRedirect(request *http.Request, previous []*http.Request) error {
 	if len(previous) >= 5 {
 		return fmt.Errorf("29CM redirect 횟수가 5회를 넘었습니다")
 	}
-	if request.URL.Hostname() != "display-bff-api.29cm.co.kr" {
+	host := request.URL.Hostname()
+	if host != "display-bff-api.29cm.co.kr" && host != "29cm.co.kr" && !strings.HasSuffix(host, ".29cm.co.kr") {
 		return fmt.Errorf("허용되지 않은 redirect host입니다: %s", request.URL.Hostname())
 	}
 	return nil
@@ -323,7 +367,7 @@ func checkRedirect(request *http.Request, previous []*http.Request) error {
 // toProduct는 29CM 검색 상품을 개인정보가 없는 Collector 공통 상품으로 변환한다.
 func toProduct(item searchItem, sourceURL string, collectedAt time.Time) collector.Product {
 	provenance := collector.Provenance{SourceURL: sourceURL, CollectedAt: collectedAt, CollectorVersion: collectorVersion}
-	price := collector.Money{Amount: item.ItemInfo.DisplayPrice, Currency: "KRW"}
+	price := collector.Money{Amount: effectiveSellPrice(item), Currency: "KRW"}
 	productURL := item.ItemURL.WebLink
 	if productURL == "" {
 		productURL = "https://product.29cm.co.kr/catalog/" + strconv.Itoa(item.ItemID)
@@ -366,6 +410,14 @@ func toProduct(item searchItem, sourceURL string, collectedAt time.Time) collect
 		Reviews:      []collector.Review{},
 		Provenance:   provenance,
 	}
+}
+
+// effectiveSellPrice는 29CM 검색 JSON의 일반 판매가를 우선하고 누락되면 표시가를 사용한다.
+func effectiveSellPrice(item searchItem) int {
+	if item.ItemInfo.SellPrice > 0 {
+		return item.ItemInfo.SellPrice
+	}
+	return item.ItemInfo.DisplayPrice
 }
 
 // categoryPath는 검색 응답의 대·중·소 카테고리 이름을 빈 값 없이 순서대로 반환한다.

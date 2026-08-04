@@ -13,7 +13,9 @@ import com.purchasesearch.product_backend.collection.entity.CollectionSearchCont
 import com.purchasesearch.product_backend.collection.exception.UnstorableCollectorResultException;
 import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
 import com.purchasesearch.product_backend.evidence.entity.Evidence;
+import com.purchasesearch.product_backend.evidence.entity.ProductVerification;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
+import com.purchasesearch.product_backend.evidence.repository.ProductVerificationRepository;
 import com.purchasesearch.product_backend.product.entity.MerchantProduct;
 import com.purchasesearch.product_backend.product.entity.OfferSnapshot;
 import com.purchasesearch.product_backend.product.entity.Product;
@@ -41,6 +43,7 @@ public class CollectorResultStoreService {
 	private final OfferSnapshotRepository offerSnapshotRepository;
 	private final ProductOptionRepository productOptionRepository;
 	private final EvidenceRepository evidenceRepository;
+	private final ProductVerificationRepository productVerificationRepository;
 
 	/**
 	 * Collector 결과 저장에 필요한 validator와 repository를 연결한다.
@@ -52,6 +55,7 @@ public class CollectorResultStoreService {
 	 * @param offerSnapshotRepository 가격과 재고 snapshot repository
 	 * @param productOptionRepository 상품 옵션 repository
 	 * @param evidenceRepository 공개 출처 근거 repository
+	 * @param productVerificationRepository JSON/HTML 상품 검증 repository
 	 */
 	public CollectorResultStoreService(
 			Validator validator,
@@ -60,7 +64,8 @@ public class CollectorResultStoreService {
 			MerchantProductRepository merchantProductRepository,
 			OfferSnapshotRepository offerSnapshotRepository,
 			ProductOptionRepository productOptionRepository,
-			EvidenceRepository evidenceRepository) {
+			EvidenceRepository evidenceRepository,
+			ProductVerificationRepository productVerificationRepository) {
 		this.validator = validator;
 		this.collectionSearchContextRepository = collectionSearchContextRepository;
 		this.productRepository = productRepository;
@@ -68,6 +73,7 @@ public class CollectorResultStoreService {
 		this.offerSnapshotRepository = offerSnapshotRepository;
 		this.productOptionRepository = productOptionRepository;
 		this.evidenceRepository = evidenceRepository;
+		this.productVerificationRepository = productVerificationRepository;
 	}
 
 	/**
@@ -89,18 +95,58 @@ public class CollectorResultStoreService {
 
 		int optionCount = 0;
 		int evidenceCount = 0;
+		int verificationCount = 0;
 		for (CollectorResult.Product product : result.products()) {
 			MerchantProduct merchantProduct = upsertMerchantProduct(result, product);
 			OfferSnapshot snapshot = saveOfferSnapshot(result, product, merchantProduct);
 			optionCount += saveOptions(product, snapshot);
 			evidenceCount += saveEvidence(product, merchantProduct, snapshot);
+			verificationCount += saveVerification(product, merchantProduct, snapshot);
 		}
 
 		return new StoreReport(
 				result.products().size(),
 				result.products().size(),
 				optionCount,
-				evidenceCount);
+				evidenceCount,
+				verificationCount);
+	}
+
+	/**
+	 * 상품에 JSON/HTML 비교 결과가 있으면 현재 snapshot에 연결해 저장한다.
+	 *
+	 * @param product 검증 결과를 포함할 수 있는 Collector 상품
+	 * @param merchantProduct 검증 대상 판매처 상품
+	 * @param snapshot 비교한 시점의 상품 snapshot
+	 * @return 저장했으면 1, 검증 결과가 없으면 0
+	 */
+	private int saveVerification(
+			CollectorResult.Product product,
+			MerchantProduct merchantProduct,
+			OfferSnapshot snapshot) {
+		CollectorResult.Verification verification = product.verification();
+		if (verification == null) {
+			return 0;
+		}
+		var differences = verification.differences().stream()
+				.map(difference -> {
+					Map<String, Object> values = new java.util.LinkedHashMap<>();
+					values.put("field", difference.field());
+					values.put("jsonValue", difference.jsonValue());
+					values.put("htmlValue", difference.htmlValue());
+					return values;
+				})
+				.toList();
+		productVerificationRepository.save(ProductVerification.create(
+				merchantProduct,
+				snapshot,
+				verification.status(),
+				verification.comparedFields(),
+				differences,
+				verification.jsonSourceUrl(),
+				verification.htmlSourceUrl(),
+				verification.verifiedAt()));
+		return 1;
 	}
 
 	/**
@@ -274,11 +320,13 @@ public class CollectorResultStoreService {
 	 * @param snapshotCount 추가한 offer snapshot 수
 	 * @param optionCount 추가한 옵션 수
 	 * @param evidenceCount 추가한 근거 수
+	 * @param verificationCount 추가한 JSON/HTML 검증 결과 수
 	 */
 	public record StoreReport(
 			int productCount,
 			int snapshotCount,
 			int optionCount,
-			int evidenceCount) {
+			int evidenceCount,
+			int verificationCount) {
 	}
 }

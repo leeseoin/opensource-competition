@@ -88,6 +88,8 @@ DB에서 조건 검색
 
 - 외부 판매처에 접근하는 유일한 구성요소
 - 판매처별 공개 JSON, HTML, JSON-LD 중 안정적인 데이터 소스 선택
+- JSON 기본 상품값과 HTML/JSON-LD 표시값의 상품별 교차 검증
+- 원본 JSON/HTML 파일과 차이 필드 생성
 - 검색, 상세, 옵션, 재고, 공개 리뷰 parsing
 - RabbitMQ 작업 소비와 `CollectorResult` 발행
 - 판매처별 요청 간격, timeout, 재시도 상한, 차단 감지
@@ -102,6 +104,7 @@ Go Collector는 DB에 저장하거나 최종 추천을 판단하지 않는다.
 - RabbitMQ 수집 작업 발행과 결과 소비
 - Contract 검증, 판매처 공통 모델 정규화, 중복 처리
 - Flyway migration과 JPA repository를 통한 최종 DB 쓰기
+- 상품 snapshot과 연결된 교차 검증 결과 저장
 - 수집 작업 상태, 리뷰 신호, 상품 비교, 구매 전 재검증 관리
 
 Product Backend는 Collector가 제공하지 않은 판매처 사실을 만들지 않는다.

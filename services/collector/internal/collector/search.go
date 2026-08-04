@@ -28,6 +28,19 @@ const (
 	StockAvailable = "available"
 	// StockOut은 상품의 재고가 없음을 나타낸다.
 	StockOut = "out_of_stock"
+
+	// VerificationPending은 HTML 교차 검증을 아직 수행하지 않았음을 나타낸다.
+	VerificationPending = "PENDING"
+	// VerificationMatched는 JSON과 HTML의 비교 필드가 모두 일치함을 나타낸다.
+	VerificationMatched = "MATCHED"
+	// VerificationMismatch는 JSON과 HTML의 비교 필드 중 하나 이상이 다름을 나타낸다.
+	VerificationMismatch = "MISMATCH"
+	// VerificationMissingInHTML은 JSON 상품을 HTML에서 찾지 못했음을 나타낸다.
+	VerificationMissingInHTML = "MISSING_IN_HTML"
+	// VerificationMissingInJSON은 HTML 상품을 JSON에서 찾지 못했음을 나타낸다.
+	VerificationMissingInJSON = "MISSING_IN_JSON"
+	// VerificationFailed는 HTML 요청 또는 parsing 실패로 비교를 완료하지 못했음을 나타낸다.
+	VerificationFailed = "FAILED"
 )
 
 var (
@@ -123,19 +136,60 @@ type SearchFilters struct {
 // SearchResult는 상품 검색 작업의 상태, 원본 검색 조건, 판매처 기준 페이지 정보, 상품, 경고와 오류를 전달한다.
 // TotalCount와 HasNext는 판매처가 값을 제공하지 않거나 요청이 실패하면 nil이며, 로컬 필터 적용 전 판매처 검색 결과를 기준으로 한다.
 type SearchResult struct {
-	RequestID        string        `json:"requestId"`
-	Operation        string        `json:"operation"`
-	Status           string        `json:"status"`
-	Merchant         string        `json:"merchant"`
-	Query            string        `json:"query"`
-	Filters          SearchFilters `json:"filters"`
-	TotalCount       *int          `json:"totalCount"`
-	HasNext          *bool         `json:"hasNext"`
-	CollectedAt      time.Time     `json:"collectedAt"`
-	CollectorVersion string        `json:"collectorVersion"`
-	Products         []Product     `json:"products"`
-	Warnings         []Issue       `json:"warnings"`
-	Errors           []Issue       `json:"errors"`
+	RequestID           string               `json:"requestId"`
+	Operation           string               `json:"operation"`
+	Status              string               `json:"status"`
+	Merchant            string               `json:"merchant"`
+	Query               string               `json:"query"`
+	Filters             SearchFilters        `json:"filters"`
+	TotalCount          *int                 `json:"totalCount"`
+	HasNext             *bool                `json:"hasNext"`
+	CollectedAt         time.Time            `json:"collectedAt"`
+	CollectorVersion    string               `json:"collectorVersion"`
+	VerificationSummary *VerificationSummary `json:"verificationSummary,omitempty"`
+	Products            []Product            `json:"products"`
+	Warnings            []Issue              `json:"warnings"`
+	Errors              []Issue              `json:"errors"`
+}
+
+// VerificationSummary는 응답 상품들의 JSON/HTML 비교 상태를 한눈에 볼 수 있게 집계한다.
+type VerificationSummary struct {
+	Total         int `json:"total"`
+	Matched       int `json:"matched"`
+	Mismatched    int `json:"mismatched"`
+	Failed        int `json:"failed"`
+	MissingInHTML int `json:"missingInHtml"`
+	MissingInJSON int `json:"missingInJson"`
+	Pending       int `json:"pending"`
+}
+
+// SummarizeVerifications는 검증 결과가 있는 상품만 상태별로 집계하고 없으면 nil을 반환한다.
+func SummarizeVerifications(products []Product) *VerificationSummary {
+	summary := VerificationSummary{}
+	for _, product := range products {
+		if product.Verification == nil {
+			continue
+		}
+		summary.Total++
+		switch product.Verification.Status {
+		case VerificationMatched:
+			summary.Matched++
+		case VerificationMismatch:
+			summary.Mismatched++
+		case VerificationFailed:
+			summary.Failed++
+		case VerificationMissingInHTML:
+			summary.MissingInHTML++
+		case VerificationMissingInJSON:
+			summary.MissingInJSON++
+		case VerificationPending:
+			summary.Pending++
+		}
+	}
+	if summary.Total == 0 {
+		return nil
+	}
+	return &summary
 }
 
 // Product는 판매처 검색 페이지에서 수집한 상품 기본 정보를 표현한다.
@@ -154,7 +208,25 @@ type Product struct {
 	Options      []Option                    `json:"options"`
 	Measurements map[string]MeasurementValue `json:"measurements"`
 	Reviews      []Review                    `json:"reviews"`
+	Verification *Verification               `json:"verification,omitempty"`
 	Provenance   Provenance                  `json:"provenance"`
+}
+
+// Verification은 JSON 기본 수집값과 HTML 표시값의 상품별 비교 결과를 표현한다.
+type Verification struct {
+	Status         string                   `json:"status"`
+	ComparedFields []string                 `json:"comparedFields"`
+	Differences    []VerificationDifference `json:"differences"`
+	JSONSourceURL  string                   `json:"jsonSourceUrl"`
+	HTMLSourceURL  string                   `json:"htmlSourceUrl"`
+	VerifiedAt     time.Time                `json:"verifiedAt"`
+}
+
+// VerificationDifference는 하나의 비교 필드에서 확인한 JSON과 HTML 값을 표현한다.
+type VerificationDifference struct {
+	Field     string  `json:"field"`
+	JSONValue *string `json:"jsonValue"`
+	HTMLValue *string `json:"htmlValue"`
 }
 
 // Money는 금액을 최소 통화 단위의 정수와 통화 코드로 표현한다.

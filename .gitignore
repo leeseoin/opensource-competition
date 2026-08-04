@@ -8,3 +8,9 @@
 
 # macOS Finder 메타데이터
 .DS_Store
+
+# Python 실험 브랜치에서 생성되는 로컬 실행 산출물
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/output/

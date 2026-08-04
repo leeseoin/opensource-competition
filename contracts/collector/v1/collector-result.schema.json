@@ -55,6 +55,10 @@
     "collectorVersion": {
       "$ref": "#/$defs/version"
     },
+    "verificationSummary": {
+      "$ref": "#/$defs/verificationSummary",
+      "description": "상품별 JSON/HTML 검증 상태를 응답 최상위에서 집계한 값이다."
+    },
     "products": {
       "type": "array",
       "items": {
@@ -451,9 +455,61 @@
           },
           "maxItems": 1000
         },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        },
         "provenance": {
           "$ref": "#/$defs/provenance"
         }
+      }
+    },
+    "verificationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "matched", "mismatched", "failed", "missingInHtml", "missingInJson", "pending"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "matched": {"type": "integer", "minimum": 0},
+        "mismatched": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "missingInHtml": {"type": "integer", "minimum": 0},
+        "missingInJson": {"type": "integer", "minimum": 0},
+        "pending": {"type": "integer", "minimum": 0}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "comparedFields", "differences", "jsonSourceUrl", "htmlSourceUrl", "verifiedAt"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "MATCHED", "MISMATCH", "MISSING_IN_HTML", "MISSING_IN_JSON", "FAILED"]
+        },
+        "comparedFields": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 100},
+          "uniqueItems": true,
+          "maxItems": 50
+        },
+        "differences": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/verificationDifference"},
+          "maxItems": 50
+        },
+        "jsonSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "htmlSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "verifiedAt": {"$ref": "#/$defs/dateTime"}
+      }
+    },
+    "verificationDifference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "jsonValue", "htmlValue"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "jsonValue": {"type": ["string", "null"], "maxLength": 2000},
+        "htmlValue": {"type": ["string", "null"], "maxLength": 2000}
       }
     }
   }

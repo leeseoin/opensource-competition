@@ -32,7 +32,7 @@ func run() error {
 	if rabbitURL == "" {
 		rabbitURL = defaultRabbitMQURL
 	}
-	timeout := 15 * time.Second
+	timeout := 90 * time.Second
 	if value := os.Getenv("COLLECTOR_WORKER_TIMEOUT"); value != "" {
 		parsed, err := time.ParseDuration(value)
 		if err != nil || parsed <= 0 {

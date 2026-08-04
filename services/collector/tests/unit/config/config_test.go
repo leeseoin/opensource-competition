@@ -25,7 +25,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.HTTPAddress != ":8090" ||
 		cfg.ReadTimeout != 5*time.Second ||
-		cfg.WriteTimeout != 10*time.Second ||
+		cfg.WriteTimeout != 90*time.Second ||
 		cfg.IdleTimeout != 60*time.Second ||
 		cfg.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("default config = %#v", cfg)

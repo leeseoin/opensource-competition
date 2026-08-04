@@ -14,6 +14,11 @@ Spring Boot의 단일 페이지 및 여러 페이지 수집 작업 발행 API도
 생성부터 결과 저장까지의 코드 경로가 연결됐다. ABC마트 실제 Queue E2E는 검증했고,
 29CM 실제 Queue E2E와 작업 상태 영구 저장은 남아 있다.
 
+검색 상품은 JSON을 기본값으로 사용한다. `COLLECTOR-006`은 같은 상품을 화면에서
+확인 가능한 HTML 또는 상세 페이지의 JSON-LD와 다시 비교한다. 상품별 검증 상태와
+차이 필드는 CollectorResult에 포함되며 Spring Boot가 `product_verifications`에 저장한다.
+최상위 `verificationSummary`는 일치/불일치/실패 개수를 바로 보여준다.
+
 ```text
 현재 가능:
 판매처 검색 → Go Collector → 공통 CollectorResult JSON
@@ -22,6 +27,7 @@ Spring Boot의 단일 페이지 및 여러 페이지 수집 작업 발행 API도
 RabbitMQ CollectionResult → Spring Boot Consumer → PostgreSQL 자동 저장
 Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
 연속 페이지 요청 → 페이지별 Queue 작업 → 결과별 PostgreSQL 누적 저장
+JSON 기본값 ↔ HTML/JSON-LD 표시값 비교 → 상품별 검증 결과 저장
 
 현재 미구현:
 수집 작업의 PostgreSQL 상태 저장과 Redis 진행 상태
@@ -57,6 +63,7 @@ DB에 저장된다. 이전 Python 구현에서 DB 적재를 검증한 기록은
 | 검색 결과 전체 개수 `totalCount` | 수집 | 수집 |
 | 다음 페이지 여부 `hasNext` | 수집 | 수집 |
 | 출처 URL과 수집 시각 | 수집 | 수집 |
+| JSON/HTML 교차 검증 | 렌더링 검색 HTML과 비교 | 상세 JSON-LD와 비교 |
 
 ABC마트 검색 응답은 사이즈별 재고를 제공하므로 옵션도 만든다.
 
@@ -84,7 +91,7 @@ ABC마트 검색 응답은 사이즈별 재고를 제공하므로 옵션도 만�
 
 ```text
 ABC마트: PRDT_NO, PRDT_NAME, PRDT_DC_PRICE
-29CM:    itemId, productName, displayPrice
+29CM:    itemId, productName, sellPrice
 ```
 
 판매처별 Go Adapter가 이를 공통 필드로 번역한다.
@@ -92,7 +99,7 @@ ABC마트: PRDT_NO, PRDT_NAME, PRDT_DC_PRICE
 ```text
 PRDT_NO / itemId                    → externalId
 PRDT_NAME / productName             → name
-PRDT_DC_PRICE / displayPrice        → price.amount
+PRDT_DC_PRICE / sellPrice           → price.amount
 ```
 
 핵심 변환 위치는 다음과 같다.
@@ -102,6 +109,11 @@ PRDT_DC_PRICE / displayPrice        → price.amount
 - 공통 결과: `services/collector/internal/collector/search.go`의 `Product`
 
 Product Backend는 판매처 원본 필드 이름을 알 필요 없이 `CollectorResult`만 검증하고 저장하면 된다.
+
+교차 검증은 JSON 값을 다른 값으로 덮어쓰지 않는다. `MATCHED`, `MISMATCH`,
+`MISSING_IN_HTML`, `FAILED` 상태와 서로 다른 필드 목록을 별도 근거로 남긴다. 원본은
+`output/raw_json/{merchant}`와 `output/raw_html/{merchant}`에 저장해 파서 변경을
+재현할 수 있게 한다.
 
 ## 4. 현재 구현된 DB 저장 기반과 남은 연결
 
@@ -119,6 +131,8 @@ Product Backend가 Java DTO와 Bean Validation으로 Contract 검증
 JPA transaction
         ↓
 PostgreSQL
+        ├── offer_snapshots / evidence
+        └── product_verifications
 ```
 
 DTO 검증, JPA transaction, RabbitMQ 단일/다중 페이지 작업 발행, 결과 Consumer와

@@ -15,12 +15,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/leeseoin/opensource-competition/services/collector/internal/artifact"
 	"github.com/leeseoin/opensource-competition/services/collector/internal/collector"
+	"github.com/leeseoin/opensource-competition/services/collector/internal/render"
 )
 
 const (
 	merchantName       = "abcmart"
-	collectorVersion   = "abcmart-search-v2"
+	collectorVersion   = "abcmart-search-v3"
 	searchEndpoint     = "https://abcmart.a-rt.com/display/search-word/result-total/list"
 	productEndpoint    = "https://abcmart.a-rt.com/product"
 	maxSearchBodyBytes = 4 * 1024 * 1024
@@ -32,6 +34,8 @@ type Searcher struct {
 	client          *http.Client
 	now             func() time.Time
 	minInterval     time.Duration
+	renderer        render.Renderer
+	artifacts       *artifact.Store
 	rateMu          sync.Mutex
 	nextRequestTime time.Time
 }
@@ -52,6 +56,8 @@ type searchItem struct {
 	Brand          string            `json:"BRAND_NAME"`
 	ImageURL       string            `json:"PRDT_IMAGE_URL"`
 	DiscountPrice  string            `json:"PRDT_DC_PRICE"`
+	NormalPrice    string            `json:"NRMAL_AMT"`
+	DiscountRate   string            `json:"DISCOUNT_RATE"`
 	Category       string            `json:"CTGR_NAME_ALL"`
 	ProductOptions string            `json:"PRDT_OPTION"`
 	ColorID        string            `json:"COLOR_ID"`
@@ -67,6 +73,8 @@ type normalizedItem struct {
 	Brand       string
 	ImageURL    string
 	Price       int
+	NormalPrice int
+	Discount    *int
 	Category    []string
 	Color       string
 	IsSoldOut   bool
@@ -93,21 +101,32 @@ func (e *ResponseError) Error() string {
 
 // NewSearcher는 timeout과 redirect 제한이 설정된 HTTP client로 ABC마트 검색기를 생성한다.
 func NewSearcher(timeout time.Duration) *Searcher {
-	return NewSearcherWithClient(&http.Client{
+	return NewSearcherWithDependencies(&http.Client{
 		Timeout:       timeout,
 		CheckRedirect: checkRedirect,
-	}, time.Now, minRequestInterval)
+	}, time.Now, minRequestInterval, render.NewChromeRenderer(), artifact.NewStore("output"))
 }
 
 // NewSearcherWithClient는 테스트용 HTTP client와 시계를 주입해 ABC마트 검색기를 생성한다.
 func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterval time.Duration) *Searcher {
+	return NewSearcherWithDependencies(client, now, minInterval, nil, nil)
+}
+
+// NewSearcherWithDependencies는 HTTP client, 시계, 요청 간격, HTML renderer와 원본 저장소를 주입해 검증 가능한 ABC마트 검색기를 생성한다.
+func NewSearcherWithDependencies(
+	client *http.Client,
+	now func() time.Time,
+	minInterval time.Duration,
+	renderer render.Renderer,
+	artifacts *artifact.Store,
+) *Searcher {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second, CheckRedirect: checkRedirect}
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &Searcher{client: client, now: now, minInterval: minInterval}
+	return &Searcher{client: client, now: now, minInterval: minInterval, renderer: renderer, artifacts: artifacts}
 }
 
 // Search는 ABC마트 공개 검색 JSON에서 상품, 사이즈별 재고, 전체 수와 다음 페이지 여부를 수집한다.
@@ -170,6 +189,27 @@ func (s *Searcher) SearchPage(ctx context.Context, request collector.SearchReque
 	result.TotalCount = &totalCount
 	result.HasNext = &hasNext
 	result.Products = products
+	if s.artifacts != nil {
+		label := artifactLabel(request.RequestID, page, collectedAt)
+		if saveErr := s.artifacts.SaveJSON(merchantName, label, body); saveErr != nil {
+			result.Status = collector.StatusPartial
+			result.Warnings = append(result.Warnings, collector.Issue{
+				Code: "ABCMART_RAW_JSON_SAVE_FAILED", Message: saveErr.Error(), Retryable: false, SourceURL: &searchURL,
+			})
+		}
+	}
+	if s.renderer != nil && len(result.Products) > 0 {
+		htmlURL := buildSearchPageURL(request, page)
+		verifiedProducts, warnings := s.verifySearchPage(
+			ctx, body, result.Products, searchURL, htmlURL, request.RequestID, collectedAt, page,
+		)
+		result.Products = verifiedProducts
+		result.VerificationSummary = collector.SummarizeVerifications(result.Products)
+		if len(warnings) > 0 {
+			result.Status = collector.StatusPartial
+			result.Warnings = append(result.Warnings, warnings...)
+		}
+	}
 
 	if len(request.Filters.Categories) > 0 || len(request.Filters.Colors) > 0 || len(request.Filters.Attributes) > 0 {
 		result.Status = collector.StatusPartial
@@ -239,6 +279,21 @@ func normalizeItem(item searchItem) (normalizedItem, error) {
 	if err != nil {
 		return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 가격 해석 실패: %w", item.ProductNo, err)
 	}
+	normalPrice := price
+	if strings.TrimSpace(item.NormalPrice) != "" {
+		normalPrice, err = parseNonNegativeInt(item.NormalPrice)
+		if err != nil {
+			return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 정상가 해석 실패: %w", item.ProductNo, err)
+		}
+	}
+	var discount *int
+	if strings.TrimSpace(item.DiscountRate) != "" {
+		value, discountErr := parseNonNegativeInt(item.DiscountRate)
+		if discountErr != nil {
+			return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 할인율 해석 실패: %w", item.ProductNo, discountErr)
+		}
+		discount = &value
+	}
 	stocks, err := parseSizeStocks(item.ProductOptions, item.SizeList)
 	if err != nil {
 		return normalizedItem{}, fmt.Errorf("ABC마트 상품 %s의 사이즈 재고 해석 실패: %w", item.ProductNo, err)
@@ -253,7 +308,8 @@ func normalizeItem(item searchItem) (normalizedItem, error) {
 	}
 	return normalizedItem{
 		ProductNo: item.ProductNo, Name: item.Name, Brand: item.Brand, ImageURL: item.ImageURL,
-		Price: price, Category: splitCategoryPath(item.Category), Color: item.ColorID,
+		Price: price, NormalPrice: normalPrice, Discount: discount,
+		Category: splitCategoryPath(item.Category), Color: item.ColorID,
 		IsSoldOut: strings.EqualFold(item.SoldOut, "y"), ReviewCount: reviewCount, SizeStocks: stocks,
 	}, nil
 }
@@ -379,6 +435,25 @@ func buildSearchURL(request collector.SearchRequest, page int) string {
 	values.Set("resultChannel", "10001")
 	values.Set("memberTypeCode", "10002")
 	return searchEndpoint + "?" + values.Encode()
+}
+
+// buildSearchPageURL은 JSON 요청과 같은 검색어, 페이지와 개수를 사용하는 ABC마트 검색 화면 URL을 만든다.
+func buildSearchPageURL(request collector.SearchRequest, page int) string {
+	values := url.Values{}
+	pageSize := request.Limit
+	if pageSize < 30 {
+		pageSize = 30
+	}
+	values.Set("channel", "10001")
+	values.Set("searchWord", request.Query)
+	values.Set("smartSearchCheck", "true")
+	values.Set("page", strconv.Itoa(page))
+	values.Set("perPage", strconv.Itoa(pageSize))
+	values.Set("pageColumn", "3")
+	values.Set("sort", "point")
+	values.Set("tabGubun", "total")
+	values.Set("searchPageGubun", "product")
+	return "https://abcmart.a-rt.com/display/search-word/result?" + values.Encode()
 }
 
 // checkRedirect는 ABC마트 또는 A-RT host 안에서 최대 5회까지만 redirect를 허용한다.

@@ -82,6 +82,15 @@
 - [x] 29CM 공개 검색 화면의 상품 응답 구조 확인
 - [x] 29CM 상품 기본정보 Searcher와 fixture 단위 테스트
 - [x] 29CM opt-in live smoke test
+- [x] `COLLECTOR-006` 공통 상품 검증 상태와 필드 차이 계약
+- [x] `COLLECTOR-006` 응답 최상위 검증 상태 집계
+- [x] `COLLECTOR-006` ABC마트 JSON 결과와 렌더링 HTML 전수 비교
+- [x] `COLLECTOR-006` 29CM JSON 결과와 상세 JSON-LD 전수 비교
+- [x] `COLLECTOR-006` 판매처별 원본 JSON/HTML 파일 저장
+- [x] `COLLECTOR-006` Spring Boot 검증 결과 PostgreSQL 적재
+- [x] `COLLECTOR-006` Go fixture 테스트와 Spring 통합 테스트
+- [ ] `COLLECTOR-006` ABC마트/29CM 실제 소량 smoke test **(구현 완료/검증 필요)**
+- [ ] `COLLECTOR-006` Collector Result JSON Schema 직접 검증 **(검증 도구 실행 오류)**
 - [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 확인
 - [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 구조 확인
 - [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test
@@ -116,6 +125,7 @@
 - [x] Collector JSON 수동 적재 내부 API와 정상/실패 통합 테스트
 - [x] 저장된 최신 상품 검색 REST API
 - [x] springdoc-openapi 기반 Swagger UI와 OpenAPI 경로 통합 테스트
+- [x] 다중 페이지 수집 API의 바로 실행 가능한 최소 Swagger 요청 예시
 - [x] ABC마트 실제 검색 결과 Swagger 수동 적재와 PostgreSQL 행 검증
 - [x] 29CM 실제 검색 결과 Swagger 수동 적재와 PostgreSQL 행 검증
 - [x] 수집 요청 검색어와 적용 filters를 `collection_search_contexts`에 저장하고
@@ -295,9 +305,9 @@
 - [ ] 동일 상품 매칭
 - [ ] 사용자 치수·선호 프로필
 - [ ] 검색·수집 캐시 정책
-- [ ] 판매처별 HTML fixture 변경 비교 자동화
-- [ ] live smoke에서 필수 field 누락과 DOM 변경 자동 감지
-- [ ] JSON-LD·공개 JSON 우선 추출과 HTML selector fallback
+- [x] 판매처별 JSON/HTML fixture 변경 비교 자동화
+- [ ] live smoke에서 필수 field 누락과 DOM 변경 자동 감지 **(부분 구현: 상품별 검증 상태와 차이 필드 생성)**
+- [x] JSON-LD/공개 JSON 우선 추출과 HTML 교차 검증
 - [ ] parser 수정안 자동 생성과 회귀 테스트 실행
 - [ ] 자동 수정안의 사람 승인·배포 절차
 - [ ] 주문·결제 지원 범위 재검토

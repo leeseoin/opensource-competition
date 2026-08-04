@@ -2,8 +2,8 @@
 
 작성일: 2026-07-31
 최종 점검일: 2026-08-04
-최종 점검 범위: `OPS-004` 코드/실수집/계약/보고서 완료 감사
-상태: 선택 기능 감사 완료
+최종 점검 범위: `COLLECTOR-006` JSON/HTML 교차 검증 구현 감사
+상태: 선택 기능 구현 완료/검증 필요
 
 ## 목적
 
@@ -68,6 +68,7 @@
 | `COLLECTOR-003` | 29CM 공개 상품 검색 | 완료 | P0 | 공개 검색 응답의 상품 기본정보와 pagination 변환 | fixture 테스트와 낮은 빈도의 opt-in smoke test가 통과하고 출처가 포함됨 | Collector 변환 설명 / 공통 수집 데이터 명세 | 상세/리뷰 기능과 분리해 유지 |
 | `COLLECTOR-004` | 상품 상세와 옵션 수집 | 계획 | P1 | 상세 설명, 가격, 배송, 옵션, 사이즈표와 재고 | ABC마트/29CM 상세 결과가 공통 계약으로 변환되고 fixture 테스트가 통과함 | 공통 수집 데이터 명세 / 데이터 수집과 DB 적재 설계 | 공개 상세 구조와 요청 예산 확인 |
 | `COLLECTOR-005` | 공개 리뷰 수집 | 계획 | P1 | 리뷰 pagination, 평점, 본문, 구매 옵션과 사진 존재 여부 | 작성자 식별정보와 이미지를 저장하지 않고 제한된 요청으로 fixture 테스트가 통과함 | 공통 수집 데이터 명세 / 데이터 수집과 DB 적재 설계 | 리뷰 공개 범위와 pagination 구조 확인 |
+| `COLLECTOR-006` | JSON/HTML 수집 결과 교차 검증 | 구현 완료/검증 필요 | P1 | JSON을 기본 상품값으로 사용하고 ABC마트 렌더링 HTML 및 29CM 상세 JSON-LD와 전수 비교, 원본 파일과 검증 상태 저장 | 공통 계약/Go 구현/Spring 저장/fixture 테스트가 일치하고 ABC마트/29CM 실제 소량 검증에서 `MATCHED` 또는 설명 가능한 차이를 반환함 | 시스템 구조 / 공통 수집 데이터 명세 / 현재 DB 저장 흐름 | 실제 판매처 소량 smoke test와 JSON Schema 직접 검증 |
 | `MERCHANT-001` | 판매처 추가와 접근 안전성 | 부분 구현 | P1 | Registry, host allowlist, robots 확인, URL/DNS/redirect 검증과 판매처별 제한 | 새 Adapter가 공통 등록 절차로 추가되고 private network와 접근 제한 우회가 차단됨 | 시스템 구조 / Collector 변환 설명 | 공통 allowlist와 redirect 안전성 구현 |
 
 ### Queue와 Redis

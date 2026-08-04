@@ -59,6 +59,25 @@ func TestSearchRequestValidateRejectsInvalidValues(t *testing.T) {
 	}
 }
 
+// TestSummarizeVerifications는 상품별 검증 상태를 응답 최상위 개수로 집계하는지 검증한다.
+func TestSummarizeVerifications(t *testing.T) {
+	products := []collector.Product{
+		{Verification: &collector.Verification{Status: collector.VerificationMatched}},
+		{Verification: &collector.Verification{Status: collector.VerificationMatched}},
+		{Verification: &collector.Verification{Status: collector.VerificationMismatch}},
+		{Verification: &collector.Verification{Status: collector.VerificationFailed}},
+		{},
+	}
+
+	summary := collector.SummarizeVerifications(products)
+	if summary == nil {
+		t.Fatal("SummarizeVerifications() = nil, want summary")
+	}
+	if summary.Total != 4 || summary.Matched != 2 || summary.Mismatched != 1 || summary.Failed != 1 {
+		t.Fatalf("SummarizeVerifications() = %#v", summary)
+	}
+}
+
 // validSearchRequest는 검증 테스트에서 재사용할 정상 요청을 생성한다.
 func validSearchRequest() collector.SearchRequest {
 	return collector.SearchRequest{

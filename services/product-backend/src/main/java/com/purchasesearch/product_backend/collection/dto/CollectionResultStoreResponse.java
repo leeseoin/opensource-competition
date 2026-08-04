@@ -10,12 +10,14 @@ import com.purchasesearch.product_backend.collection.service.CollectorResultStor
  * @param snapshotCount 추가한 가격과 재고 snapshot 수
  * @param optionCount 추가한 옵션 수
  * @param evidenceCount 추가한 출처 근거 수
+ * @param verificationCount 추가한 JSON/HTML 검증 결과 수
  */
 public record CollectionResultStoreResponse(
 		int productCount,
 		int snapshotCount,
 		int optionCount,
-		int evidenceCount) {
+		int evidenceCount,
+		int verificationCount) {
 
 	/**
 	 * 저장 서비스의 내부 결과를 HTTP 응답 DTO로 변환한다.
@@ -28,7 +30,8 @@ public record CollectionResultStoreResponse(
 				report.productCount(),
 				report.snapshotCount(),
 				report.optionCount(),
-				report.evidenceCount());
+				report.evidenceCount(),
+				report.verificationCount());
 	}
 
 	/**

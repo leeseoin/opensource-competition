@@ -1,6 +1,7 @@
 package com.purchasesearch.product_backend.collection.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +21,7 @@ import com.purchasesearch.product_backend.collection.service.CollectionTaskPubli
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -98,7 +100,24 @@ public class CollectionTaskController {
 				description = "RabbitMQ 발행 실패이며 일부 앞 페이지는 이미 접수됐을 수 있음",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
-	public BulkCollectionTaskResponse publishPages(@Valid @RequestBody BulkCollectionTaskRequest request) {
+	public BulkCollectionTaskResponse publishPages(
+			@io.swagger.v3.oas.annotations.parameters.RequestBody(
+				required = true,
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON_VALUE,
+					examples = @ExampleObject(
+						name = "ABC마트 1페이지 소량 수집",
+						summary = "손으로 바로 실행할 수 있는 최소 요청",
+						value = """
+							{
+							  "merchant": "abcmart",
+							  "query": "구두",
+							  "startPage": 1,
+							  "pageCount": 1,
+							  "limit": 3
+							}
+							""")))
+			@Valid @RequestBody BulkCollectionTaskRequest request) {
 		return collectionTaskPublisher.publishPages(request);
 	}
 

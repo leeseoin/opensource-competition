@@ -65,7 +65,7 @@ func TestSearcherSearch(t *testing.T) {
 	if product.ExternalID != "2468262" || product.Name != "[29EDITION] BELLA SLINGBACK / BLACK" {
 		t.Errorf("product identity = %#v", product)
 	}
-	if product.Brand == nil || *product.Brand != "기호" || product.Price == nil || product.Price.Amount != 100_960 {
+	if product.Brand == nil || *product.Brand != "기호" || product.Price == nil || product.Price.Amount != 134_400 {
 		t.Errorf("product facts = %#v", product)
 	}
 	if len(product.CategoryPath) != 3 || product.CategoryPath[2] != "플랫" || product.Rating == nil || *product.Rating != 4.5 {
@@ -96,7 +96,7 @@ func TestSearcherAppliesSupportedFilters(t *testing.T) {
 		return jsonResponse(http.StatusOK, readFixture(t)), nil
 	})}
 	request := validRequest()
-	maxPrice := 120_000
+	maxPrice := 150_000
 	request.Filters.PriceMax = &maxPrice
 	request.Filters.InStockOnly = true
 

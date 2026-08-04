@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-07-31
+최종 갱신일: 2026-08-04
 
 ## 이 문서를 공개하는 이유
 
@@ -23,6 +23,7 @@
 |---|---:|---|---|---|
 | Go | 1.25 | Collector 개발 및 실행 | [go.dev](https://go.dev/) | BSD-3-Clause |
 | RabbitMQ AMQP 0-9-1 Go Client | 1.10.0 | RabbitMQ 작업과 결과 메시지 처리 | [rabbitmq/amqp091-go](https://github.com/rabbitmq/amqp091-go) | BSD-3-Clause |
+| Google Chrome 또는 Chromium | 시스템 설치 버전 | ABC마트 공개 검색 화면의 JavaScript rendering HTML 검증 | [Chromium](https://www.chromium.org/) / [Chrome 약관](https://www.google.com/chrome/terms/) | Chromium BSD-3-Clause 기반 / Chrome 배포물은 Google 약관 적용 |
 
 정확한 Go 모듈 해석 결과는 `services/collector/go.mod`와 `services/collector/go.sum`에서 확인한다.
 

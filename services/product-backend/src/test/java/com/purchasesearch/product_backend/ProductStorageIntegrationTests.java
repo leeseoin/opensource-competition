@@ -25,6 +25,7 @@ import com.purchasesearch.product_backend.collection.repository.CollectionSearch
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
+import com.purchasesearch.product_backend.evidence.repository.ProductVerificationRepository;
 import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
@@ -68,6 +69,9 @@ class ProductStorageIntegrationTests {
 	private EvidenceRepository evidenceRepository;
 
 	@Autowired
+	private ProductVerificationRepository productVerificationRepository;
+
+	@Autowired
 	private MockMvc mockMvc;
 
 	@Autowired
@@ -90,7 +94,8 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.productCount").value(1))
 				.andExpect(jsonPath("$.snapshotCount").value(1))
 				.andExpect(jsonPath("$.optionCount").value(1))
-				.andExpect(jsonPath("$.evidenceCount").value(1));
+				.andExpect(jsonPath("$.evidenceCount").value(1))
+				.andExpect(jsonPath("$.verificationCount").value(1));
 
 		assertThat(productRepository.count()).isEqualTo(1);
 		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
@@ -98,6 +103,14 @@ class ProductStorageIntegrationTests {
 		assertThat(offerSnapshotRepository.count()).isEqualTo(1);
 		assertThat(productOptionRepository.count()).isEqualTo(1);
 		assertThat(evidenceRepository.count()).isEqualTo(1);
+		assertThat(productVerificationRepository.count()).isEqualTo(1);
+		assertThat(productVerificationRepository.findAll())
+				.singleElement()
+				.satisfies(verification -> {
+					assertThat(verification.getStatus()).isEqualTo("MATCHED");
+					assertThat(verification.getComparedFields()).contains("title", "price");
+					assertThat(verification.getDifferences()).isEmpty();
+				});
 	}
 
 	/**
@@ -186,6 +199,7 @@ class ProductStorageIntegrationTests {
 		assertThat(firstReport.snapshotCount()).isEqualTo(1);
 		assertThat(firstReport.optionCount()).isEqualTo(1);
 		assertThat(firstReport.evidenceCount()).isEqualTo(1);
+		assertThat(firstReport.verificationCount()).isEqualTo(1);
 		assertThat(secondReport).isEqualTo(firstReport);
 		assertThat(productRepository.count()).isEqualTo(1);
 		assertThat(collectionSearchContextRepository.count()).isEqualTo(1);
@@ -193,6 +207,7 @@ class ProductStorageIntegrationTests {
 		assertThat(offerSnapshotRepository.count()).isEqualTo(2);
 		assertThat(productOptionRepository.count()).isEqualTo(2);
 		assertThat(evidenceRepository.count()).isEqualTo(2);
+		assertThat(productVerificationRepository.count()).isEqualTo(2);
 
 		mockMvc.perform(get("/internal/v1/products")
 						.param("merchant", "abcmart")
@@ -273,8 +288,8 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
-	 * OpenAPI JSON에 수동 적재와 상품 조회 경로가 포함되고 Swagger UI 진입 주소가
-	 * 정상적으로 제공되는지 검증한다.
+	 * OpenAPI JSON에 수동 적재와 상품 조회 경로 및 짧은 페이지 수집 예시가 포함되고
+	 * Swagger UI 진입 주소가 정상적으로 제공되는지 검증한다.
 	 *
 	 * @throws Exception OpenAPI 또는 Swagger UI 요청에 실패한 경우
 	 */
@@ -287,7 +302,15 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.paths['/internal/v1/collection-results'].post")
 						.exists())
 				.andExpect(jsonPath("$.paths['/internal/v1/products'].get")
-						.exists());
+						.exists())
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-tasks/pages'].post"
+						+ ".requestBody.content['application/json'].examples"
+						+ "['ABC마트 1페이지 소량 수집'].value.merchant")
+						.value("abcmart"))
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-tasks/pages'].post"
+						+ ".requestBody.content['application/json'].examples"
+						+ "['ABC마트 1페이지 소량 수집'].value.limit")
+						.value(3));
 
 		mockMvc.perform(get("/swagger-ui.html"))
 				.andExpect(status().is3xxRedirection());

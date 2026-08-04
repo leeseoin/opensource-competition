@@ -10,7 +10,7 @@ import (
 const (
 	defaultHTTPAddress     = ":8090"
 	defaultReadTimeout     = 5 * time.Second
-	defaultWriteTimeout    = 10 * time.Second
+	defaultWriteTimeout    = 90 * time.Second
 	defaultIdleTimeout     = 60 * time.Second
 	defaultShutdownTimeout = 10 * time.Second
 )
