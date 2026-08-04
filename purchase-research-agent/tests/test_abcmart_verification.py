@@ -2,7 +2,8 @@
 
 import unittest
 
-from app.crawlers.abcmart.verification import reconcile_page, verification_summary
+from app.crawlers.abcmart.verification import reconcile_page
+from app.services.verification_summary import summarize_verifications
 
 
 class AbcMartVerificationTests(unittest.TestCase):
@@ -24,7 +25,15 @@ class AbcMartVerificationTests(unittest.TestCase):
             html_source_url="https://example.com/search?page=1",
         )
 
-        self.assertEqual(verification_summary(verified), {"MATCHED": 1, "MISSING_IN_HTML": 1})
+        self.assertEqual(summarize_verifications(verified), {
+            "total": 2,
+            "matched": 1,
+            "mismatched": 0,
+            "failed": 0,
+            "missingInHtml": 1,
+            "missingInJson": 0,
+            "pending": 0,
+        })
         self.assertEqual(len(warnings), 1)
 
     def test_records_price_mismatch(self) -> None:

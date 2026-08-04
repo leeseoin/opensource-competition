@@ -1120,8 +1120,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   검색어와 페이지의 렌더링 HTML을 수집한 모든 상품과 대조하도록
   구현했다. 상품별 검증 상태와 필드별 차이는 Spring Boot를 통해
   PostgreSQL에 저장한다. ABC마트 자동 테스트와 실제 판매처/DB 수동 E2E는
-  통과했다. 29CM은 검색 JSON 적재는 통과했고 상세 HTML JSON-LD 전수 비교
-  코드와 자동 테스트를 추가했으며 수동 E2E 재확인이 남아 있다.
+  통과했다. 29CM도 검색 JSON과 공개 상세 HTML JSON-LD 전수 비교, 상품별 DB
+  저장 및 실제 3개 수동 E2E가 통과했다.
 - 구현 위치:
   - `purchase-research-agent/app/crawlers/abcmart/json_fetcher.py:27` `AbcJsonFetcher`: 공개 검색 JSON pagination, 원본 저장과 Python 상품 변환
   - `purchase-research-agent/app/crawlers/abcmart/crawler.py:71` `AbcMartCrawler.crawl`: 같은 페이지의 JSON/HTML 수집과 전수 대조 흐름
@@ -1163,14 +1163,23 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 원본 파일 정리: JSON과 HTML 원본을 각각
   `output/raw_json/{merchant}`와 `output/raw_html/{merchant}`에 판매처별로 저장하도록
   통일했다. 기존 실행 파일도 삭제하지 않고 같은 하위 디렉토리로 옮겼다.
+- 공통 집계와 계약 정렬: Python의 기존 `{"MATCHED": 3}` 상태 map을 Go와 같은
+  `total/matched/mismatched/failed/missingInHtml/missingInJson/pending` 구조로
+  바꿨다. 각 50개 저장 batch가 자기 상품만 집계하며, Adapter는 전송 전에 공통
+  CollectorResult JSON Schema를 강제한다.
+- 추가 구현 위치:
+  - `purchase-research-agent/app/services/verification_summary.py:18` `summarize_verifications`: Python과 Go의 공통 검증 집계 구조 생성
+  - `purchase-research-agent/app/services/collector_result_validation.py:20` `validate_collector_result`: Spring Boot 전송 전 공통 JSON Schema 검증
+  - `purchase-research-agent/app/services/collector_result_adapter.py:30` `build_collector_result`: batch별 검증 집계와 계약 검사 연결
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectorResult.java:39` `CollectorResult.VerificationSummary`: Python/Go 공통 집계 역직렬화와 Bean Validation
 - 남은 위험: browser 렌더링은 JSON 전용 수집보다 느리고 페이지 스크립트 변경에
   민감하다. 검증 경고가 많은 실행의 응답 크기와 DB 용량 상한도 추가로
-  정해야 한다. Python 실제 판매처/PostgreSQL 수동 E2E 통과 후에만 Go 동일
-  기능을 `sandbox/ls`에 구현한다.
+  정해야 한다. 실제 대량 수집 시 원본 파일 보존 기간과 용량 제한도 필요하다.
 - 검증:
-  - `purchase-research-agent/.venv/bin/python -m unittest discover -s tests -v`: 12개 통과
+  - `make python-crawler-test`: 13개 통과
   - 수동 E2E에서 저장한 ABC마트 1페이지 JSON/HTML fixture 30개 재비교: `MATCHED` 30개, 경고 0개
   - ABC마트 Swagger 수동 E2E 3개: `MATCHED` 3개, `verificationCount` 3개, 경고 0개
+  - 29CM Swagger 수동 E2E 3개: `MATCHED` 3개, `verificationCount` 3개, 경고 0개
   - `services/product-backend/./gradlew test`: `BUILD SUCCESSFUL`
   - `uvx check-jsonschema --schemafile contracts/collector/v1/collector-result.schema.json contracts/collector/v1/examples/collector-result.abcmart-success.json`: 통과
   - `uvx check-jsonschema --schemafile contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json contracts/collector/v1-abcmart/examples/abcmart-crawl-item.valid.json`: 통과

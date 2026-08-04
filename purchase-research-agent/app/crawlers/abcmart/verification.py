@@ -87,16 +87,6 @@ def mark_failed(
     return products, [f"HTML 전수 검증 실패: {reason}"]
 
 
-def verification_summary(products: list[dict[str, Any]]) -> dict[str, int]:
-    """상품 목록의 검증 상태별 개수를 계산한다."""
-
-    summary: dict[str, int] = {}
-    for product in products:
-        status = str((product.get("verification") or {}).get("status") or "PENDING")
-        summary[status] = summary.get(status, 0) + 1
-    return summary
-
-
 def _differences(json_product: dict[str, Any], html_product: dict[str, Any]) -> list[dict[str, Any]]:
     """비교 대상 필드의 정규화된 값이 다른 경우 차이 목록을 만든다."""
 

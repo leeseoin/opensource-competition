@@ -62,3 +62,4 @@
 | 2026-08-03 | Codex를 사용해 실제 ABC마트 Queue E2E의 빈 filters 역직렬화 실패를 진단하고 Java DTO 기본값 처리를 수정 | 실제 RabbitMQ Queue/DLQ와 PostgreSQL을 확인하고 빈 filters 수동 저장, HTTP 저장 회귀 테스트와 결과 Consumer 통합 테스트로 검증 |
 | 2026-08-03 | Codex를 사용해 전달받은 Python 통합 Schema를 운영 CollectorResult와 분리하고 Python/Go 최대 10,000개 수집 및 성능 비교 설계를 작성 | 사용자가 Python/Go 비교 목표와 브랜치 경계를 결정하고 Schema/20건 예제/dev-jw 구현/현재 Go DTO를 대조해 필드 변환과 검증 기준을 확인 |
 | 2026-08-03 | Codex를 사용해 dev-jw Python 크롤러의 판매처 Adapter를 선별 이식하고 pagination/중복 제거/checkpoint/요청 예산/안전 중단/공통 계약 검증 코어를 구현 | 저장된 ABC마트/29CM fixture, 전달받은 20건 예제, checkpoint 재개와 429 중단을 7개 자동 테스트로 검증 |
+| 2026-08-05 | Codex를 사용해 Python ABC마트/29CM의 JSON/HTML 검증 집계를 Go Collector와 동일한 CollectorResult 구조로 정렬하고 전송 전 JSON Schema 검사를 추가 | 사용자가 실제 두 판매처 3개 수집과 PostgreSQL 저장을 확인했으며 Python 13개 테스트와 Spring Boot Testcontainers 전체 테스트로 계약 호환성을 검증 |

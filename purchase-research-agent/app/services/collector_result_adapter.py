@@ -6,6 +6,9 @@ import re
 from datetime import datetime
 from typing import Any
 
+from app.services.collector_result_validation import validate_collector_result
+from app.services.verification_summary import summarize_verifications
+
 
 def parse_won(value: str | int | float | None) -> int | None:
     """원화 문자열에서 정수 금액을 추출한다.
@@ -58,7 +61,7 @@ def build_collector_result(
 
     issues = crawler_errors or []
     status = "partial" if issues else "success"
-    return {
+    result = {
         "requestId": request_id,
         "operation": "search",
         "status": status,
@@ -76,6 +79,11 @@ def build_collector_result(
         "warnings": [_issue(message) for message in issues],
         "errors": [],
     }
+    verification_summary = summarize_verifications(products)
+    if verification_summary is not None:
+        result["verificationSummary"] = verification_summary
+    validate_collector_result(result)
+    return result
 
 
 def build_collector_result_batches(
@@ -139,7 +147,7 @@ def _convert_product(product: dict[str, Any], collected_at: str) -> dict[str, An
     provenance = _provenance(source_url, collected_at)
     amount = parse_won(product.get("price"))
     image_url = str(product.get("image_url") or "")
-    return {
+    converted = {
         "externalId": external_id,
         "name": name,
         "brand": str(product.get("brand") or ""),
@@ -158,9 +166,12 @@ def _convert_product(product: dict[str, Any], collected_at: str) -> dict[str, An
         "options": _convert_options(product, external_id, amount, provenance),
         "measurements": {},
         "reviews": _convert_reviews(product.get("reviews"), provenance),
-        "verification": _convert_verification(product.get("verification")),
         "provenance": provenance,
     }
+    verification = _convert_verification(product.get("verification"))
+    if verification is not None:
+        converted["verification"] = verification
+    return converted
 
 
 def _convert_verification(raw: Any) -> dict[str, Any] | None:

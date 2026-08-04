@@ -55,6 +55,10 @@
     "collectorVersion": {
       "$ref": "#/$defs/version"
     },
+    "verificationSummary": {
+      "$ref": "#/$defs/verificationSummary",
+      "description": "상품별 JSON/HTML 검증 상태를 응답 최상위에서 집계한 값이다."
+    },
     "products": {
       "type": "array",
       "items": {
@@ -457,6 +461,20 @@
         "provenance": {
           "$ref": "#/$defs/provenance"
         }
+      }
+    },
+    "verificationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "matched", "mismatched", "failed", "missingInHtml", "missingInJson", "pending"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "matched": {"type": "integer", "minimum": 0},
+        "mismatched": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "missingInHtml": {"type": "integer", "minimum": 0},
+        "missingInJson": {"type": "integer", "minimum": 0},
+        "pending": {"type": "integer", "minimum": 0}
       }
     },
     "verification": {

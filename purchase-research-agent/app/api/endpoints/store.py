@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.services.backend_store_service import BackendStoreError, BackendStoreService
 from app.services.collector_result_adapter import build_collector_result_batches
 from app.services.crawler_service import CrawlerService
-from app.crawlers.abcmart.verification import verification_summary
+from app.services.verification_summary import summarize_verifications
 
 router = APIRouter()
 
@@ -94,7 +94,7 @@ async def collect_and_store(request: CollectAndStoreRequest) -> dict:
         "query": request.query,
         "collectedCount": len(products),
         "batchCount": len(collector_results),
-        "verificationSummary": verification_summary(products),
+        "verificationSummary": summarize_verifications(products),
         "crawlerWarnings": errors,
         "storeResult": store_result,
     }

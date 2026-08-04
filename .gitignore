@@ -13,3 +13,6 @@
 .venv/
 __pycache__/
 *.py[cod]
+
+# 크롤러가 생성하는 로컬 JSON/HTML 원본과 실행 산출물
+**/output/

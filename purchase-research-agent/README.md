@@ -72,8 +72,14 @@ curl -X POST 'http://localhost:8012/api/v1/collect-and-store' \
 
 성공하면 응답의 `storeResult`에 `productCount`, `snapshotCount`, `optionCount`,
 `evidenceCount`, `verificationCount`가 표시됩니다. `verificationSummary`에서는
-`MATCHED`, `MISMATCH`, `MISSING_IN_HTML`, `FAILED` 상태별 상품 수를 확인할 수
-있습니다. 실제 DB 조회는 Product Backend의 다음 API를 사용합니다.
+`total`, `matched`, `mismatched`, `failed`, `missingInHtml`, `missingInJson`,
+`pending` 개수를 확인할 수 있습니다. 이 구조는 Go Collector와 동일하며 50개씩
+나뉜 각 저장 batch에도 해당 batch의 집계가 포함됩니다. 실제 DB 조회는 Product
+Backend의 다음 API를 사용합니다.
+
+Python Adapter는 전송 직전에
+`contracts/collector/v1/collector-result.schema.json`을 검사합니다. 공통 계약에
+없는 상태나 필드 구조가 만들어지면 Spring Boot에 보내지 않고 오류로 중단합니다.
 
 `limit`은 최대 500까지 입력할 수 있습니다. Spring Boot의 `CollectorResult` 한 요청은
 최대 50개이므로 Python 연결 API가 자동으로 50개씩 나눠 저장합니다. 예를 들어
@@ -181,4 +187,6 @@ API Endpoint (/category) → 결과 JSON + Markdown 리포트 저장
 - `logs/reports/{site}_{category}_{timestamp}.md` — 분석 리포트
 - `logs/search_log.md` — 누적 요청 로그
 
-> `output/`, `logs/`는 `.gitignore`에 등록되어 git에 포함되지 않습니다.
+> `output/`, `logs/`는 `.gitignore`에 등록되어 git에 포함되지 않습니다. 원본은
+> 수집 결과 검증용 로컬 산출물이며 PostgreSQL에는 상품별 출처 URL과 비교 결과를
+> 저장합니다.

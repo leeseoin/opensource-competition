@@ -32,6 +32,7 @@ import jakarta.validation.constraints.Size;
  * @param hasNext 다음 페이지 존재 여부
  * @param collectedAt 결과 수집 완료 시각
  * @param collectorVersion Collector 구현 버전
+ * @param verificationSummary 상품별 JSON/HTML 검증 상태 집계
  * @param products 공통 상품 목록
  * @param warnings 수집 경고 목록
  * @param errors 수집 오류 목록
@@ -63,6 +64,8 @@ public record CollectorResult(
 		@NotBlank
 		@Size(max = 100)
 		String collectorVersion,
+		@Valid
+		VerificationSummary verificationSummary,
 		@NotNull
 		@Size(max = 50)
 		List<@Valid Product> products,
@@ -72,6 +75,27 @@ public record CollectorResult(
 		List<@Valid Issue> errors) {
 
 	private static final Set<String> STORABLE_STATUSES = Set.of("success", "partial");
+
+	/**
+	 * VerificationSummary는 응답 상품들의 JSON/HTML 검증 상태별 개수를 표현한다.
+	 *
+	 * @param total 검증 결과가 있는 전체 상품 수
+	 * @param matched 일치 상품 수
+	 * @param mismatched 불일치 상품 수
+	 * @param failed 검증 실패 상품 수
+	 * @param missingInHtml HTML에서 찾지 못한 상품 수
+	 * @param missingInJson JSON에서 찾지 못한 상품 수
+	 * @param pending 아직 검증하지 않은 상품 수
+	 */
+	public record VerificationSummary(
+			@Min(0) int total,
+			@Min(0) int matched,
+			@Min(0) int mismatched,
+			@Min(0) int failed,
+			@Min(0) int missingInHtml,
+			@Min(0) int missingInJson,
+			@Min(0) int pending) {
+	}
 
 	/**
 	 * 저장 가능한 정상 또는 부분 성공 결과인지 확인한다.

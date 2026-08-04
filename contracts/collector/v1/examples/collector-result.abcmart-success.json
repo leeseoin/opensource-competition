@@ -12,6 +12,15 @@
   "hasNext": true,
   "collectedAt": "2026-07-30T15:00:00+09:00",
   "collectorVersion": "abcmart-search-v2",
+  "verificationSummary": {
+    "total": 1,
+    "matched": 1,
+    "mismatched": 0,
+    "failed": 0,
+    "missingInHtml": 0,
+    "missingInJson": 0,
+    "pending": 0
+  },
   "products": [
     {
       "externalId": "1010110882",
