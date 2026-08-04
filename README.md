@@ -101,7 +101,9 @@ docker compose ps
 Product Backend를 실행하면 Flyway가 상품, 판매처 상품, 가격/재고 snapshot,
 옵션 및 근거 테이블을 자동 생성한다. Collector JSON 수동 적재와 상품 조회뿐 아니라
 RabbitMQ 검색 작업 발행 및 결과 자동 저장 경로도 구현돼 있다. 작업별 진행 상태를
-PostgreSQL에 저장하는 기능은 아직 구현 전이다.
+PostgreSQL의 `collection_jobs`와 `collection_tasks`에 저장하며 `jobId` 조회 API에서
+전체 상태, 페이지별 결과, 상품 수와 `verificationSummary`를 확인할 수 있다. Redis의
+짧은 진행 상태 및 장애 복구 연동은 아직 구현 전이다.
 
 ## 루트 개발 명령
 
@@ -123,6 +125,13 @@ Product Backend의 내부 API는 실행 후 Swagger UI에서 직접 확인할 �
 http://localhost:8080/swagger-ui.html
 ```
 
+Go Collector도 별도 Swagger UI와 OpenAPI JSON을 제공한다.
+
+```text
+http://localhost:8090/swagger-ui/
+http://localhost:8090/openapi.json
+```
+
 ```bash
 make web-dev WEB_PORT=2500
 ```
@@ -133,8 +142,10 @@ Go Collector의 RabbitMQ Worker는 다음 명령으로 실행한다.
 make collector-worker
 ```
 
-Product Backend의 RabbitMQ 작업 발행과 결과 저장 코드는 구현됐다. 실제 판매처 전체
-흐름은 Product Backend와 Go Worker를 함께 실행한 opt-in 수동 검증이 남아 있다.
+Product Backend의 RabbitMQ 작업 발행과 결과 저장 코드는 구현됐다. ABC마트와 29CM는
+Product Backend에서 작업 등록, Go Worker 실제 수집, PostgreSQL 저장 및 `jobId` 완료
+조회까지 상품 3개씩 opt-in E2E를 통과했다. 실제 판매처 검증은 기본 CI에서는 실행하지
+않고 필요할 때만 수동으로 실행한다.
 
 기본 검증은 다음 명령으로 실행한다.
 

@@ -4,6 +4,7 @@
 
 ## 최신 기록
 
+- 2026-08-05 / [`COLLECTOR-006` JSON/HTML 상품 교차 검증](2026-08-05-COLLECTOR-006-JSON_HTML_상품_교차_검증.md) / `e1fa451`, `a9b5b80` / ABC마트/29CM JSON과 공개 HTML을 전수 비교하고 실제 상품 각 3개 `MATCHED` 확인
 - 2026-08-05 / [`BACKEND-002` 수집 job 영구 상태와 조회](2026-08-05-BACKEND-002-수집_job_영구_상태와_조회.md) / `d0dab6f` / PostgreSQL job/task 상태와 상품 수 및 JSON/HTML 검증 집계 조회 구현
 - 2026-08-04 / [`OPS-004` Python/Go 크롤러 확장성과 성능 비교](2026-08-04-OPS-004-Python_Go_크롤러_확장성과_성능_비교.md) / `2715c1a`, `30e9b60` / 두 언어로 ABC마트 9,417개와 29CM 10,000개를 수집하고 fixture 성능을 비교
 - 2026-07-31 / [`BACKEND-001` Collector 결과와 상품 snapshot 저장](2026-07-31-BACKEND-001-Collector_결과_상품_저장.md) / `3b59cd7` / ABC마트 실제 결과를 상품 3개와 옵션 19개로 PostgreSQL에 저장

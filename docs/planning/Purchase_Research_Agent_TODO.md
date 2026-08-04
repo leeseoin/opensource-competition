@@ -90,8 +90,8 @@
 - [x] `COLLECTOR-006` 판매처별 원본 JSON/HTML 파일 저장
 - [x] `COLLECTOR-006` Spring Boot 검증 결과 PostgreSQL 적재
 - [x] `COLLECTOR-006` Go fixture 테스트와 Spring 통합 테스트
-- [ ] `COLLECTOR-006` ABC마트/29CM 실제 소량 smoke test **(구현 완료/검증 필요)**
-- [ ] `COLLECTOR-006` Collector Result JSON Schema 직접 검증 **(검증 도구 실행 오류)**
+- [x] `COLLECTOR-006` ABC마트/29CM 실제 소량 smoke test
+- [x] `COLLECTOR-006` Collector Result JSON Schema 직접 검증
 - [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 확인
 - [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 구조 확인
 - [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test

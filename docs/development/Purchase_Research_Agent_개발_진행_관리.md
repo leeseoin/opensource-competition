@@ -136,7 +136,7 @@
 - [x] `COLLECTOR-006` 29CM JSON과 상세 Product JSON-LD의 선택 상품 전수 비교
 - [x] `COLLECTOR-006` 원본 JSON/HTML 판매처별 파일 저장
 - [x] `COLLECTOR-006` 외부 네트워크 없는 parser/검증 회귀 테스트
-- [ ] `COLLECTOR-006` 실제 ABC마트/29CM 소량 검증 **(구현 완료/검증 필요)**
+- [x] `COLLECTOR-006` 실제 ABC마트/29CM 소량 검증
 - [x] 무신사 현재 robots 정책과 일반 Collector 차단 범위 재확인
 - [x] 무신사 공개 검색 HTML의 서버 렌더링 JSON 파서 구현
 - [x] 무신사 상품 기본정보 Searcher와 opt-in live smoke test 구현
@@ -363,7 +363,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
 | `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 및 Queue 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌 남음 |
-| `COLLECTOR-006` 검증 결과 PostgreSQL 저장 | 구현 완료/검증 필요 | `services/product-backend/src/main/resources/db/migration/V3__add_product_verifications.sql:1` `product_verifications`; `collection/dto/CollectorResult.java:90` `VerificationSummary`; `:252` `Verification`; `collection/service/CollectorResultStoreService.java:123` `saveVerification`; `evidence/entity/ProductVerification.java:35` `ProductVerification` | `./gradlew test` 통과, 검증 결과 1건 저장 확인 / 실제 새 CollectorResult 수동 적재 남음 |
+| `COLLECTOR-006` 검증 결과 PostgreSQL 저장 | 완료 | `services/product-backend/src/main/resources/db/migration/V3__add_product_verifications.sql:1` `product_verifications`; `collection/dto/CollectorResult.java:90` `VerificationSummary`; `:252` `Verification`; `collection/service/CollectorResultStoreService.java:123` `saveVerification`; `evidence/entity/ProductVerification.java:35` `ProductVerification` | `./gradlew test` 통과 / ABC마트와 29CM 각각 상품 3개 Queue E2E에서 검증 결과 저장 및 `matched=3` 확인 |
 | `BACKEND-002` 수집 job 영구 상태와 조회 | 부분 구현 | `services/product-backend/src/main/resources/db/migration/V4__add_collection_job_tracking.sql:1` `collection_jobs/collection_tasks`; `collection/entity/CollectionJob.java:25` `CollectionJob`; `collection/entity/CollectionTask.java:30` `CollectionTask`; `collection/service/CollectionJobService.java:23` `CollectionJobService`; `collection/controller/CollectionJobController.java:29` `CollectionJobController`; `collection/dto/CollectionJobResponse.java:30` `CollectionJobResponse` | Java 전체 통합 테스트 통과 / Flyway V4 실제 적용 / ABC마트와 29CM 각각 상품 3개 E2E에서 `COMPLETED`, `matched=3` 확인 / Redis 상태 일치와 장애 복구 남음 |
 | `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 완료 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java:73` `publish`, `:101` `publishPages`; `collection/service/CollectionTaskPublisher.java:91` `publishPages`, `:133` `publishTask`; `collection/config/RabbitCollectionConfiguration.java:48` `collectionSearchTaskQueue`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:154` `publishesConsecutivePagesWithSharedJobIdentifier`; `CollectionResultConsumerIntegrationTests.java:124` `storesProductsFromMultiplePageTasks` | RabbitMQ/PostgreSQL Testcontainers와 실제 ABC마트/29CM 수집, PostgreSQL 적재 및 job 완료 상태 조회 통과 |
 | `QUEUE-003` 여러 검색어와 페이지 수집 | 부분 구현 | Go `services/collector/internal/collector/search.go:47` `PageSearcher`, `internal/messaging/processor.go:31` `Process`; Java `collection/dto/BulkCollectionTaskRequest.java:25` `BulkCollectionTaskRequest`, `collection/controller/CollectionTaskController.java:101` `publishPages`, `collection/service/CollectionTaskPublisher.java:91` `publishPages`; `collection/service/CollectionJobService.java:145` `refreshJobStatus` | page 1부터 200, 페이지당 최대 50개, 공통 jobId와 페이지별 taskId, 범위 초과 사전 거절, DB 누적 저장 및 상태/실패 수량 보고 통과 / 여러 검색어와 request budget 남음 |
@@ -1172,16 +1172,37 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   추가하지 않았다.
 - 남은 위험: 배포 환경에 Chrome 실행 파일이 없으면 ABC마트 검증은 `FAILED`로 기록된다.
   29CM는 최대 50개 검증에 약 50초 이상 걸릴 수 있다. 판매처 HTML/JSON-LD 변경에 대한
-  주기적인 감지와 Collector Result JSON Schema 직접 검증이 남아 있다.
+  주기적인 구조 변화 감지와 원본 파일 보존 정책은 별도 운영 기능으로 남아 있다.
 - 검증:
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go test ./...`: 통과
   - `cd services/collector && GOCACHE=/private/tmp/purchase-go-build go vet ./...`: 통과
   - `cd services/product-backend && ./gradlew test`: 통과, PostgreSQL Testcontainers 포함
   - `make docs-check`: 통과
-  - `uvx check-jsonschema`: 현재 실행 환경의 `uvx` panic으로 미검증
+  - Python `jsonschema.Draft202012Validator`로 CollectorResult 예제 3개 직접 검사: 3개 통과, 실패 0개
   - 실제 ABC마트 `구두` 3개: `status=success`, `matched=3`, `mismatched=0`
   - 실제 29CM `구두` 3개: `status=success`, `matched=3`, `mismatched=0`
   - `services/collector/output/raw_json/{merchant}`와 `raw_html/{merchant}`: 두 판매처 원본 생성 확인
+
+### 2026-08-05 OPS-004 Python CollectorResult 계약 정렬
+
+- 진행상황: `sandbox-python-crawler/ls`에서 Python ABC마트/29CM의 JSON/HTML 검증
+  집계를 Go와 같은 고정 `verificationSummary` 구조로 맞췄다. 각 50개 저장 batch에
+  해당 batch의 집계를 넣고, Spring Boot로 보내기 전에 공통 CollectorResult JSON
+  Schema를 검사한다.
+- 구현 근거:
+  - 브랜치: `sandbox-python-crawler/ls`
+  - 구현 commit: `f08958ec4e88324f23915b18810ec1978d86dc3a`
+  - 코드트래커 commit: `15173a4`
+  - `purchase-research-agent/app/services/verification_summary.py:17` `summarize_verifications`
+  - `purchase-research-agent/app/services/collector_result_validation.py:18` `validate_collector_result`
+  - `purchase-research-agent/app/services/collector_result_adapter.py:31` `build_collector_result`
+- 문제와 해결: Python은 `{"MATCHED": 3}` 형태의 동적 map을 반환해 Go 응답과
+  달랐다. 공통 필드 집계로 변환하고 검증 결과가 없으면 null 대신 필드를 생략해
+  JSON Schema와 Go의 `omitempty` 의미를 맞췄다.
+- 검증:
+  - `make python-crawler-test`: 13개 통과
+  - Python 브랜치의 `services/product-backend`에서 `./gradlew test`: `BUILD SUCCESSFUL`
+  - 사용자 수동 Swagger E2E: ABC마트 및 29CM 각 3개 `MATCHED`, PostgreSQL 검증 결과 저장
 
 ### 2026-08-05 Go Collector Swagger UI
 
