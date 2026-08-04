@@ -21,6 +21,8 @@ const (
 	TaskStatusPartial = "partial"
 	// TaskStatusFailed는 작업을 저장 가능한 결과로 완료하지 못했음을 나타낸다.
 	TaskStatusFailed = "failed"
+	// MaxSearchPage는 한 Queue 대량 작업에서 허용하는 최대 검색 페이지다.
+	MaxSearchPage = 200
 )
 
 var (
@@ -44,7 +46,6 @@ type CollectionTask struct {
 }
 
 // SearchPayload는 판매처 Adapter가 검색 URL을 만들 때 사용할 Queue v1 조건이다.
-// Adapter의 대량 수집용 SearchPage와 별개로 Queue v1은 Page가 1이 아니면 검증에 실패한다.
 type SearchPayload struct {
 	Query    string                  `json:"query"`
 	Page     int                     `json:"page"`
@@ -100,8 +101,8 @@ func (t CollectionTask) Validate() error {
 	if !idempotencyKeyPattern.MatchString(t.IdempotencyKey) {
 		return fmt.Errorf("idempotencyKey 형식이 올바르지 않습니다")
 	}
-	if t.Payload.Page != 1 {
-		return fmt.Errorf("현재 Queue v1 검색 Worker는 page=1만 지원합니다")
+	if t.Payload.Page < 1 || t.Payload.Page > MaxSearchPage {
+		return fmt.Errorf("page는 1 이상 %d 이하여야 합니다", MaxSearchPage)
 	}
 	return t.SearchRequest().Validate()
 }

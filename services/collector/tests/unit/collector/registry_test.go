@@ -16,6 +16,22 @@ func (f registrySearcherFunc) Search(ctx context.Context, request collector.Sear
 	return f(ctx, request)
 }
 
+// registryPageSearcher는 Registry가 지정 페이지를 판매처 검색기에 전달하는지 기록한다.
+type registryPageSearcher struct {
+	page int
+}
+
+// Search는 첫 페이지 검색 결과를 반환한다.
+func (s *registryPageSearcher) Search(_ context.Context, request collector.SearchRequest) collector.SearchResult {
+	return collector.SearchResult{RequestID: request.RequestID, Merchant: request.Merchant, Status: collector.StatusSuccess}
+}
+
+// SearchPage는 요청 페이지를 기록하고 검색 결과를 반환한다.
+func (s *registryPageSearcher) SearchPage(_ context.Context, request collector.SearchRequest, page int) collector.SearchResult {
+	s.page = page
+	return collector.SearchResult{RequestID: request.RequestID, Merchant: request.Merchant, Status: collector.StatusSuccess}
+}
+
 // TestSearchRegistryRoutesMerchant는 판매처 이름에 맞는 검색기가 호출되는지 검증한다.
 func TestSearchRegistryRoutesMerchant(t *testing.T) {
 	called := false
@@ -54,5 +70,19 @@ func TestSearchRegistryRejectsUnknownMerchant(t *testing.T) {
 	}
 	if len(result.Errors) != 1 || result.Errors[0].Code != "MERCHANT_UNSUPPORTED" {
 		t.Fatalf("errors = %#v", result.Errors)
+	}
+}
+
+// TestSearchRegistryRoutesSelectedPage는 page=2를 등록된 PageSearcher에 전달하는지 검증한다.
+func TestSearchRegistryRoutesSelectedPage(t *testing.T) {
+	searcher := &registryPageSearcher{}
+	registry := collector.NewSearchRegistry(map[string]collector.Searcher{"abcmart": searcher})
+
+	result := registry.SearchPage(context.Background(), collector.SearchRequest{
+		RequestID: "page-002", Merchant: "abcmart", Query: "구두",
+	}, 2)
+
+	if result.Status != collector.StatusSuccess || searcher.page != 2 {
+		t.Fatalf("result=%#v page=%d", result, searcher.page)
 	}
 }

@@ -32,9 +32,28 @@ func NewSearchRegistryWithClock(searchers map[string]Searcher, now func() time.T
 
 // Search는 요청한 판매처의 검색기에 작업을 전달하고 미등록 판매처는 unsupported로 반환한다.
 func (r *SearchRegistry) Search(ctx context.Context, request SearchRequest) SearchResult {
+	return r.SearchPage(ctx, request, 1)
+}
+
+// SearchPage는 등록 판매처가 페이지 검색을 지원하면 지정 페이지로 작업을 전달한다.
+// page=2 이상을 지원하지 않는 판매처는 외부 요청 없이 unsupported 결과를 반환한다.
+func (r *SearchRegistry) SearchPage(ctx context.Context, request SearchRequest, page int) SearchResult {
 	searcher, ok := r.searchers[request.Merchant]
 	if ok {
-		result := searcher.Search(ctx, request)
+		var result SearchResult
+		if page == 1 {
+			result = searcher.Search(ctx, request)
+		} else if pageSearcher, supportsPage := searcher.(PageSearcher); supportsPage {
+			result = pageSearcher.SearchPage(ctx, request, page)
+		} else {
+			return SearchResult{
+				RequestID: request.RequestID, Operation: OperationSearch, Status: StatusUnsupported,
+				Merchant: request.Merchant, Query: request.Query, Filters: request.Filters,
+				CollectedAt: r.now(), CollectorVersion: "collector-registry-v1",
+				Products: []Product{}, Warnings: []Issue{},
+				Errors: []Issue{{Code: "PAGE_UNSUPPORTED", Message: "이 판매처는 page=2 이상 검색을 지원하지 않습니다", Retryable: false}},
+			}
+		}
 		result.Query = request.Query
 		result.Filters = request.Filters
 		return result

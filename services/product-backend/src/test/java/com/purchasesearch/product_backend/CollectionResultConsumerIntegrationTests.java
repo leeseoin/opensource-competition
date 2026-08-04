@@ -116,6 +116,34 @@ class CollectionResultConsumerIntegrationTests {
 	}
 
 	/**
+	 * 같은 검색어의 서로 다른 페이지 결과가 각각의 요청 문맥과 상품 snapshot으로 누적 저장되는지 검증한다.
+	 *
+	 * @throws Exception fixture 읽기 또는 결과 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void storesProductsFromMultiplePageTasks() throws Exception {
+		String firstResult = normalizedCollectorResult();
+		String secondResult = normalizedCollectorResult()
+				.replace("backend-test-001", "backend-test-002")
+				.replace("1010110882", "1010110999")
+				.replace("페니 로퍼", "두 번째 페이지 로퍼");
+
+		ProcessingOutcome firstOutcome = messageService.process(
+				successfulEnvelope(firstResult, "backend-test-001").getBytes(StandardCharsets.UTF_8));
+		ProcessingOutcome secondOutcome = messageService.process(
+				successfulEnvelope(secondResult, "backend-test-002").getBytes(StandardCharsets.UTF_8));
+
+		assertThat(firstOutcome).isEqualTo(ProcessingOutcome.STORED);
+		assertThat(secondOutcome).isEqualTo(ProcessingOutcome.STORED);
+		assertThat(collectionSearchContextRepository.count()).isEqualTo(2);
+		assertThat(productRepository.count()).isEqualTo(2);
+		assertThat(merchantProductRepository.count()).isEqualTo(2);
+		assertThat(offerSnapshotRepository.count()).isEqualTo(2);
+		assertThat(productOptionRepository.count()).isEqualTo(2);
+		assertThat(evidenceRepository.count()).isEqualTo(2);
+	}
+
+	/**
 	 * 필수 필드가 없는 Queue 결과는 저장하지 않고 RabbitMQ 결과 DLQ로 이동하는지 검증한다.
 	 */
 	@Test
@@ -188,10 +216,21 @@ class CollectionResultConsumerIntegrationTests {
 	 * @return RabbitMQ에 발행할 성공 결과 JSON
 	 */
 	private String successfulEnvelope(String collectorResult) {
+		return successfulEnvelope(collectorResult, "backend-test-001");
+	}
+
+	/**
+	 * 지정한 taskId와 일치하는 성공 Queue 봉투를 생성한다.
+	 *
+	 * @param collectorResult 공통 CollectorResult JSON
+	 * @param taskId Queue 작업과 Collector requestId에 함께 사용할 식별자
+	 * @return RabbitMQ에 발행하거나 직접 처리할 성공 결과 JSON
+	 */
+	private String successfulEnvelope(String collectorResult, String taskId) {
 		return """
 				{
 				  "schemaVersion":"1",
-				  "taskId":"backend-test-001",
+				  "taskId":"%s",
 				  "jobId":"queue-test-job-001",
 				  "status":"success",
 				  "startedAt":"2026-08-02T16:00:00+09:00",
@@ -200,7 +239,23 @@ class CollectionResultConsumerIntegrationTests {
 				  "collectorResult":%s,
 				  "error":null
 				}
-				""".formatted(collectorResult);
+				""".formatted(taskId, collectorResult);
+	}
+
+	/**
+	 * 저장 계약 검증에 맞게 선택 필터를 빈 필터로 바꾼 ABC마트 fixture를 반환한다.
+	 *
+	 * @return DB 저장 테스트용 CollectorResult JSON
+	 * @throws Exception fixture 읽기에 실패한 경우
+	 */
+	private String normalizedCollectorResult() throws Exception {
+		return Files.readString(abcmartCollectorResultPath())
+				.replace("""
+					  "filters": {
+					    "sizes": ["270"],
+					    "inStockOnly": true
+					  },
+					""", "  \"filters\": {},\n");
 	}
 
 	/**

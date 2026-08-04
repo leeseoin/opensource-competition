@@ -15,7 +15,7 @@ import jakarta.validation.constraints.Size;
  *
  * @param merchant 판매처 식별자
  * @param query 검색어
- * @param page 검색 페이지이며 현재는 1만 지원
+ * @param page 검색 페이지이며 1부터 200까지 지원
  * @param limit 수집할 상품 최대 개수
  * @param locale 검색 지역 형식
  * @param currency 통화 코드
@@ -32,6 +32,7 @@ public record CollectionTaskRequest(
 		@Size(max = 200)
 		String query,
 		@Min(1)
+		@Max(200)
 		Integer page,
 		@Min(1)
 		@Max(50)

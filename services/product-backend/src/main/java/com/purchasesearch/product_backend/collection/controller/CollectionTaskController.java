@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskRequest;
+import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse.ErrorResponse;
@@ -70,6 +72,34 @@ public class CollectionTaskController {
 	})
 	public CollectionTaskResponse publish(@Valid @RequestBody CollectionTaskRequest request) {
 		return collectionTaskPublisher.publish(request);
+	}
+
+	/**
+	 * 같은 판매처와 검색어의 연속 페이지를 개별 Queue 작업으로 등록한다.
+	 *
+	 * @param request 시작 페이지, 페이지 수와 공통 검색 조건
+	 * @return 공통 jobId와 실제 발행된 페이지 범위
+	 * @throws InvalidCollectionTaskException 페이지 범위나 검색 조건이 지원 범위를 벗어난 경우
+	 * @throws CollectionTaskPublishException RabbitMQ가 일부 또는 전체 작업 발행을 확인하지 못한 경우
+	 */
+	@PostMapping("/pages")
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	@Operation(
+			summary = "여러 페이지 검색 수집 작업 등록",
+			description = "연속된 검색 페이지를 같은 jobId의 CollectionTask v1 작업으로 나눠 RabbitMQ에 등록합니다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "202", description = "모든 페이지 작업 Queue 접수 성공"),
+		@ApiResponse(
+				responseCode = "400",
+				description = "입력 또는 최대 200페이지 범위 위반",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(
+				responseCode = "503",
+				description = "RabbitMQ 발행 실패이며 일부 앞 페이지는 이미 접수됐을 수 있음",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	})
+	public BulkCollectionTaskResponse publishPages(@Valid @RequestBody BulkCollectionTaskRequest request) {
+		return collectionTaskPublisher.publishPages(request);
 	}
 
 	/**

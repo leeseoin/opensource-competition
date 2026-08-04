@@ -42,6 +42,12 @@ type Searcher interface {
 	Search(ctx context.Context, request SearchRequest) SearchResult
 }
 
+// PageSearcher는 Queue 대량 작업이 지정한 검색 페이지를 수집하는 확장 계약이다.
+// 일반 HTTP 검색은 Searcher를 사용하고 page=2 이상이 필요한 내부 Worker만 이 계약을 사용한다.
+type PageSearcher interface {
+	SearchPage(ctx context.Context, request SearchRequest, page int) SearchResult
+}
+
 // SearchRequest는 Product Backend 또는 내부 호출자가 Collector에 전달하는 상품 검색 조건이다.
 type SearchRequest struct {
 	RequestID   string        `json:"requestId"`

@@ -39,7 +39,17 @@ func (p *Processor) Process(ctx context.Context, task CollectionTask) Collection
 
 	taskCtx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
-	result := p.searcher.Search(taskCtx, task.SearchRequest())
+	request := task.SearchRequest()
+	var result collector.SearchResult
+	if task.Payload.Page > 1 {
+		pageSearcher, supportsPage := p.searcher.(collector.PageSearcher)
+		if !supportsPage {
+			return p.failed(task, startedAt, "PAGE_UNSUPPORTED", "검색기가 page=2 이상 작업을 지원하지 않습니다", false, nil)
+		}
+		result = pageSearcher.SearchPage(taskCtx, request, task.Payload.Page)
+	} else {
+		result = p.searcher.Search(taskCtx, request)
+	}
 
 	switch result.Status {
 	case collector.StatusSuccess:

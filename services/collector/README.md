@@ -134,7 +134,7 @@ make collector-worker
 ```
 
 이 Worker는 HTTP 서버를 거치지 않고 `CollectionTask`를 기존 판매처 Searcher에
-전달한다. 현재 검색 1페이지만 지원하고 prefetch와 동시 처리 개수는 1이며,
+전달한다. 각 Queue 작업은 지정된 검색 페이지 한 건을 처리하고 prefetch와 동시 처리 개수는 1이며,
 일시 오류는 5초 뒤 한 번 재시도한다.
 
 실제 ABC마트 공개 검색 결과 확인은 아래 명령을 명시적으로 실행한 경우에만 동작한다.

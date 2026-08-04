@@ -21,6 +21,21 @@ func (s stubSearcher) Search(_ context.Context, request collector.SearchRequest)
 	return result
 }
 
+// stubPageSearcher는 Processor가 Queue page를 SearchPage에 전달했는지 기록한다.
+type stubPageSearcher struct {
+	stubSearcher
+	requestedPage int
+}
+
+// SearchPage는 요청 페이지를 기록하고 준비된 검색 결과를 반환한다.
+func (s *stubPageSearcher) SearchPage(_ context.Context, request collector.SearchRequest, page int) collector.SearchResult {
+	s.requestedPage = page
+	result := s.result
+	result.RequestID = request.RequestID
+	result.Merchant = request.Merchant
+	return result
+}
+
 func validTask() messaging.CollectionTask {
 	return messaging.CollectionTask{
 		SchemaVersion:  messaging.SchemaVersion,
@@ -58,12 +73,35 @@ func TestCollectionTaskValidationAndRetry(t *testing.T) {
 	}
 }
 
-func TestCollectionTaskRejectsUnsupportedPage(t *testing.T) {
+// TestCollectionTaskAcceptsBoundedPage는 page=2를 허용하고 안전 상한 초과는 거절하는지 검증한다.
+func TestCollectionTaskAcceptsBoundedPage(t *testing.T) {
+	task := validTask()
+	task.Payload.Page = 2
+	if err := task.Validate(); err != nil {
+		t.Fatalf("page=2 작업이 거부됐습니다: %v", err)
+	}
+
+	task.Payload.Page = messaging.MaxSearchPage + 1
+	if err := task.Validate(); err == nil || !strings.Contains(err.Error(), "page는") {
+		t.Fatalf("페이지 안전 상한 오류가 필요합니다: %v", err)
+	}
+}
+
+// TestProcessorRoutesSelectedPage는 page=2 작업이 SearchPage로 한 번만 전달되는지 검증한다.
+func TestProcessorRoutesSelectedPage(t *testing.T) {
+	searcher := &stubPageSearcher{stubSearcher: stubSearcher{result: collector.SearchResult{
+		Operation: collector.OperationSearch, Status: collector.StatusSuccess,
+		CollectorVersion: "test-v1", Products: []collector.Product{},
+		Warnings: []collector.Issue{}, Errors: []collector.Issue{},
+	}}}
+	processor := messaging.NewProcessor(searcher, time.Second, time.Now)
 	task := validTask()
 	task.Payload.Page = 2
 
-	if err := task.Validate(); err == nil || !strings.Contains(err.Error(), "page=1") {
-		t.Fatalf("지원하지 않는 페이지 오류가 필요합니다: %v", err)
+	result := processor.Process(context.Background(), task)
+
+	if result.Status != messaging.TaskStatusSuccess || searcher.requestedPage != 2 {
+		t.Fatalf("result=%#v requestedPage=%d", result, searcher.requestedPage)
 	}
 }
 

@@ -153,8 +153,8 @@
 
 - [x] 단일 판매처 검색 요청 API와 Spring Boot `CollectionTask` producer 구현
 - [x] persistent 메시지, priority와 RabbitMQ publisher confirm 적용
-- [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(부분 구현: page 필드 추가, 현재 page=1만 허용)**
-- [ ] `maxPages`, `maxProducts`, `requestBudget` 상한 추가
+- [x] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(page 1부터 200까지 구현)**
+- [ ] `maxPages`, `maxProducts`, `requestBudget` 상한 추가 **(부분 구현: pageCount 최대 200 및 limit 최대 50 적용)**
 - [ ] 여러 검색어와 판매처를 입력받는 batch collection use case 구현
 - [ ] 검색 결과에서 발견한 상품 URL을 상세 작업으로 등록
 - [ ] 이미 성공한 URL과 현재 처리 중인 URL의 중복 작업 방지
@@ -187,8 +187,8 @@
 - [ ] RabbitMQ 없이 실행하는 fixture 기반 Go Processor/Java 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
 - [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Go 작업 retry/DLQ와 Spring 결과 ACK/DLQ를 서비스별 검증)**
-- [ ] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
-- [ ] ABC마트 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
+- [x] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
+- [ ] ABC마트 여러 검색어와 여러 페이지 batch 수집 opt-in smoke test **(부분 구현: 구두 한 검색어 2페이지 및 상품 6개 적재 통과)**
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 동일 상품 재수집 시 상품 중복 없이 snapshot만 증가하는 DB 검증
 - [ ] 판매처별 요청 상한을 넘지 않는지 검증

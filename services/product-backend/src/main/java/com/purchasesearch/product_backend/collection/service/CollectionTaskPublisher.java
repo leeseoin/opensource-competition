@@ -23,6 +23,8 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
+import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskRequest;
+import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage.SearchFilters;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage.SearchPayload;
@@ -41,6 +43,8 @@ import tools.jackson.databind.ObjectMapper;
 public class CollectionTaskPublisher {
 
 	private static final int DEFAULT_PAGE = 1;
+	private static final int DEFAULT_PAGE_COUNT = 1;
+	private static final int MAX_PAGE = 200;
 	private static final int DEFAULT_LIMIT = 30;
 	private static final int DEFAULT_PRIORITY = 20;
 	private static final int DEFAULT_MAX_ATTEMPTS = 2;
@@ -72,6 +76,61 @@ public class CollectionTaskPublisher {
 	 */
 	public CollectionTaskResponse publish(CollectionTaskRequest request) {
 		CollectionTaskMessage task = createTask(request);
+		publishTask(task);
+		return CollectionTaskResponse.queued(task);
+	}
+
+	/**
+	 * 연속된 검색 페이지를 같은 jobId의 독립 작업으로 나눠 순서대로 발행한다.
+	 *
+	 * @param request 시작 페이지와 페이지 수가 포함된 검색 조건
+	 * @return 전체 작업을 묶는 jobId와 발행 범위
+	 * @throws InvalidCollectionTaskException 마지막 페이지가 최대 범위를 벗어난 경우
+	 * @throws CollectionTaskPublishException 일부 또는 전체 작업의 broker 확인에 실패한 경우
+	 */
+	public BulkCollectionTaskResponse publishPages(BulkCollectionTaskRequest request) {
+		int startPage = request.startPage() == null ? DEFAULT_PAGE : request.startPage();
+		int pageCount = request.pageCount() == null ? DEFAULT_PAGE_COUNT : request.pageCount();
+		long endPageValue = (long) startPage + pageCount - 1;
+		if (startPage < 1 || pageCount < 1 || endPageValue > MAX_PAGE) {
+			throw new InvalidCollectionTaskException("검색 페이지 범위는 1부터 200까지여야 합니다.");
+		}
+
+		int endPage = (int) endPageValue;
+		String jobId = "job-" + UUID.randomUUID();
+		OffsetDateTime requestedAt = OffsetDateTime.now(ZoneOffset.UTC);
+		int publishedCount = 0;
+		for (int page = startPage; page <= endPage; page++) {
+			CollectionTaskMessage task = createTask(request.toPageRequest(page), jobId, requestedAt);
+			try {
+				publishTask(task);
+				publishedCount++;
+			} catch (CollectionTaskPublishException exception) {
+				throw new CollectionTaskPublishException(
+						"전체 " + pageCount + "개 중 " + publishedCount
+								+ "개 작업만 접수된 뒤 RabbitMQ 발행이 실패했습니다.",
+						exception);
+			}
+		}
+
+		return new BulkCollectionTaskResponse(
+				jobId,
+				"QUEUED",
+				request.merchant(),
+				"search",
+				startPage,
+				endPage,
+				publishedCount,
+				requestedAt);
+	}
+
+	/**
+	 * 작업 한 건을 persistent 메시지로 발행하고 RabbitMQ broker ACK를 확인한다.
+	 *
+	 * @param task 발행할 단일 페이지 작업
+	 * @throws CollectionTaskPublishException 직렬화, RabbitMQ 발행 또는 confirm에 실패한 경우
+	 */
+	private void publishTask(CollectionTaskMessage task) {
 		CorrelationData correlationData = new CorrelationData(task.taskId());
 		Message message = createMessage(task);
 
@@ -90,7 +149,6 @@ public class CollectionTaskPublisher {
 			if (correlationData.getReturned() != null) {
 				throw new CollectionTaskPublishException("수집 작업을 받을 RabbitMQ Queue가 없습니다.");
 			}
-			return CollectionTaskResponse.queued(task);
 		} catch (CollectionTaskPublishException exception) {
 			throw exception;
 		} catch (InterruptedException exception) {
@@ -109,9 +167,28 @@ public class CollectionTaskPublisher {
 	 * @throws InvalidCollectionTaskException page, 가격 범위, 중복 목록 또는 attributes가 잘못된 경우
 	 */
 	CollectionTaskMessage createTask(CollectionTaskRequest request) {
+		return createTask(
+				request,
+				"job-" + UUID.randomUUID(),
+				OffsetDateTime.now(ZoneOffset.UTC));
+	}
+
+	/**
+	 * 지정한 jobId와 요청 시각을 공유하는 단일 페이지 Queue 작업을 생성한다.
+	 *
+	 * @param request 원본 검색 요청
+	 * @param jobId 여러 페이지 작업을 묶을 식별자
+	 * @param requestedAt 전체 작업 공통 요청 시각
+	 * @return Queue v1 검색 작업
+	 * @throws InvalidCollectionTaskException 페이지, 가격 범위, 중복 목록 또는 attributes가 잘못된 경우
+	 */
+	private CollectionTaskMessage createTask(
+			CollectionTaskRequest request,
+			String jobId,
+			OffsetDateTime requestedAt) {
 		int page = request.page() == null ? DEFAULT_PAGE : request.page();
-		if (page != DEFAULT_PAGE) {
-			throw new InvalidCollectionTaskException("현재 검색 작업은 page=1만 지원합니다.");
+		if (page < 1 || page > MAX_PAGE) {
+			throw new InvalidCollectionTaskException("검색 page는 1부터 200까지 지원합니다.");
 		}
 
 		SearchFilters filters = normalizeFilters(request.filters());
@@ -127,11 +204,10 @@ public class CollectionTaskPublisher {
 				request.locale() == null ? DEFAULT_LOCALE : request.locale(),
 				request.currency() == null ? DEFAULT_CURRENCY : request.currency(),
 				filters);
-		OffsetDateTime requestedAt = OffsetDateTime.now(ZoneOffset.UTC);
 		return new CollectionTaskMessage(
 				"1",
 				"task-" + UUID.randomUUID(),
-				"job-" + UUID.randomUUID(),
+				jobId,
 				request.merchant(),
 				"search",
 				request.priority() == null ? DEFAULT_PRIORITY : request.priority(),

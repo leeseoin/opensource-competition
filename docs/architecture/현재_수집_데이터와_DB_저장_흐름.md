@@ -1,7 +1,7 @@
 # 현재 수집 데이터와 DB 저장 흐름
 
 작성일: 2026-07-26
-최종 수정일: 2026-08-03
+최종 수정일: 2026-08-04
 대상: 프로젝트를 처음 보는 개발자
 
 ## 1. 먼저 알아야 할 현재 상태
@@ -10,8 +10,9 @@ Go Collector는 ABC마트와 29CM 검색 결과를 실제로 가져올 수 있�
 Flyway 초기 schema, CollectorResult DTO, JPA 저장 서비스와 상품 검색 API가
 구현됐다. ABC마트와 29CM 실제 결과의 수동 적재도 검증했으며, RabbitMQ 결과
 Consumer가 같은 저장 서비스를 호출하는 자동 저장 경로도 통합 테스트를 완료했다.
-Spring Boot의 수집 작업 발행 API도 구현돼 현재 작업 생성부터 결과 저장까지의 코드
-경로가 연결됐다. 실제 판매처 전체 Queue E2E와 작업 상태 영구 저장은 남아 있다.
+Spring Boot의 단일 페이지 및 여러 페이지 수집 작업 발행 API도 구현돼 현재 작업
+생성부터 결과 저장까지의 코드 경로가 연결됐다. ABC마트 실제 Queue E2E는 검증했고,
+29CM 실제 Queue E2E와 작업 상태 영구 저장은 남아 있다.
 
 ```text
 현재 가능:
@@ -20,11 +21,12 @@ Spring Boot의 수집 작업 발행 API도 구현돼 현재 작업 생성부터 
 수집 당시 query와 filters → requestId로 snapshot 연결 → 상품 조회
 RabbitMQ CollectionResult → Spring Boot Consumer → PostgreSQL 자동 저장
 Spring Boot 수집 요청 API → RabbitMQ CollectionTask 발행
+연속 페이지 요청 → 페이지별 Queue 작업 → 결과별 PostgreSQL 누적 저장
 
 현재 미구현:
 수집 작업의 PostgreSQL 상태 저장과 Redis 진행 상태
-여러 검색어/여러 페이지 batch 작업
-실제 ABC마트/29CM 전체 Queue E2E 재검증
+여러 검색어를 한 번에 받는 batch 작업
+29CM 실제 전체 Queue E2E 검증
 ```
 
 Product Backend와 Go Worker를 함께 실행하면 Swagger에서 만든 작업 결과가 자동으로
@@ -32,9 +34,13 @@ DB에 저장된다. 이전 Python 구현에서 DB 적재를 검증한 기록은
 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에 과거 작업으로
 남겨 두었다.
 
+루트 Makefile은 `.env`에서 읽은 PostgreSQL과 RabbitMQ 설정을 Spring Boot 및 Go Worker
+하위 프로세스에도 전달한다. 따라서 포트, 사용자 또는 비밀번호를 변경했을 때 Compose와
+애플리케이션이 같은 설정을 사용한다.
+
 ## 2. 지금 수집하는 데이터
 
-현재 검색 Collector는 검색 결과 1페이지에서 다음 정보를 공통 형식으로 반환한다.
+현재 검색 Collector는 작업에 지정된 검색 결과 페이지에서 다음 정보를 공통 형식으로 반환한다.
 
 | 데이터 | ABC마트 | 29CM |
 |---|---:|---:|
@@ -115,9 +121,85 @@ JPA transaction
 PostgreSQL
 ```
 
-DTO 검증, JPA transaction, RabbitMQ 작업 발행/결과 Consumer와 PostgreSQL 저장은
-Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 다중 페이지 계약과 작업 상태를
-추가하고 실제 판매처 전체 Queue 흐름을 반복 검증하는 것이다.
+DTO 검증, JPA transaction, RabbitMQ 단일/다중 페이지 작업 발행, 결과 Consumer와
+PostgreSQL 저장은 Testcontainers 통합 테스트까지 구현됐다. 다음 작업은 실제 판매처
+전체 Queue 흐름과 작업 상태를 추가하는 것이다.
+
+### 여러 페이지는 어떻게 처리하는가
+
+예를 들어 `startPage=1`, `pageCount=3`, `limit=50`을 요청하면 Spring Boot가
+RabbitMQ 작업 3개를 만든다.
+
+```text
+사용자 요청 job-123
+├── task-A / page=1 / 최대 50개
+├── task-B / page=2 / 최대 50개
+└── task-C / page=3 / 최대 50개
+```
+
+- `jobId`는 세 작업이 같은 사용자 요청이라는 뜻이다.
+- `taskId`는 페이지 하나를 실행하는 단위라서 서로 다르다.
+- Go Worker는 prefetch 1로 한 작업씩 처리한다.
+- 각 결과의 `requestId`는 해당 `taskId`와 같아야 한다.
+- Spring Boot는 결과 한 건마다 별도 transaction으로 DB에 저장한다.
+
+페이지 하나가 실패하면 이미 성공한 다른 페이지의 DB 데이터는 유지된다. 현재는 작업
+상태 테이블이 없어서 `jobId`별 성공 페이지와 실패 페이지를 API로 조회할 수 없다. 이는
+`BACKEND-002`에서 구현할 범위다.
+
+### Swagger에서 여러 페이지를 요청하는 예시
+
+`POST /internal/v1/collection-tasks/pages`에 다음 JSON을 보낸다.
+
+```json
+{
+  "merchant": "abcmart",
+  "query": "구두",
+  "startPage": 1,
+  "pageCount": 3,
+  "limit": 50
+}
+```
+
+현재 범위는 1페이지부터 200페이지이며 페이지당 최대 50개다. 따라서 요청 한 번으로
+표현할 수 있는 최대 범위는 10,000개다. 실제 검색 결과가 그보다 적으면 판매처가 빈
+페이지 또는 `hasNext=false`를 반환할 수 있지만, 아직 뒤쪽 Queue 작업을 자동 취소하지는
+않는다.
+
+### 직접 실행해서 DB 저장을 확인하는 순서
+
+Collector HTTP 서버는 이 흐름에서 필요하지 않다. RabbitMQ 작업을 읽는 Worker만 실행한다.
+
+```text
+터미널 1: make infra-up
+터미널 2: make product-backend-run
+터미널 3: make collector-worker
+```
+
+브라우저에서 `http://localhost:8080/swagger-ui.html`을 열고
+`POST /internal/v1/collection-tasks/pages`를 실행한다. 응답이 `QUEUED`이면 작업 등록까지
+성공한 것이다. Worker 터미널에서 페이지별 수집 결과가 보이고 Spring Boot 터미널에서
+결과 저장 오류가 없어야 한다.
+
+상품 조회는 다음 주소로 확인한다.
+
+```text
+http://localhost:8080/internal/v1/products?merchant=abcmart&query=구두&limit=10
+```
+
+DB 테이블의 전체 행 수는 `make db-shell`로 접속한 뒤 아래 SQL로 확인한다.
+
+```sql
+SELECT COUNT(*) FROM collection_search_contexts;
+SELECT COUNT(*) FROM products;
+SELECT COUNT(*) FROM merchant_products;
+SELECT COUNT(*) FROM offer_snapshots;
+SELECT COUNT(*) FROM product_options;
+SELECT COUNT(*) FROM evidence;
+```
+
+`products`와 `merchant_products`는 같은 판매처 상품을 다시 수집하면 기존 행을 사용한다.
+반면 가격과 재고 이력인 `offer_snapshots`는 재수집할 때 새 행이 추가되는 것이 정상이다.
 
 현재 테이블 관계는 다음과 같다.
 
@@ -178,6 +260,9 @@ products
 8. [완료] `CollectionResult` consumer와 계약 위반 결과 DLQ 처리
 9. [완료] ABC마트와 29CM 실제 결과 수동 적재 및 PostgreSQL 행 검증
 10. [완료] 수집 요청 검색어와 적용 filters를 별도 검색 문맥에 저장하고 상품 조회에 연결
+11. [완료] 1부터 200까지 지정 페이지를 처리하는 Go Queue Worker
+12. [완료] 같은 jobId로 연속 페이지 작업을 발행하는 Spring Boot API
+13. [완료] 서로 다른 페이지 결과가 PostgreSQL에 누적되는 통합 테스트
 
 이 항목들이 완료되고 검증 명령이 통과한 뒤에만 “DB 적재 구현 완료”로 체크한다.
 
@@ -194,6 +279,6 @@ products
 
 ## 7. 다음 구현 순서
 
-다음 작업은 Product Backend → RabbitMQ → Go Worker → RabbitMQ → Product Backend →
-PostgreSQL 전체 E2E를 실제 ABC마트와 29CM 요청으로 검증하는 것이다. 그 뒤 작업 상태를
-PostgreSQL에 저장하고 Redis 중복 차단을 연결한다.
+ABC마트는 Product Backend와 Go Worker를 직접 실행한 환경에서 구두 2페이지와 상품
+6개가 PostgreSQL에 저장되는 흐름을 검증했다. 다음 작업은 같은 방식으로 29CM을
+검증한 뒤 작업 상태를 PostgreSQL에 저장하고 Redis 중복 차단을 연결하는 것이다.
