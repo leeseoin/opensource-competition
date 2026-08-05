@@ -2,7 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  deriveProductQuery,
+  fetchProductCandidates,
+  formatProductPrice,
+  ProductCandidateResponse,
+} from "../lib/product-candidates";
 import styles from "./page.module.css";
 
 const defaultQuestion = "출근용 검정 구두를 10만원 안에서 찾고 있어";
@@ -14,9 +20,34 @@ const defaultQuestion = "출근용 검정 구두를 10만원 안에서 찾고 �
 export default function ChatExperience() {
   const [question, setQuestion] = useState(defaultQuestion);
   const [draft, setDraft] = useState("");
+  const [result, setResult] = useState<ProductCandidateResponse | null>(null);
+  const [requestState, setRequestState] = useState<"loading" | "success" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  /** 첫 화면에서도 예시 질문을 사용해 PostgreSQL 후보를 조회한다. */
+  useEffect(() => {
+    let active = true;
+    void fetchProductCandidates(defaultQuestion)
+      .then((response) => {
+        if (active) {
+          setResult(response);
+          setRequestState("success");
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMessage(error instanceof Error ? error.message : "상품 후보를 불러오지 못했습니다.");
+          setRequestState("error");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   /** 입력된 구매 조건을 현재 쇼핑 브리프에 반영한다. */
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextQuestion = draft.trim();
 
@@ -26,7 +57,29 @@ export default function ChatExperience() {
 
     setQuestion(nextQuestion);
     setDraft("");
+    setRequestState("loading");
+    setErrorMessage("");
+    try {
+      const response = await fetchProductCandidates(nextQuestion);
+      setResult(response);
+      setRequestState("success");
+    } catch (error) {
+      setResult(null);
+      setErrorMessage(error instanceof Error ? error.message : "상품 후보를 불러오지 못했습니다.");
+      setRequestState("error");
+    }
   }
+
+  const candidates = result?.candidates ?? [];
+  const featured = candidates[0];
+  const merchantCount = new Set(candidates.map((candidate) => candidate.merchant)).size;
+  const compareHref = {
+    pathname: "/compare",
+    query: {
+      question: result?.question ?? question,
+      query: result?.query ?? deriveProductQuery(question),
+    },
+  };
 
   return (
     <main className={styles.page}>
@@ -47,45 +100,69 @@ export default function ChatExperience() {
           <hr />
           <p className={styles.sectionLabel}>RESEARCH NOTE</p>
           <p className={styles.note}>
-            조건에 맞는 상품 18개를 확인했습니다.<br />
-            가격과 재고와 출처가 모두 확인된 3개를 먼저 보여드릴게요.
+            {requestState === "loading" && "PostgreSQL에서 최근 수집 상품을 확인하고 있습니다."}
+            {requestState === "error" && errorMessage}
+            {requestState === "success" && result && (
+              <>{`검색어 “${result.query}”와 일치하는 상품 ${result.totalCount}개를 확인했습니다.`}<br />
+              가격과 재고 및 출처가 있는 후보 {candidates.length}개를 보여드립니다.</>
+            )}
           </p>
 
           <ol className={styles.reasonList}>
-            <li><em>01</em><div><strong>가장 저렴함</strong><span>ABC마트 페니 로퍼 / ₩69,000</span></div></li>
-            <li><em>02</em><div><strong>출근용 균형</strong><span>29CM 레더 로퍼 / ₩79,000</span></div></li>
-            <li><em>03</em><div><strong>후기 근거</strong><span>사이즈 관련 공개 리뷰 신호 확인</span></div></li>
+            {candidates.map((candidate, index) => (
+              <li key={`${candidate.merchant}-${candidate.externalId}`}>
+                <em>{String(index + 1).padStart(2, "0")}</em>
+                <div>
+                  <strong>{candidate.merchant.toUpperCase()} 최신 수집 후보</strong>
+                  <span>{candidate.name} / {formatProductPrice(candidate.price)}</span>
+                </div>
+              </li>
+            ))}
+            {requestState === "success" && candidates.length === 0 && (
+              <li className={styles.emptyResult}>DB에 일치하는 상품이 없습니다. 다른 상품 검색어로 질문해 주세요.</li>
+            )}
           </ol>
 
           <div className={styles.evidence} id="evidence">
-            3 PRODUCTS / 2 MERCHANTS / ALL SOURCES VERIFIED
+            {result?.totalCount ?? 0} DB MATCHES / {merchantCount} MERCHANTS / SOURCES LINKED
           </div>
         </article>
 
         <aside className={styles.shortlist}>
           <p className={styles.shortlistLabel}>TODAY&apos;S EDIT / WORK SHOES</p>
           <h2>THE SHORTLIST</h2>
-          <div className={styles.featured}>
-            <div className={styles.productImage}>
-              <Image
-                src="/images/landing-v2/hero-abcmart.jpeg"
-                alt="ABC마트 페니 로퍼"
-                fill
-                priority
-                sizes="(max-width: 900px) 80vw, 350px"
-              />
-            </div>
-            <span className={styles.rank}>01</span>
-            <div className={styles.productSummary}>
-              <small>ABC-MART</small>
-              <strong>페니 로퍼</strong>
-              <b>₩69,000</b>
-              <p>270 재고 있음<br />2개 출처 일치</p>
-            </div>
-          </div>
-          <div className={styles.alternative}><span>02 29CM / 레더 로퍼</span><b>₩79,000</b></div>
-          <div className={styles.alternative}><span>03 29CM / 더비 슈즈</span><b>₩92,000</b></div>
-          <Link className={styles.compareLink} href="/compare">세 상품 자세히 비교하기 →</Link>
+          {featured ? (
+            <>
+              <div className={styles.featured}>
+                <div className={styles.productImage}>
+                  <Image
+                    src={featured.imageUrls[0] ?? "/images/landing-v2/hero-abcmart.jpeg"}
+                    alt={`${featured.merchant} ${featured.name}`}
+                    fill
+                    priority
+                    sizes="(max-width: 900px) 80vw, 350px"
+                  />
+                </div>
+                <span className={styles.rank}>01</span>
+                <div className={styles.productSummary}>
+                  <small>{featured.merchant.toUpperCase()}</small>
+                  <strong>{featured.name}</strong>
+                  <b>{formatProductPrice(featured.price)}</b>
+                  <p>{featured.stockStatus === "available" ? "재고 있음" : "재고 확인 필요"}<br />
+                    {new Date(featured.source.collectedAt).toLocaleString("ko-KR")} 수집</p>
+                </div>
+              </div>
+              {candidates.slice(1).map((candidate, index) => (
+                <div className={styles.alternative} key={`${candidate.merchant}-${candidate.externalId}`}>
+                  <span>{String(index + 2).padStart(2, "0")} {candidate.merchant.toUpperCase()} / {candidate.name}</span>
+                  <b>{formatProductPrice(candidate.price)}</b>
+                </div>
+              ))}
+              <Link className={styles.compareLink} href={compareHref}>실제 DB 상품 자세히 비교하기 →</Link>
+            </>
+          ) : (
+            <div className={styles.shortlistEmpty}>상품 서버 응답을 기다리고 있습니다.</div>
+          )}
         </aside>
       </section>
 
@@ -97,7 +174,7 @@ export default function ChatExperience() {
           onChange={(event) => setDraft(event.target.value)}
           placeholder="조건을 더 말해 주세요. 예: 굽이 낮고 비 오는 날에도 신을 수 있는 것"
         />
-        <button type="submit" aria-label="질문 보내기">→</button>
+        <button type="submit" aria-label="질문 보내기" disabled={requestState === "loading"}>→</button>
       </form>
     </main>
   );

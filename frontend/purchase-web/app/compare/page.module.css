@@ -5,6 +5,7 @@
 .heading h1 { margin:0; font-family:var(--font-bodoni),serif; font-size:clamp(54px,6vw,86px); font-style:italic; font-weight:900; line-height:1; letter-spacing:-.05em; }
 .heading p { margin:8px 0 0; font-size:18px; font-weight:600; }
 .heading > strong { padding:24px 28px; border:1px solid var(--ink); background:var(--lime); font-family:var(--font-geist-sans),sans-serif; font-size:11px; }
+.errorMessage { padding:18px; border:1px solid var(--orange); background:white; color:#a52f00; }
 .productGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; padding:28px 0 34px; }
 .card { padding:14px; border:1px solid var(--ink); background:white; }
 .cardHeader { display:flex; height:64px; align-items:flex-start; justify-content:space-between; }

@@ -224,7 +224,7 @@ com.purchasesearch.product_backend
 | Product Backend | 부분 구현 | 수집 작업 발행, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 상품 조회 API |
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 저장 검증 |
 | MCP Server | 계획 | 디렉토리와 책임 문서만 생성 |
-| Next.js Web | 초기화 | `frontend/purchase-web` 기본 scaffold |
+| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2와 Product Backend DB 후보 server route / Agent Gateway 연결 전 |
 | RabbitMQ | 부분 구현 | Spring 작업 발행, Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |

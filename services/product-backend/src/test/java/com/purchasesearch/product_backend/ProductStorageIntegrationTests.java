@@ -233,6 +233,74 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 사용자 질문 후보 API가 원본 질문을 보존하고 DB 상품의 가격, 재고와 출처를 반환하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void returnsProductCandidatesForUserQuestion() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+
+		mockMvc.perform(post("/internal/v1/product-candidates/search")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "출근용 검정 구두를 찾아줘",
+							  "query": "구두",
+							  "limit": 3
+							}
+							"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.question").value("출근용 검정 구두를 찾아줘"))
+				.andExpect(jsonPath("$.query").value("구두"))
+				.andExpect(jsonPath("$.totalCount").value(1))
+				.andExpect(jsonPath("$.hasNext").value(false))
+				.andExpect(jsonPath("$.candidates[0].merchant").value("abcmart"))
+				.andExpect(jsonPath("$.candidates[0].price.amount").value(69000))
+				.andExpect(jsonPath("$.candidates[0].stockStatus").value("available"))
+				.andExpect(jsonPath("$.candidates[0].source.sourceUrl").exists());
+	}
+
+	/**
+	 * 후보 검색 결과가 없을 때 성공 응답과 빈 후보 목록을 반환하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void returnsEmptyCandidateListWhenDatabaseHasNoMatch() throws Exception {
+		mockMvc.perform(post("/internal/v1/product-candidates/search")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "없는 상품을 찾아줘",
+							  "query": "존재하지않는검색어"
+							}
+							"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalCount").value(0))
+				.andExpect(jsonPath("$.hasNext").value(false))
+				.andExpect(jsonPath("$.candidates").isEmpty());
+	}
+
+	/**
+	 * DB 검색어가 비어 있으면 전체 상품을 노출하지 않고 400으로 거절하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void rejectsCandidateRequestWithoutExplicitQuery() throws Exception {
+		mockMvc.perform(post("/internal/v1/product-candidates/search")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "출근용 구두를 찾아줘",
+							  "query": " "
+							}
+							"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	/**
 	 * search 결과에 query가 없으면 검색 문맥 없는 snapshot을 만들지 않고 400으로
 	 * 거절하는지 검증한다.
 	 *
@@ -302,6 +370,8 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.paths['/internal/v1/collection-results'].post")
 						.exists())
 				.andExpect(jsonPath("$.paths['/internal/v1/products'].get")
+						.exists())
+				.andExpect(jsonPath("$.paths['/internal/v1/product-candidates/search'].post")
 						.exists());
 
 		mockMvc.perform(get("/swagger-ui.html"))
