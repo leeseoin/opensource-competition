@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { BackendRequestError, ProductBackendClient, type PurchaseCondition } from "./backend-client.js";
+
+const conditions: PurchaseCondition = {
+  productType: "구두",
+  usage: ["출근"],
+  price: { min: null, max: 100000, currency: "KRW" },
+  colors: ["검정"],
+  sizes: ["270"],
+  requirements: ["편안함"],
+  merchant: null,
+  missingConditions: [],
+  assumptions: [],
+  confidence: 0.9,
+  requiresConfirmation: true,
+};
+
+/** DRAFT 조사 세션 요청이 runtime과 Plugin 식별자를 강제로 포함하는지 검증한다. */
+test("DRAFT 조사 세션 생성 요청을 Product Backend에 전달한다", async () => {
+  let requestBody = "";
+  const client = new ProductBackendClient("http://backend", async (_input, init) => {
+    requestBody = String(init?.body);
+    return Response.json({ sessionId: "a", status: "DRAFT" });
+  });
+
+  await client.createSession("검정 구두를 찾아줘", conditions);
+  assert.deepEqual(JSON.parse(requestBody), {
+    question: "검정 구두를 찾아줘",
+    runtime: "codex",
+    pluginId: "purchase-research-agent",
+    conditions,
+  });
+});
+
+/** 미확정 검색 등 Product Backend 오류를 상태 코드와 함께 보존하는지 검증한다. */
+test("Product Backend 상태 오류를 MCP 오류로 변환한다", async () => {
+  const client = new ProductBackendClient("http://backend", async () => new Response(
+    JSON.stringify({ code: "RESEARCH_SESSION_NOT_READY" }),
+    { status: 409 },
+  ));
+
+  await assert.rejects(
+    client.searchCandidates("00000000-0000-4000-8000-000000000000"),
+    (error: unknown) => error instanceof BackendRequestError && error.status === 409,
+  );
+});

@@ -1371,6 +1371,25 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - Product Backend와 Next.js 빈 결과 요청: 각각 HTTP 200 / `candidateCount=0`
   - Next.js `limit=4` 요청: HTTP 400 / `INVALID_REQUEST`
 
+### 2026-08-05 MCP-001 Product Backend 조사 세션 MCP 도구
+
+- 진행상황: TypeScript와 공식 MCP SDK 기반 stdio server를 구현하고 조사 세션 생성, 사용자
+  조건 확인과 확정 조건 상품 검색 도구를 Product Backend REST API에 연결했다.
+- 구현 위치:
+  - `services/mcp-server/src/index.ts:26` `main`: stdio 연결과 세 MCP 도구 등록
+  - `services/mcp-server/src/backend-client.ts:43` `ProductBackendClient`: Product Backend 전용 REST client
+  - `services/mcp-server/src/mcp-smoke.test.ts:8` `stdio MCP 서버가 조사 세션 도구를 공개한다`: child process 초기화와 tool list 검증
+  - `.codex/config.toml:1` `mcp_servers.purchase_research`: 저장소 범위 Codex MCP 설정
+  - `plugins/purchase-research-agent/.mcp.json:1` `purchase_research`: Plugin MCP 실행 설정
+- 발생 문제: Node의 TypeScript strip-only 실행은 constructor parameter property를 지원하지
+  않았고 `.ts` import 확장자는 NodeNext 빌드 설정과 충돌했다.
+- 원인: source를 직접 실행하는 Node 실험 기능과 TypeScript compiler의 module 해석 규칙이 달랐다.
+- 해결: 모든 MCP 테스트를 `tsc`로 빌드한 뒤 `dist/*.test.js`에서 실행하도록 통일했다.
+- 남은 위험: Product Backend 실제 실행 환경에서 Codex가 MCP 도구를 선택하는 전체 E2E와
+  timeout/취소/동시 실행 상한이 남아 있다.
+- 검증:
+  - `cd services/mcp-server && npm test`: 통과, REST client 2개와 stdio tool list 1개
+
 ## 작업 기록 템플릿
 
 ### 2026-08-05 MCP-002 AI 구매 조건과 조사 세션 확인 경계

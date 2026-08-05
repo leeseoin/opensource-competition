@@ -53,6 +53,8 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 | React DOM | 19.2.4 | browser rendering | [facebook/react](https://github.com/facebook/react) | MIT |
 | Tailwind CSS | 4.3.3 | UI style | [tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) | MIT |
 | TypeScript | 5.9.3 | 정적 type 검사 | [microsoft/TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 |
+| Model Context Protocol TypeScript SDK | 1.30.0 | Purchase Research stdio MCP Server와 client smoke test | [modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
+| Zod | 4.4.3 | MCP 도구 입력 Schema 검증 | [colinhacks/zod](https://github.com/colinhacks/zod) | MIT |
 | ESLint | 9.39.5 | 정적 코드 검사 | [eslint/eslint](https://github.com/eslint/eslint) | MIT |
 | eslint-config-next | 16.2.12 | Next.js ESLint 규칙 | [vercel/next.js](https://github.com/vercel/next.js) | MIT |
 | Node.js type definitions | 20.19.43 | TypeScript 개발 type | [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
@@ -85,7 +87,7 @@ Docker image에는 Alpine Linux와 여러 system package가 포함되므로 위 
 ## Plugin, MCP 및 AI 모델
 
 - `plugins/purchase-research-agent`는 이 저장소에서 직접 작성 중인 Codex Plugin이다.
-- `services/mcp-server`는 현재 README와 경계만 있으며 외부 MCP SDK 및 runtime 의존성은 아직 없다.
+- `services/mcp-server`는 공식 MCP TypeScript SDK와 Zod를 사용해 stdio 도구를 제공한다.
 - Ollama, llama.cpp 및 GPU model server는 계획 단계이며 현재 실행 의존성이나 내장 model이 아니다.
 - 외부 AI model을 runtime에 추가하면 이름, 정확한 version, 제공자, 출처, weight 공개 여부, license 및 실행 방식을 이 문서와 `AI_USAGE.md`에 함께 기록한다.
 

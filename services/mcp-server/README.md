@@ -5,12 +5,23 @@ Codex, Claude Code 및 이후 로컬 LLM이 구매 조사 기능을 같은 방�
 
 ## 현재 상태
 
-디렉토리와 책임만 확정된 planned 단계다. 언어, SDK, 실행 entrypoint 및 MCP tool은
-아직 구현하지 않았다.
+TypeScript와 공식 `@modelcontextprotocol/sdk` 기반 stdio server를 구현했다. 현재 도구는
+다음 세 개다.
 
-구현 언어와 실행 명령을 확정하기 전까지 Codex Plugin의 `.mcp.json`에는 실행 설정을
-등록하지 않는다. 존재하지 않는 명령을 등록해 Plugin 실행이 실패하는 것을 막기
-위한 결정이다.
+- `create_research_session`: AI 구매 조건을 DRAFT로 저장
+- `confirm_purchase_conditions`: 사용자가 확인한 조건을 CONFIRMED로 전환
+- `search_product_candidates`: 확인된 세션의 PostgreSQL 후보 최대 3개 조회
+
+```bash
+cd services/mcp-server
+npm install
+npm test
+npm run build
+npm start
+```
+
+`PRODUCT_BACKEND_BASE_URL`의 기본값은 `http://127.0.0.1:8080`이다. stdout은 MCP stdio
+protocol에만 사용하며 일반 로그를 출력하지 않는다.
 
 ## 책임
 

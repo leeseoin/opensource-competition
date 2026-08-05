@@ -31,7 +31,9 @@
 
 ## 실행 시 사용하는 AI의 현재 상태
 
-- Codex Plugin 골격은 있지만 Product Backend와 연결되는 MCP 도구는 아직 구현되지 않았다.
+- Codex Plugin은 `purchase-research-agent` workflow와 로컬 stdio MCP 설정을 포함한다.
+- Purchase Research MCP Server는 조사 세션 생성/조건 확인/확정 조건 상품 검색 도구를
+  Product Backend REST API에 연결한다. PostgreSQL과 판매처에는 직접 접근하지 않는다.
 - Next.js Agent Gateway, Claude Code 연동, Ollama, llama.cpp 및 GPU model server는 계획 단계다.
 - 현재 저장소에 직접 포함한 AI model weight는 없다.
 - runtime model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 기록한다.
