@@ -39,6 +39,23 @@ test("빈 검색어 요청을 거절한다", async () => {
   assert.equal(called, false);
 });
 
+/** 후보를 3개보다 많이 요청하면 Product Backend 호출 전에 거절하는지 검증한다. */
+test("후보 4개 요청을 거절한다", async () => {
+  let called = false;
+  const fetcher: typeof fetch = async () => {
+    called = true;
+    return Response.json({});
+  };
+  const response = await handleProductCandidateRequest(new Request("http://localhost/api/product-candidates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: "검정 구두", query: "구두", limit: 4 }),
+  }), fetcher);
+
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+});
+
 /** Product Backend가 오류를 반환하면 browser에 502 경계를 제공하는지 검증한다. */
 test("상품 서버 처리 오류를 502로 변환한다", async () => {
   const fetcher: typeof fetch = async () => new Response(null, { status: 500 });

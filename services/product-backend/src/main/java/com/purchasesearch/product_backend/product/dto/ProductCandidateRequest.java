@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Size;
  * @param question 사용자가 입력한 원본 구매 질문
  * @param query PostgreSQL 상품 검색에 사용할 검색어
  * @param merchant 선택 판매처 식별자
- * @param limit 최대 후보 수, 생략하면 3개
+	 * @param limit 최대 후보 수, 생략하면 3개이며 3개를 초과할 수 없음
  */
 public record ProductCandidateRequest(
 		@NotBlank
@@ -25,6 +25,6 @@ public record ProductCandidateRequest(
 		@Size(max = 64)
 		String merchant,
 		@Min(1)
-		@Max(10)
+		@Max(3)
 		Integer limit) {
 }

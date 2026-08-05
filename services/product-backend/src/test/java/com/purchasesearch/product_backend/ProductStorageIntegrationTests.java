@@ -301,6 +301,25 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 상품 후보를 3개보다 많이 요청하면 화면 계약을 벗어나므로 400으로 거절하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void rejectsCandidateRequestOverThreeProducts() throws Exception {
+		mockMvc.perform(post("/internal/v1/product-candidates/search")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "출근용 구두를 찾아줘",
+							  "query": "구두",
+							  "limit": 4
+							}
+							"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	/**
 	 * search 결과에 query가 없으면 검색 문맥 없는 snapshot을 만들지 않고 400으로
 	 * 거절하는지 검증한다.
 	 *
