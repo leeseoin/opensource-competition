@@ -16,3 +16,7 @@ __pycache__/
 
 # 크롤러가 생성하는 로컬 JSON/HTML 원본과 실행 산출물
 **/output/
+
+# Node.js 의존성과 TypeScript 빌드 산출물
+**/node_modules/
+services/mcp-server/dist/

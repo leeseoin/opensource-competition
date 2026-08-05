@@ -1,3 +1,11 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "purchase_research": {
+      "command": "node",
+      "args": ["services/mcp-server/dist/index.js"],
+      "env": {
+        "PRODUCT_BACKEND_BASE_URL": "http://127.0.0.1:8080"
+      }
+    }
+  }
 }

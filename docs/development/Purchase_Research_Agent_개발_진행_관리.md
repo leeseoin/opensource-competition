@@ -1240,6 +1240,81 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `cd frontend/purchase-web && npm run lint`: 통과
   - `cd frontend/purchase-web && npm run build`: 통과, `/`, `/chat`, `/compare` 정적 페이지 생성
 
+### 2026-08-05 BACKEND-001/WEB-002 PostgreSQL 상품 후보 화면 연결
+
+- 진행상황: Product Backend에 사용자 질문 문맥과 명시적 검색어를 받는 상품 후보 API를
+  추가했다. Next.js server route가 이 API를 호출하며 `/chat`과 `/compare`는 고정 상품 대신
+  실제 DB 후보의 가격, 재고, 판매처, 공개 출처와 수집 시각을 표시한다. MCP와 Codex는 아직
+  연결하지 않았다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductCandidateController.java:48` `search`: 사용자 질문용 상품 후보 HTTP API
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:34` `findCandidates`: 기존 상품 검색을 후보 응답으로 변환
+  - `frontend/purchase-web/app/api/product-candidates/route.ts:47` `handleProductCandidateRequest`: server 전용 backend 중계와 오류 경계
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:20` `ChatExperience`: DB 후보를 표시하는 구매 질문 화면
+  - `frontend/purchase-web/app/compare/compare-experience.tsx:17` `CompareExperience`: DB 후보 세 개 비교 화면
+- 발생 문제: 새 `package.json` test script 때문에 문서 동기화 검사가 외부 구성요소 공개 문서
+  갱신을 요구했고, React lint는 effect 시작 시 동기 상태 갱신을 거절했다.
+- 원인: 문서 검사기는 manifest 변경 자체를 감지하며 React 19 lint는 effect 안의 즉시 `setState`
+  호출을 연쇄 rendering 위험으로 본다.
+- 해결: 새 외부 package가 없고 Node 내장 test runner를 사용한다는 내용을
+  `THIRD_PARTY_NOTICES.md`에 기록했다. 초기 조회는 promise 완료 callback에서만 상태를 갱신하고
+  사용자 제출 시에만 loading 상태를 즉시 변경하도록 분리했다.
+- 남은 위험: Product Backend 프로세스가 실행 중이지 않아 Next.js server route를 거친 실제
+  HTTP E2E와 browser 렌더링은 아직 확인하지 못했다. 후보 순서는 최신 수집 순서이며 추천
+  점수나 최저가 순위가 아니다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+  - `cd frontend/purchase-web && npm test`: 통과, 정상/400/최대 3개/502/503 5개
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과, 동적 server route 생성
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-05 BACKEND-001/WEB-002 실제 상품 후보 HTTP E2E 검증
+
+- 진행상황: 사용자가 실행한 PostgreSQL, Spring Boot와 Next.js를 대상으로 Product Backend
+  직접 호출과 Next.js server route 호출을 검증했다. `구두` 검색은 DB의 503건 중 최대 후보
+  3건을 반환했고, 두 응답에는 같은 상품/가격/재고/공개 출처/수집 시각이 포함됐다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductCandidateController.java:48` `search`: 실제 PostgreSQL 후보 조회 HTTP 진입점
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:34` `findCandidates`: 후보 최대 3건 조회 및 질문 문맥 보존
+  - `frontend/purchase-web/app/api/product-candidates/route.ts:47` `handleProductCandidateRequest`: Spring Boot 응답 중계와 입력/timeout/장애 경계
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:20` `ChatExperience`: 실제 후보를 표시하도록 구성된 채팅 화면
+  - `frontend/purchase-web/app/compare/compare-experience.tsx:17` `CompareExperience`: 같은 질문과 검색어로 후보를 다시 조회하는 비교 화면
+- 발생 문제: 최초 결과 확인용 `jq` 경로를 최상위 `sourceUrl`로 잘못 지정해 근거가 `null`처럼
+  보였고, 자동 브라우저 연결을 사용할 수 없어 실제 화면 렌더링을 확인하지 못했다.
+- 원인: 근거 계약은 후보의 `source.sourceUrl`과 `source.collectedAt`에 중첩돼 있다. 현재
+  세션에는 연결 가능한 자동 브라우저가 없었다.
+- 해결: 전체 후보 JSON을 다시 확인해 중첩된 근거 URL, 수집 시각과 Collector 버전을 검증했다.
+  Spring Boot와 Next.js 응답을 정렬 비교했으며 숫자의 소수점 직렬화 표현 외 실제 값은 같았다.
+- 남은 위험: `/chat`과 `/compare`의 실제 데스크톱/모바일 렌더링, 키보드 접근성과 화면에서의
+  오류 표시를 수동 브라우저로 확인해야 한다. 추천 점수와 자연어 답변은 Agent Gateway와 MCP
+  연결 전이므로 아직 제공하지 않는다.
+- 검증:
+  - Product Backend 실제 후보 요청: HTTP 200 / `totalCount=503` / `candidateCount=3`
+  - Next.js server route 실제 후보 요청: HTTP 200 / 같은 후보 3건과 근거 반환
+  - Product Backend와 Next.js 빈 결과 요청: 각각 HTTP 200 / `candidateCount=0`
+  - Next.js `limit=4` 요청: HTTP 400 / `INVALID_REQUEST`
+
+### 2026-08-05 MCP-001 Product Backend 조사 세션 MCP 도구
+
+- 진행상황: TypeScript와 공식 MCP SDK 기반 stdio server를 구현하고 조사 세션 생성, 사용자
+  조건 확인과 확정 조건 상품 검색 도구를 Product Backend REST API에 연결했다.
+- 구현 위치:
+  - `services/mcp-server/src/index.ts:26` `main`: stdio 연결과 세 MCP 도구 등록
+  - `services/mcp-server/src/backend-client.ts:43` `ProductBackendClient`: Product Backend 전용 REST client
+  - `services/mcp-server/src/mcp-smoke.test.ts:8` `stdio MCP 서버가 조사 세션 도구를 공개한다`: child process 초기화와 tool list 검증
+  - `.codex/config.toml:1` `mcp_servers.purchase_research`: 저장소 범위 Codex MCP 설정
+  - `plugins/purchase-research-agent/.mcp.json:1` `purchase_research`: Plugin MCP 실행 설정
+- 발생 문제: Node의 TypeScript strip-only 실행은 constructor parameter property를 지원하지
+  않았고 `.ts` import 확장자는 NodeNext 빌드 설정과 충돌했다.
+- 원인: source를 직접 실행하는 Node 실험 기능과 TypeScript compiler의 module 해석 규칙이 달랐다.
+- 해결: 모든 MCP 테스트를 `tsc`로 빌드한 뒤 `dist/*.test.js`에서 실행하도록 통일했다.
+- 남은 위험: Product Backend 실제 실행 환경에서 Codex가 MCP 도구를 선택하는 전체 E2E와
+  timeout/취소/동시 실행 상한이 남아 있다.
+- 검증:
+  - `cd services/mcp-server && npm test`: 통과, REST client 2개와 stdio tool list 1개
+
 ## 작업 기록 템플릿
 
 ### 2026-08-05 MCP-002 AI 구매 조건과 조사 세션 확인 경계

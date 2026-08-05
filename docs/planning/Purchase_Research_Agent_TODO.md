@@ -201,10 +201,10 @@
 ### 5.1 공통 MCP Server
 
 - [x] `services/mcp-server` 디렉토리와 책임 문서 생성
-- [ ] 구현 언어와 MCP SDK 확정
-- [ ] stdio server 구성
-- [ ] MCP 도구 공통 오류·응답·근거 계약 정의
-- [ ] `search_products`: PostgreSQL 조건 검색
+- [x] 구현 언어와 MCP SDK 확정
+- [x] stdio server 구성
+- [x] MCP 도구 공통 오류·응답·근거 계약 정의
+- [x] `search_products`: PostgreSQL 조건 검색 **(조사 세션 기반 `search_product_candidates`)**
 - [ ] `get_product`: 상품·판매처·최신 가격·옵션·근거 조회
 - [ ] `compare_products`: 후보 상품 공통 비교 데이터 반환
 - [ ] `verify_offer`: RabbitMQ에 우선순위 재검증 작업 등록
