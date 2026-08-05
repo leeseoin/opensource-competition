@@ -230,6 +230,8 @@
 
 - [ ] Next.js가 직접 CLI를 실행하지 않도록 Agent Gateway 책임 정의
 - [ ] 공통 `AI Runtime Adapter` 계약 정의
+- [x] AI 구조화 출력용 `PurchaseCondition` JSON Schema 정의
+- [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
 - [ ] Codex CLI adapter와 stream 중계 구현
 - [ ] Claude Code CLI adapter와 stream 중계 구현
 - [ ] 요청별 process, 대화 session, timeout, 취소 정책 정의
@@ -280,7 +282,7 @@
 
 ### 6.4 API와 검증
 
-- [ ] Spring Boot research session REST API
+- [x] Spring Boot research session REST API
 - [ ] Agent Gateway API **(부분 구현: Product Backend 후보 조회용 Next.js server route)**
 - [x] Next.js server route → Product Backend → PostgreSQL 상품 후보 실제 HTTP E2E
 - [ ] 수집 작업 생성·조회·취소 API

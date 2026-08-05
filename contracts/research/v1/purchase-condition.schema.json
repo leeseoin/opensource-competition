@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research.local/contracts/research/v1/purchase-condition.schema.json",
+  "title": "PurchaseCondition",
+  "description": "AI가 자연어 구매 질문에서 추출하고 사용자가 확인할 구매 조건",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["productType", "usage", "price", "colors", "sizes", "requirements", "merchant", "missingConditions", "assumptions", "confidence", "requiresConfirmation"],
+  "properties": {
+    "productType": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "usage": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 100 } },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "currency"],
+      "properties": {
+        "min": { "type": ["integer", "null"], "minimum": 0 },
+        "max": { "type": ["integer", "null"], "minimum": 0 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    },
+    "colors": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 100 } },
+    "sizes": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 100 } },
+    "requirements": { "type": "array", "maxItems": 30, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+    "merchant": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 64 },
+    "missingConditions": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+    "assumptions": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 500 } },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "requiresConfirmation": { "type": "boolean", "const": true }
+  }
+}
