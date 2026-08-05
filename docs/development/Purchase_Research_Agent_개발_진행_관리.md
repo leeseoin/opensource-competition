@@ -1345,6 +1345,32 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 
+### 2026-08-05 BACKEND-001/WEB-002 실제 상품 후보 HTTP E2E 검증
+
+- 진행상황: 사용자가 실행한 PostgreSQL, Spring Boot와 Next.js를 대상으로 Product Backend
+  직접 호출과 Next.js server route 호출을 검증했다. `구두` 검색은 DB의 503건 중 최대 후보
+  3건을 반환했고, 두 응답에는 같은 상품/가격/재고/공개 출처/수집 시각이 포함됐다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductCandidateController.java:48` `search`: 실제 PostgreSQL 후보 조회 HTTP 진입점
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:34` `findCandidates`: 후보 최대 3건 조회 및 질문 문맥 보존
+  - `frontend/purchase-web/app/api/product-candidates/route.ts:47` `handleProductCandidateRequest`: Spring Boot 응답 중계와 입력/timeout/장애 경계
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:20` `ChatExperience`: 실제 후보를 표시하도록 구성된 채팅 화면
+  - `frontend/purchase-web/app/compare/compare-experience.tsx:17` `CompareExperience`: 같은 질문과 검색어로 후보를 다시 조회하는 비교 화면
+- 발생 문제: 최초 결과 확인용 `jq` 경로를 최상위 `sourceUrl`로 잘못 지정해 근거가 `null`처럼
+  보였고, 자동 브라우저 연결을 사용할 수 없어 실제 화면 렌더링을 확인하지 못했다.
+- 원인: 근거 계약은 후보의 `source.sourceUrl`과 `source.collectedAt`에 중첩돼 있다. 현재
+  세션에는 연결 가능한 자동 브라우저가 없었다.
+- 해결: 전체 후보 JSON을 다시 확인해 중첩된 근거 URL, 수집 시각과 Collector 버전을 검증했다.
+  Spring Boot와 Next.js 응답을 정렬 비교했으며 숫자의 소수점 직렬화 표현 외 실제 값은 같았다.
+- 남은 위험: `/chat`과 `/compare`의 실제 데스크톱/모바일 렌더링, 키보드 접근성과 화면에서의
+  오류 표시를 수동 브라우저로 확인해야 한다. 추천 점수와 자연어 답변은 Agent Gateway와 MCP
+  연결 전이므로 아직 제공하지 않는다.
+- 검증:
+  - Product Backend 실제 후보 요청: HTTP 200 / `totalCount=503` / `candidateCount=3`
+  - Next.js server route 실제 후보 요청: HTTP 200 / 같은 후보 3건과 근거 반환
+  - Product Backend와 Next.js 빈 결과 요청: 각각 HTTP 200 / `candidateCount=0`
+  - Next.js `limit=4` 요청: HTTP 400 / `INVALID_REQUEST`
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

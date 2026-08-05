@@ -282,6 +282,7 @@
 
 - [ ] Spring Boot research session REST API
 - [ ] Agent Gateway API **(부분 구현: Product Backend 후보 조회용 Next.js server route)**
+- [x] Next.js server route → Product Backend → PostgreSQL 상품 후보 실제 HTTP E2E
 - [ ] 수집 작업 생성·조회·취소 API
 - [ ] SSE 또는 stream 기반 Agent 응답 전달
 - [ ] SSE 기반 수집 진행 상태 전달
