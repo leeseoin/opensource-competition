@@ -34,6 +34,17 @@ test("Codex를 읽기 전용 구조화 모드로 실행한다", async () => {
   assert.match(receivedPrompt, /검정 구두를 찾아줘/);
 });
 
+/** Codex가 productType에 색상을 중복해도 DB 검색어에서는 상품 종류만 남기는지 검증한다. */
+test("상품 종류에서 구조화된 색상 중복을 제거한다", async () => {
+  const result = await structurePurchaseQuestion("검정 구두를 찾아줘", async () => JSON.stringify({
+    ...validCondition,
+    productType: "검정 구두",
+  }));
+
+  assert.equal(result.productType, "구두");
+  assert.deepEqual(result.colors, ["검정"]);
+});
+
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */
 test("Codex의 잘못된 JSON을 거절한다", async () => {
   await assert.rejects(

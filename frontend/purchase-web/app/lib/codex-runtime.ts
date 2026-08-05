@@ -119,6 +119,23 @@ export function runCodexCommand(
   });
 }
 
+/** productType에 중복 포함된 구조화 색상을 제거해 DB 검색어가 상품 종류에 집중되게 한다. */
+function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondition {
+  let productType = condition.productType.trim();
+  for (const color of condition.colors) {
+    const token = color.trim();
+    if (!token) {
+      continue;
+    }
+    productType = productType.replaceAll(token, " ");
+  }
+  productType = productType.replace(/\s+/g, " ").trim();
+  return {
+    ...condition,
+    productType: productType || condition.productType.trim(),
+  };
+}
+
 /** 사용자 질문을 Plugin 규칙과 공통 Schema에 따라 구매 조건 JSON으로 구조화한다. */
 export async function structurePurchaseQuestion(
   question: string,
@@ -132,6 +149,8 @@ export async function structurePurchaseQuestion(
     "당신은 Purchase Research Agent의 구매 조건 구조화 단계다.",
     "아래 Plugin 규칙을 적용하되 상품을 검색하거나 사실을 추측하지 않는다.",
     pluginRules,
+    "productType에는 구두, 운동화처럼 상품 종류만 기록한다.",
+    "색상, 사이즈, 가격, 판매처와 용도는 각각의 전용 필드에만 기록하고 productType에 중복하지 않는다.",
     "사용자 질문에 명시되지 않았지만 결과를 크게 바꾸는 조건은 missingConditions에 기록한다.",
     "assumptions에는 추론한 내용만 기록하고 requiresConfirmation은 반드시 true로 둔다.",
     "사용자 질문:",
@@ -165,5 +184,5 @@ export async function structurePurchaseQuestion(
   if (!isPurchaseCondition(parsed)) {
     throw new CodexRuntimeError("AI_OUTPUT_INVALID", "Codex 응답이 PurchaseCondition 계약과 일치하지 않습니다.");
   }
-  return parsed;
+  return normalizePurchaseCondition(parsed);
 }
