@@ -84,7 +84,7 @@
 
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
-| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 요청별 검색어/filters, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가되고 수집 검색어로 조회됨 | 시스템 구조 / 현재 DB 저장 흐름 | 동시 최초 저장 충돌 처리 후 Queue 결과 PostgreSQL 적재 E2E |
+| `BACKEND-001` | Collector 결과와 상품 snapshot 저장 | 부분 구현 | P0 | Flyway schema, Java DTO 검증, 요청별 검색어/filters, 상품 upsert, 가격/재고/옵션/근거 snapshot과 최신 상품 조회 | fixture 통합 테스트와 실제 ABC마트/29CM 결과 저장에서 상품 중복 없이 snapshot이 추가되고 수집 검색어로 조회됨 | 시스템 구조 / 현재 DB 저장 흐름 | 사용자 질문 후보 실제 HTTP E2E와 동시 최초 저장 충돌 처리 |
 | `BACKEND-002` | 수집 작업 영구 상태 관리 | 부분 구현 | P0 | collection job/task, 상태 전이, 성공/실패 수량과 소요시간 | 장애 후에도 PostgreSQL 기준 최종 상태를 복구하고 Redis 상태와 일치함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | 실제 RUNNING event, Redis 상태 일치와 장애 복구 검증 |
 
 ### MCP와 AI 실행
@@ -99,7 +99,7 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `WEB-001` | Next.js 공통 화면 기반 | 부분 구현 | P1 | routing, layout, theme, 환경변수와 서버 전용 인증정보 경계 | build/lint가 통과하고 browser에 비밀값이 노출되지 않음 | 시스템 구조 | Astryx 기반 공통 layout 확정 |
-| `WEB-002` | 사용자 구매 채팅 화면 | 부분 구현 | P1 | 질문 입력, streaming 답변, 후보 비교, 근거와 재검증 표시 | 사용자가 질문부터 근거 확인까지 한 흐름으로 완료하고 E2E가 통과함 | 시스템 구조 | 정적 채팅 및 비교 화면을 Agent Gateway와 연결 |
+| `WEB-002` | 사용자 구매 채팅 화면 | 부분 구현 | P1 | 질문 입력, streaming 답변, 후보 비교, 근거와 재검증 표시 | 사용자가 질문부터 근거 확인까지 한 흐름으로 완료하고 E2E가 통과함 | 시스템 구조 | DB 후보 실제 HTTP E2E 후 Agent Gateway와 MCP 연결 |
 | `WEB-003` | 수집 관리 화면 | 계획 | P1 | 작업 등록, 상태, 실패 원인, 수량, 재시도와 중단 | 관리자가 수집 작업의 시작부터 종료까지 상태와 결과를 확인함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | CollectionJob API 확정 |
 
 ### 분석과 재검증

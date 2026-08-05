@@ -1315,6 +1315,36 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `cd frontend/purchase-web && npm run lint`: 통과
   - `cd frontend/purchase-web && npm run build`: 통과, `/`, `/chat`, `/compare` 정적 페이지 생성
 
+### 2026-08-05 BACKEND-001/WEB-002 PostgreSQL 상품 후보 화면 연결
+
+- 진행상황: Product Backend에 사용자 질문 문맥과 명시적 검색어를 받는 상품 후보 API를
+  추가했다. Next.js server route가 이 API를 호출하며 `/chat`과 `/compare`는 고정 상품 대신
+  실제 DB 후보의 가격, 재고, 판매처, 공개 출처와 수집 시각을 표시한다. MCP와 Codex는 아직
+  연결하지 않았다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/controller/ProductCandidateController.java:48` `search`: 사용자 질문용 상품 후보 HTTP API
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:34` `findCandidates`: 기존 상품 검색을 후보 응답으로 변환
+  - `frontend/purchase-web/app/api/product-candidates/route.ts:47` `handleProductCandidateRequest`: server 전용 backend 중계와 오류 경계
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:20` `ChatExperience`: DB 후보를 표시하는 구매 질문 화면
+  - `frontend/purchase-web/app/compare/compare-experience.tsx:17` `CompareExperience`: DB 후보 세 개 비교 화면
+- 발생 문제: 새 `package.json` test script 때문에 문서 동기화 검사가 외부 구성요소 공개 문서
+  갱신을 요구했고, React lint는 effect 시작 시 동기 상태 갱신을 거절했다.
+- 원인: 문서 검사기는 manifest 변경 자체를 감지하며 React 19 lint는 effect 안의 즉시 `setState`
+  호출을 연쇄 rendering 위험으로 본다.
+- 해결: 새 외부 package가 없고 Node 내장 test runner를 사용한다는 내용을
+  `THIRD_PARTY_NOTICES.md`에 기록했다. 초기 조회는 promise 완료 callback에서만 상태를 갱신하고
+  사용자 제출 시에만 loading 상태를 즉시 변경하도록 분리했다.
+- 남은 위험: Product Backend 프로세스가 실행 중이지 않아 Next.js server route를 거친 실제
+  HTTP E2E와 browser 렌더링은 아직 확인하지 못했다. 후보 순서는 최신 수집 순서이며 추천
+  점수나 최저가 순위가 아니다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+  - `cd frontend/purchase-web && npm test`: 통과, 정상/400/502/503 4개
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과, 동적 server route 생성
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
