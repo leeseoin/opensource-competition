@@ -1339,7 +1339,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   점수나 최저가 순위가 아니다.
 - 검증:
   - `cd services/product-backend && ./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
-  - `cd frontend/purchase-web && npm test`: 통과, 정상/400/502/503 4개
+  - `cd frontend/purchase-web && npm test`: 통과, 정상/400/최대 3개/502/503 5개
   - `cd frontend/purchase-web && npm run lint`: 통과
   - `cd frontend/purchase-web && npm run build`: 통과, 동적 server route 생성
   - `make docs-check`: 통과
