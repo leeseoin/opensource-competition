@@ -414,6 +414,39 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 사용자 확인 최대 가격보다 비싼 최신 상품은 조사 세션 후보에서 제외되는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void appliesConfirmedPriceConditionToResearchCandidates() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		String condition = purchaseCondition("[]").replace("\"max\": 100000", "\"max\": 60000");
+		String response = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "6만 원 이하 구두",
+							  "runtime": "codex",
+							  "pluginId": "purchase-research-agent",
+							  "conditions": %s
+							}
+							""".formatted(condition)))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + condition + "}"))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(0))
+				.andExpect(jsonPath("$.result.candidates").isEmpty());
+	}
+
+	/**
 	 * search 결과에 query가 없으면 검색 문맥 없는 snapshot을 만들지 않고 400으로
 	 * 거절하는지 검증한다.
 	 *
@@ -547,7 +580,7 @@ class ProductStorageIntegrationTests {
 				  "productType": "구두",
 				  "usage": ["출근"],
 				  "price": {"min": null, "max": 100000, "currency": "KRW"},
-				  "colors": ["검정"],
+				  "colors": [],
 				  "sizes": ["270"],
 				  "requirements": ["편안함"],
 				  "merchant": "abcmart",

@@ -70,6 +70,44 @@ public class ProductQueryService {
 	}
 
 	/**
+	 * 사용자 확인 가격, 사이즈, 색상과 판매 중 재고를 최신 snapshot에 적용해 검색한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param query 상품 검색어
+	 * @param minPrice 최소 가격
+	 * @param maxPrice 최대 가격
+	 * @param currency 가격 통화
+	 * @param sizesCsv 검색할 사이즈 목록
+	 * @param colorsCsv 검색할 색상 목록
+	 * @param limit 최대 후보 수
+	 * @return 조건과 일치하는 전체 개수와 후보 목록
+	 */
+	@Transactional(readOnly = true)
+	public ProductSearchResponse searchCandidates(
+			String merchant,
+			String query,
+			Long minPrice,
+			Long maxPrice,
+			String currency,
+			String sizesCsv,
+			String colorsCsv,
+			int limit) {
+		Page<MerchantProduct> page = merchantProductRepository.searchCandidates(
+				normalize(merchant),
+				normalize(query),
+				minPrice,
+				maxPrice,
+				normalize(currency),
+				normalize(sizesCsv),
+				normalize(colorsCsv),
+				PageRequest.of(0, limit));
+		List<ProductSummary> products = page.getContent().stream()
+				.map(this::toSummary)
+				.toList();
+		return new ProductSearchResponse(page.getTotalElements(), page.hasNext(), products);
+	}
+
+	/**
 	 * 빈 검색 조건을 repository가 처리할 수 있는 null로 변환한다.
 	 *
 	 * @param value 원본 검색 조건
