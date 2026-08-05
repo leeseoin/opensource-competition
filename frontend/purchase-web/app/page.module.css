@@ -1,0 +1,538 @@
+.page {
+  --paper: #f2efe6;
+  --ink: #101010;
+  --orange: #ff4d00;
+  --blue: #3457ff;
+  --lime: #d7ff3f;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.navigation {
+  display: flex;
+  width: min(1296px, calc(100% - 64px));
+  height: 112px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.brand,
+.navigationLinks {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.brandMark {
+  width: 22px;
+  height: 22px;
+  background: var(--orange);
+}
+
+.navigationLinks {
+  gap: 26px;
+}
+
+.navigation a,
+.merchantSpaces a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.navigationLinks > a:not(.askButton) {
+  padding-block: 10px;
+  transition: color 180ms ease;
+}
+
+.navigationLinks > a:not(.askButton):hover {
+  color: var(--orange);
+}
+
+.askButton {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: white !important;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.askButton:hover {
+  transform: translateY(-2px);
+  background: var(--orange);
+}
+
+.hero {
+  position: relative;
+  width: min(1296px, calc(100% - 64px));
+  height: 642px;
+  margin: 0 auto;
+}
+
+.heroCopy {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  left: 0;
+}
+
+.eyebrow {
+  margin: 0 0 25px 0;
+  color: var(--orange);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hero h1 {
+  margin: 0;
+}
+
+.editorialTitle,
+.koreanTitle {
+  display: block;
+  white-space: nowrap;
+}
+
+.editorialTitle {
+  font-family: var(--font-bodoni), serif;
+  font-size: clamp(76px, 8vw, 116px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+}
+
+.koreanTitle {
+  margin-top: 12px;
+  font-family: var(--font-noto-kr), sans-serif;
+  font-size: clamp(46px, 4.7vw, 68px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.05em;
+}
+
+.orangeUnderline {
+  display: block;
+  width: 505px;
+  max-width: 80%;
+  height: 14px;
+  margin-top: 14px;
+  background: var(--orange);
+}
+
+.description {
+  margin: 40px 0 0 4px;
+  color: #343434;
+  font-family: var(--font-noto-kr), sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.productCollage {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: -40px;
+  width: 690px;
+  height: 510px;
+}
+
+.productPhoto {
+  position: absolute;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: white;
+  box-shadow: 0 16px 40px rgb(16 16 16 / 8%);
+}
+
+.productPhoto img {
+  object-fit: cover;
+}
+
+.mainPhoto {
+  top: 0;
+  left: 180px;
+  width: 350px;
+  height: 470px;
+  transform: rotate(-3deg);
+}
+
+.mainTag {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--ink);
+  color: white;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mainTag strong {
+  color: var(--lime);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.abcPhoto {
+  z-index: 2;
+  top: 240px;
+  left: 0;
+  width: 240px;
+  height: 285px;
+  transform: rotate(8deg);
+}
+
+.abcTag {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 8px 10px;
+  background: var(--lime);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.sidePhoto {
+  top: 198px;
+  right: 0;
+  width: 220px;
+  height: 270px;
+  transform: rotate(-7deg);
+}
+
+.verifiedSticker {
+  position: absolute;
+  z-index: 4;
+  top: 6px;
+  right: 50px;
+  width: 138px;
+  height: 138px;
+}
+
+.verifiedSticker span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  color: white;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.searchRow {
+  position: absolute;
+  right: 0;
+  bottom: 38px;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.searchCapsule {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  width: min(930px, 72%);
+  height: 78px;
+  padding: 0 10px 0 24px;
+  align-content: center;
+  border-radius: 999px;
+  background: var(--ink);
+  color: white;
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+.searchCapsule > span,
+.searchCapsule > strong {
+  grid-column: 1;
+}
+
+.searchCapsule > span {
+  margin-bottom: 3px;
+  color: #a9a9a9;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.searchCapsule > strong {
+  font-family: var(--font-noto-kr), sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.searchCapsule > a {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-content: center;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 23px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 180ms ease;
+}
+
+.searchCapsule > a:hover {
+  transform: rotate(12deg) scale(1.04);
+}
+
+.liveStatus {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: white;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ticker {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  overflow: hidden;
+  background: var(--orange);
+  border-block: 1px solid var(--ink);
+}
+
+.ticker p {
+  min-width: max-content;
+  margin: 0;
+  padding-inline: 30px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  animation: ticker 18s linear infinite;
+}
+
+.ticker span {
+  margin-inline: 10px;
+}
+
+.merchantSpaces {
+  display: grid;
+  width: min(1296px, calc(100% - 64px));
+  margin: 30px auto 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.merchantCard {
+  min-height: 238px;
+  padding: 20px 22px;
+  border: 2px solid var(--ink);
+  font-family: var(--font-geist-sans), sans-serif;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.merchantCard:hover {
+  transform: translateY(-6px);
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+.merchantCard p {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.merchantCard h2 {
+  margin: 10px 0;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.merchantCard > span {
+  display: block;
+  font-family: var(--font-noto-kr), sans-serif;
+  font-size: 13px;
+}
+
+.merchantCard > a {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.abcMerchant {
+  background: var(--lime);
+}
+
+.cmMerchant {
+  background: var(--blue);
+  color: white;
+}
+
+.cmMerchant > a {
+  color: var(--lime);
+}
+
+.proofCard {
+  background: white;
+}
+
+.proofCard p {
+  color: var(--orange);
+}
+
+.proofCard > strong {
+  display: block;
+  margin-block: 8px 12px;
+  font-family: var(--font-bodoni), serif;
+  font-size: 46px;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+}
+
+@keyframes ticker {
+  to {
+    transform: translateX(-20%);
+  }
+}
+
+@media (max-width: 1120px) {
+  .navigationLinks > a:not(.askButton) {
+    display: none;
+  }
+
+  .hero {
+    height: 920px;
+  }
+
+  .productCollage {
+    top: 360px;
+    right: 50%;
+    transform: translateX(50%);
+  }
+
+  .searchRow {
+    bottom: 24px;
+  }
+
+  .searchCapsule {
+    width: 78%;
+  }
+}
+
+@media (max-width: 760px) {
+  .navigation,
+  .hero,
+  .merchantSpaces {
+    width: min(100% - 32px, 1296px);
+  }
+
+  .navigation {
+    height: 84px;
+  }
+
+  .brand {
+    font-size: 11px;
+  }
+
+  .hero {
+    height: 820px;
+  }
+
+  .heroCopy {
+    top: 12px;
+  }
+
+  .eyebrow {
+    margin-bottom: 20px;
+    font-size: 9px;
+  }
+
+  .editorialTitle {
+    font-size: clamp(55px, 17vw, 78px);
+  }
+
+  .koreanTitle {
+    font-size: clamp(34px, 10vw, 48px);
+  }
+
+  .orangeUnderline {
+    height: 9px;
+  }
+
+  .description {
+    margin-top: 26px;
+    font-size: 14px;
+  }
+
+  .productCollage {
+    top: 330px;
+    right: auto;
+    left: 50%;
+    width: 560px;
+    transform: translateX(-50%) scale(0.72);
+    transform-origin: top center;
+  }
+
+  .searchRow {
+    display: block;
+  }
+
+  .searchCapsule {
+    width: 100%;
+  }
+
+  .liveStatus {
+    position: absolute;
+    right: 16px;
+    bottom: -46px;
+  }
+
+  .merchantSpaces {
+    margin-top: 72px;
+    grid-template-columns: 1fr;
+  }
+
+  .ticker p {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker p {
+    animation: none;
+  }
+
+  .merchantCard,
+  .askButton,
+  .searchCapsule > a {
+    transition: none;
+  }
+}

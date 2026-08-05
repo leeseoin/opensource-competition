@@ -43,7 +43,7 @@
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring producer, Go Worker, Spring 결과 Consumer 및 retry/DLQ | 실제 전체 Queue E2E, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
-| Next.js Web | 부분 구현 | `frontend/purchase-web` Next.js scaffold 생성 | Astryx `/chat`, `/admin/collections` 화면과 API 연결 |
+| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2 화면과 질문 입력 시제품 | Agent Gateway 연결과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
 | Python/Go 크롤러 비교 | 부분 구현 | 비교 Contract/20건 예제/최대 10,000개 수집과 benchmark 설계 | 언어별 adapter, pagination/checkpoint와 단계별 실수집 |
 
@@ -273,8 +273,10 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] Next.js Web의 예정 책임과 최종 사용자 경로 README 작성
 - [x] Next.js, React, TypeScript project scaffold 생성
 - [x] Astryx AI Chat Conversation 템플릿과 MIT 라이선스 확인
+- [x] Figma Editorial Commerce Landing V2 정적 화면과 반응형 CSS 구현
 - [ ] Astryx 의존성·neutral theme 적용
-- [ ] `/chat` 사용자 구매 채팅 화면
+- [ ] `/chat` 사용자 구매 채팅 화면 **(부분 구현: 질문 입력 및 정적 추천 결과)**
+- [x] `/compare` 정적 상품 비교와 선택 근거 화면
 - [ ] `/admin/collections` 관리자 수집 화면
 - [ ] 공통 navigation과 관리자 접근 정책
 - [ ] 공통 API type과 client 구성
@@ -1183,6 +1185,60 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `services/product-backend/./gradlew test`: `BUILD SUCCESSFUL`
   - `uvx check-jsonschema --schemafile contracts/collector/v1/collector-result.schema.json contracts/collector/v1/examples/collector-result.abcmart-success.json`: 통과
   - `uvx check-jsonschema --schemafile contracts/collector/v1-abcmart/abcmart-crawl-item.schema.json contracts/collector/v1-abcmart/examples/abcmart-crawl-item.valid.json`: 통과
+
+### 2026-08-05 WEB-001 Figma Landing V2 화면
+
+- 진행상황: Next.js 기본 생성 화면을 Figma의 `Desktop / Landing V2 / Editorial Commerce`
+  디자인을 반영한 공개 랜딩 화면으로 교체했다. 실제 상품 이미지, 판매처 공간, 검증 지표,
+  화면 내 navigation과 데스크톱/모바일 반응형 CSS를 구현했다. 검색 입력과 Agent Gateway
+  연결은 아직 구현 전이다.
+- 구현 위치:
+  - `frontend/purchase-web/app/page.tsx:4` `landingImages`: 저장소 내부 Figma 상품 이미지와 아이콘 경로
+  - `frontend/purchase-web/app/page.tsx:16` `Home`: 랜딩 hero, 검색 capsule, 판매처 공간과 검증 지표
+  - `frontend/purchase-web/app/page.module.css:1` `.page`: Editorial Commerce 색상과 전체 화면 기반
+  - `frontend/purchase-web/app/page.module.css:75` `.hero`: 데스크톱 hero와 상품 collage 배치
+  - `frontend/purchase-web/app/page.module.css:420` `@keyframes ticker`: ticker animation과 반응형 규칙
+  - `frontend/purchase-web/app/layout.tsx:15` `bodoni/notoSansKr`: 디자인 글꼴과 한국어 문서 metadata
+- 발생 문제: 격리 환경에서 production build가 Google Fonts에 접속하지 못해 Geist,
+  Bodoni Moda와 Noto Sans KR 다운로드 단계에서 실패했다.
+- 원인: `next/font/google`은 build 시점에 글꼴을 내려받지만 기본 검증 환경의 외부 네트워크
+  접근이 제한돼 있었다.
+- 해결: 승인된 네트워크 환경에서 같은 build를 다시 실행해 글꼴을 내려받고 정적 페이지
+  생성을 확인했다. 실제 상품 이미지와 아이콘은 만료되는 Figma URL 대신 `public` 아래에
+  저장했다.
+- 남은 위험: 데스크톱/모바일 실제 브라우저 화면 확인과 접근성 점검이 필요하다. 검색 capsule은
+  정적 예시이며 `/chat`과 Agent Gateway가 구현된 뒤 실제 질문 입력으로 교체해야 한다.
+- 검증:
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과, `/` 정적 페이지 생성
+  - `git diff --check`: 통과
+
+### 2026-08-05 WEB-002 Figma Chat/Compare V2 사용자 화면
+
+- 진행상황: 공개 랜딩에서 `/chat`으로 진입하고, 구매 조건을 입력한 뒤 정적 추천 후보와
+  검증 근거를 확인하며 `/compare`에서 세 상품을 비교하는 사용자 동선을 구현했다. 현재 질문
+  제출은 화면의 쇼핑 브리프만 갱신하며 Agent Gateway, Codex, Product Backend와는 연결하지 않았다.
+- 구현 위치:
+  - `frontend/purchase-web/app/page.tsx:17` `Home`: 랜딩의 질문 및 판매처 CTA를 `/chat`에 연결
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:14` `ChatExperience`: 질문 입력, 추천 후보,
+    검증 근거와 비교 화면 이동
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:19` `handleSubmit`: 사용자 입력을 정적 쇼핑
+    브리프에 반영하는 UI 시제품 동작
+  - `frontend/purchase-web/app/chat/page.module.css:1` `page`: Figma Chat V2 기반 데스크톱/모바일 스타일
+  - `frontend/purchase-web/app/compare/page.tsx:15` `ComparePage`: 상품 세 개의 가격, 재고, 검증 근거와
+    최종 선택 근거 표시
+  - `frontend/purchase-web/app/compare/page.module.css:1` `page`: Figma Compare V2 기반 반응형 스타일
+- 발생 문제: Figma가 생성한 코드는 Tailwind 절대 좌표 기반이어서 그대로 사용하면 작은 화면에서
+  내용이 잘리고 프로젝트의 CSS Module 방식과 맞지 않았다.
+- 원인: 디자인 원본은 1440px 고정 프레임이며 Figma MCP 출력은 디자인 전달용 참고 코드다.
+- 해결: 색상, 서체, 간격과 상품 이미지는 유지하면서 CSS Grid/Flex와 반응형 media query를 사용한
+  CSS Module로 변환했다. 만료되는 Figma 이미지 주소 대신 기존 `public/images/landing-v2` 자산을
+  재사용했다.
+- 남은 위험: 실제 브라우저에서 데스크톱/모바일 화면과 키보드 접근성을 확인해야 한다. 추천 값은
+  예시 데이터이므로 실제 서비스 주장으로 사용할 수 없으며 Agent Gateway 응답으로 교체해야 한다.
+- 검증:
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과, `/`, `/chat`, `/compare` 정적 페이지 생성
 
 ## 작업 기록 템플릿
 

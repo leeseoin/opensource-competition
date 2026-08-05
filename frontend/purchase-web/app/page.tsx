@@ -1,65 +1,150 @@
 import Image from "next/image";
+import Link from "next/link";
+import styles from "./page.module.css";
 
+const landingImages = {
+  main: "/images/landing-v2/hero-29cm-main.jpeg",
+  abcMart: "/images/landing-v2/hero-abcmart.jpeg",
+  side: "/images/landing-v2/hero-29cm-side.jpeg",
+  verified: "/images/landing-v2/verified-sticker.svg",
+  status: "/images/landing-v2/status-dot.svg",
+} as const;
+
+/**
+ * Home은 판매처별 상품 탐색과 근거 검증 흐름을 소개하는 공개 랜딩 화면을 제공한다.
+ * 정적인 PoC 화면이며 실제 상품 검색은 이후 Agent Gateway 연결 작업에서 활성화한다.
+ */
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className={styles.page}>
+      <nav className={styles.navigation} aria-label="주요 메뉴">
+        <a className={styles.brand} href="#top" aria-label="PRA 홈">
+          <span className={styles.brandMark} aria-hidden="true" />
+          <span>PRA / SHOP WITH PROOF</span>
+        </a>
+
+        <div className={styles.navigationLinks}>
+          <a href="#discover">DISCOVER</a>
+          <a href="#merchants">MERCHANTS</a>
+          <a href="#proof">HOW IT WORKS</a>
+          <Link className={styles.askButton} href="/chat">
+            ASK PRA <span aria-hidden="true">↗</span>
+          </Link>
+        </div>
+      </nav>
+
+      <section className={styles.hero} id="top">
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>
+            THE OPEN COMMERCE RESEARCH ENGINE / 2026
+          </p>
+          <h1>
+            <span className={styles.editorialTitle}>SHOP LESS.</span>
+            <span className={styles.koreanTitle}>더 잘 사는 법.</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <span className={styles.orangeUnderline} aria-hidden="true" />
+          <p className={styles.description}>
+            수천 개의 상품을 더 오래 보는 대신,
+            <br />
+            가격과 재고와 출처가 검증된 선택만 만나보세요.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+
+        <div className={styles.productCollage} aria-label="판매처 상품 미리보기">
+          <article className={`${styles.productPhoto} ${styles.mainPhoto}`}>
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+              src={landingImages.main}
+              alt="29CM의 검정 구두 상품"
+              fill
+              priority
+              sizes="(max-width: 900px) 72vw, 350px"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <div className={styles.mainTag}>
+              <span>29CM / 기호</span>
+              <strong>83,520 KRW</strong>
+            </div>
+          </article>
+
+          <article className={`${styles.productPhoto} ${styles.abcPhoto}`}>
+            <Image
+              src={landingImages.abcMart}
+              alt="ABC마트의 검정 구두 상품"
+              fill
+              priority
+              sizes="(max-width: 900px) 48vw, 240px"
+            />
+            <strong className={styles.abcTag}>ABC-MART / 19,000</strong>
+          </article>
+
+          <article className={`${styles.productPhoto} ${styles.sidePhoto}`}>
+            <Image
+              src={landingImages.side}
+              alt="29CM의 검정 스트랩 구두 상품"
+              fill
+              priority
+              sizes="(max-width: 900px) 42vw, 220px"
+            />
+          </article>
+
+          <div className={styles.verifiedSticker}>
+            <Image src={landingImages.verified} alt="출처 검증 완료" fill />
+            <span>
+              SOURCE
+              <br />
+              VERIFIED
+            </span>
+          </div>
         </div>
-      </main>
-    </div>
+
+        <div className={styles.searchRow} id="discover">
+          <div className={styles.searchCapsule}>
+            <span>WHAT ARE YOU LOOKING FOR?</span>
+            <strong>검정 로퍼 / 270 / 10만원 이하</strong>
+            <Link href="/chat" aria-label="AI에게 상품 질문하기">
+              ↗
+            </Link>
+          </div>
+
+          <div className={styles.liveStatus}>
+            <Image src={landingImages.status} alt="" width={8} height={8} />
+            <span>10,482 LIVE PRODUCTS</span>
+          </div>
+        </div>
+      </section>
+
+      <div className={styles.ticker} aria-label="지원 기능">
+        <p>
+          ABC-MART <span>✦</span> 29CM <span>✦</span> PRICE VERIFIED{" "}
+          <span>✦</span> STOCK CHECKED <span>✦</span> SOURCE LINKED{" "}
+          <span>✦</span> OPEN SOURCE <span>✦</span>
+        </p>
+      </div>
+
+      <section className={styles.merchantSpaces} id="merchants">
+        <article className={`${styles.merchantCard} ${styles.abcMerchant}`}>
+          <p>01 / MERCHANT SPACE</p>
+          <h2>ABC-MART</h2>
+          <span>운동화와 구두 / 옵션 재고까지 확인</span>
+          <Link href="/chat">ASK ABOUT ABC-MART →</Link>
+        </article>
+
+        <article className={`${styles.merchantCard} ${styles.cmMerchant}`}>
+          <p>02 / MERCHANT SPACE</p>
+          <h2>29CM</h2>
+          <span>디자이너 브랜드 / 리뷰와 평점까지 비교</span>
+          <Link href="/chat">ASK ABOUT 29CM →</Link>
+        </article>
+
+        <article className={`${styles.merchantCard} ${styles.proofCard}`} id="proof">
+          <p>WHY PRA</p>
+          <strong>99.2%</strong>
+          <span>
+            최근 검증 성공률
+            <br />
+            가격 / 재고 / 출처를 한 번에 확인
+          </span>
+        </article>
+      </section>
+    </main>
   );
 }
