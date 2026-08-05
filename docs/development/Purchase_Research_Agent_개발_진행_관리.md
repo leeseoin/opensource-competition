@@ -1390,8 +1390,6 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 검증:
   - `cd services/mcp-server && npm test`: 통과, REST client 2개와 stdio tool list 1개
 
-## 작업 기록 템플릿
-
 ### 2026-08-05 MCP-002 AI 구매 조건과 조사 세션 확인 경계
 
 - 진행상황: AI가 자연어 질문에서 생성할 `PurchaseCondition` 공통 Schema를 정의하고,
@@ -1412,6 +1410,29 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   검색 Adapter에서 구현해야 한다. Codex 구조화 출력과 MCP 연결은 아직 진행 중이다.
 - 검증:
   - `cd services/product-backend && ./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+
+### 2026-08-06 BACKEND-001 사용자 확인 조건 DB 필터
+
+- 진행상황: CONFIRMED 조사 세션의 상품 종류/판매처/최소 가격/최대 가격/통화/사이즈/색상과
+  최신 재고 상태를 PostgreSQL query에 적용했다. 검색 결과의 `totalCount`와 `hasNext`도 같은
+  조건을 사용한다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:180` `searchCandidates`: 최신 offer와 옵션 조건 SQL
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:72` `findCandidates(String, PurchaseCondition)`: 확인 조건 정규화와 후보 응답 변환
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:86` `searchCandidates`: 조건 query와 상품 요약 연결
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:422` `appliesConfirmedPriceConditionToResearchCandidates`: 최대 가격 초과 상품 제외 검증
+- 발생 문제: 첫 실제 E2E에서 10만 원 이하 조건인데 119,280원 상품이 후보에 포함됐다.
+- 원인: 조사 세션 검색이 `productType`과 `merchant`만 기존 상품 검색 API에 전달하고 나머지
+  확인 조건을 사용하지 않았다.
+- 해결: PostgreSQL의 판매처 상품별 최신 snapshot을 기준으로 가격과 재고를 검사하고, 같은
+  snapshot의 재고 있는 옵션에서 사이즈와 색상을 검사하도록 query를 확장했다. 한국어 기본
+  색상명과 `270mm` 표기는 Collector 값인 `BLACK`과 `270`으로 정규화한다.
+- 남은 위험: 용도와 편안함 같은 의미 조건은 아직 리뷰 분석 및 점수 기능이 없어 DB 필터로
+  적용하지 않는다. 최신 snapshot에 옵션이 없으면 오래된 옵션을 현재 사실처럼 사용하지 않아
+  결과에서 제외된다.
+- 검증:
+  - `./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+  - 실제 Go 옵션 재수집 후 Next/Codex/MCP/Spring/PostgreSQL E2E: `구두/검정/270/10만 원 이하` 조건에서 ABC마트 페니 로퍼 69,000원 1건 반환
 
 ## 작업 기록 템플릿
 

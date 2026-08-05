@@ -224,7 +224,7 @@
 - [ ] `get_verification_status`: 재검증 진행 상태 조회
 - [ ] `get_evidence`: 가격·재고·상품 사실의 출처 조회
 - [ ] LLM이 SQL을 직접 생성하지 않고 정해진 MCP 입력만 사용하도록 제한
-- [ ] FAISS·pgvector 없이 PostgreSQL 조건 검색으로 PoC 검증
+- [x] FAISS/pgvector 없이 PostgreSQL 가격/재고/사이즈/색상 조건 검색으로 PoC 검증
 
 ### 5.2 Codex·Claude Code 실행 경계
 

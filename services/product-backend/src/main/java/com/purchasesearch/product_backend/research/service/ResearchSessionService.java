@@ -5,7 +5,6 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.purchasesearch.product_backend.product.dto.ProductCandidateRequest;
 import com.purchasesearch.product_backend.product.dto.ProductCandidateResponse;
 import com.purchasesearch.product_backend.product.service.ProductCandidateService;
 import com.purchasesearch.product_backend.research.dto.ConfirmResearchSessionRequest;
@@ -82,11 +81,8 @@ public class ResearchSessionService {
 		if (session.getStatus() != ResearchSessionStatus.CONFIRMED) {
 			throw new ResearchSessionException("사용자가 구매 조건을 확인하지 않았습니다.");
 		}
-		ProductCandidateResponse result = productCandidateService.findCandidates(new ProductCandidateRequest(
-				session.getQuestion(),
-				session.getConditions().productType(),
-				session.getConditions().merchant(),
-				3));
+		ProductCandidateResponse result = productCandidateService.findCandidates(
+				session.getQuestion(), session.getConditions());
 		return ResearchSessionResponse.from(session, result);
 	}
 }
