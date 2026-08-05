@@ -1,27 +1,5 @@
 import type { Metadata } from "next";
-import { Bodoni_Moda, Geist, Geist_Mono, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const bodoni = Bodoni_Moda({
-  variable: "--font-bodoni",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-});
-
-const notoSansKr = Noto_Sans_KR({
-  variable: "--font-noto-kr",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Purchase Research Agent",
@@ -29,7 +7,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * RootLayout은 전역 글꼴과 문서 메타데이터를 적용하고 모든 화면의 HTML 골격을 제공한다.
+ * RootLayout은 외부 font 요청 없는 전역 문서 골격과 메타데이터를 제공한다.
  */
 export default function RootLayout({
   children,
@@ -37,10 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} ${bodoni.variable} ${notoSansKr.variable} h-full antialiased`}
-    >
+    <html lang="ko" className="h-full antialiased">
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

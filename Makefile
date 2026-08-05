@@ -10,6 +10,7 @@ export PURCHASE_RESEARCH_RABBITMQ_URL
 export COLLECTOR_HTTP_ADDRESS COLLECTOR_READ_TIMEOUT COLLECTOR_WRITE_TIMEOUT
 export COLLECTOR_IDLE_TIMEOUT COLLECTOR_SHUTDOWN_TIMEOUT COLLECTOR_WORKER_TIMEOUT COLLECTOR_CHROME_BIN
 export PRODUCT_BACKEND_BASE_URL PRODUCT_BACKEND_REQUEST_TIMEOUT_MS
+export CODEX_CLI_PATH CODEX_GATEWAY_TIMEOUT_MS PURCHASE_RESEARCH_REPO_ROOT PURCHASE_RESEARCH_MCP_ENTRY
 
 COLLECTOR_DIR := services/collector
 PRODUCT_BACKEND_DIR := services/product-backend
@@ -30,7 +31,8 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 	python-collector-sync python-collector-test \
 	python-crawler-env python-crawler-setup python-crawler-run python-crawler-test \
 	product-backend-run product-backend-test \
-	web-install web-dev web-lint web-build docs-check test check
+	mcp-server-install mcp-server-build mcp-server-test \
+	web-install web-dev web-test web-lint web-build docs-check test check
 
 help: ## 사용할 수 있는 명령을 보여준다.
 	@printf '%s\n' \
@@ -50,6 +52,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
+		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
 		'  make web-dev         Next.js 개발 서버 실행' \
 		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
 		'  make test            Go, Spring Boot, Next.js lint 일괄 검증' \
@@ -121,22 +124,35 @@ product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
 product-backend-test: ## Spring Boot와 Testcontainers 테스트를 실행한다.
 	cd $(PRODUCT_BACKEND_DIR) && ./gradlew test
 
-web-install: ## package-lock.json 기준으로 Next.js 의존성을 설치한다.
+
+mcp-server-install: ## package-lock.json 기준으로 MCP Server 의존성을 설치한다.
+	cd $(MCP_SERVER_DIR) && npm ci
+
+mcp-server-build: ## Next.js Agent Gateway가 실행할 MCP Server를 빌드한다.
+	cd $(MCP_SERVER_DIR) && npm run build
+
+mcp-server-test: ## MCP REST client와 실제 stdio 도구 목록을 검증한다.
+	cd $(MCP_SERVER_DIR) && npm test
+
+web-install: mcp-server-install ## package-lock.json 기준으로 MCP Server와 Next.js 의존성을 설치한다.
 	cd $(WEB_DIR) && npm ci
 
-web-dev: ## Next.js 개발 서버를 실행한다.
+web-dev: mcp-server-build ## MCP Server를 빌드한 뒤 Next.js 개발 서버를 실행한다.
 	cd $(WEB_DIR) && npm run dev -- --port $(WEB_PORT)
+
+web-test: ## Codex Adapter와 Next.js server route 단위 테스트를 실행한다.
+	cd $(WEB_DIR) && npm test
 
 web-lint: ## Next.js ESLint 검사를 실행한다.
 	cd $(WEB_DIR) && npm run lint
 
-web-build: ## Next.js production build를 실행한다.
+web-build: mcp-server-build ## MCP Server와 Next.js production bundle을 빌드한다.
 	cd $(WEB_DIR) && npm run build
 
 docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
 	./scripts/check-document-sync.sh
 
-test: collector-test python-collector-test product-backend-test web-lint ## Go, Python, Spring Boot, Next.js를 검증한다.
+test: collector-test python-collector-test product-backend-test mcp-server-test web-test web-lint ## Go, Python, Spring Boot, MCP, Next.js를 검증한다.
 
 check: docs-check ## 문서 동기화, Compose 설정, 테스트, Next.js production build를 모두 검증한다.
 	docker compose config --quiet

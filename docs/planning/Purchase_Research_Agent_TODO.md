@@ -210,21 +210,21 @@
 - [ ] `verify_offer`: RabbitMQ에 우선순위 재검증 작업 등록
 - [ ] `get_verification_status`: 재검증 진행 상태 조회
 - [ ] `get_evidence`: 가격·재고·상품 사실의 출처 조회
-- [ ] LLM이 SQL을 직접 생성하지 않고 정해진 MCP 입력만 사용하도록 제한
+- [x] LLM이 SQL을 직접 생성하지 않고 정해진 MCP 입력만 사용하도록 제한
 - [x] FAISS/pgvector 없이 PostgreSQL 가격/재고/사이즈/색상 조건 검색으로 PoC 검증
 
 ### 5.2 Codex·Claude Code 실행 경계
 
-- [ ] Next.js가 직접 CLI를 실행하지 않도록 Agent Gateway 책임 정의
-- [ ] 공통 `AI Runtime Adapter` 계약 정의
+- [x] browser와 Client Component가 CLI를 실행하지 않고 Next.js server Agent Gateway만 실행하도록 경계 구현
+- [x] 공통 `AI Runtime Adapter` 계약 정의 **(Codex 구현, 다음 runtime이 같은 경계 사용)**
 - [x] AI 구조화 출력용 `PurchaseCondition` JSON Schema 정의
 - [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
-- [ ] Codex CLI adapter와 stream 중계 구현
+- [ ] Codex CLI adapter와 stream 중계 구현 **(부분 구현: 읽기 전용 JSON 구조화와 timeout 완료, stream/취소/동시성 상한 남음)**
 - [ ] Claude Code CLI adapter와 stream 중계 구현
 - [ ] 요청별 process, 대화 session, timeout, 취소 정책 정의
-- [ ] Codex Plugin에서 공통 MCP 도구 선택 workflow 연결
+- [x] Codex Plugin 규칙과 공통 MCP 조사 세션 workflow 연결
 - [ ] Claude Code에서 같은 MCP Server 연결 검증
-- [ ] Agent별 인증 정보와 실행 권한을 브라우저에 노출하지 않는 구성
+- [x] Agent 인증 정보와 실행 권한을 browser에 노출하지 않는 server 전용 구성
 - [ ] MCP 도구 호출과 최종 답변의 근거 누락 contract test
 
 완료 기준: 같은 MCP Server와 PostgreSQL을 사용하면서 Next.js 요청을 Codex CLI 또는 Claude Code CLI 중 하나에 전달하고, 상품 검색 결과를 근거와 함께 반환한다.
@@ -247,13 +247,13 @@
 - [ ] Astryx AI Chat Conversation 템플릿을 가능한 그대로 적용
 - [x] 정적인 사용자 질문/Agent 답변 예제와 상품 비교 화면 구현
 - [ ] 데스크톱/모바일 브라우저에서 `/chat`과 `/compare` 수동 화면 검증
-- [ ] Codex·Claude Code 실행 환경 선택 UI
+- [x] Codex 실행 환경 선택 UI **(Claude Code는 계획 단계임을 선택 항목에서 제외)**
 - [ ] 채팅 입력, 메시지 목록, 응답 stream 표시
-- [ ] DB 상품 검색과 MCP 도구 실행 상태 표시 **(부분 구현: Product Backend 직접 DB 후보 조회)**
+- [x] DB 상품 검색과 MCP 도구 실행 상태 표시
 - [ ] 오른쪽 상품 비교·근거 panel
 - [x] DB 후보의 상품 가격/재고/판매처/마지막 수집 시각 표시
 - [ ] 구매 전 재검증 요청과 상태 표시
-- [ ] 오류·취소·timeout 상태 표시
+- [ ] 오류/취소/timeout 상태 표시 **(부분 구현: 오류와 loading 완료, 취소와 timeout 전용 UI 남음)**
 
 ### 6.3 관리자 수집 화면 `/admin/collections`
 
