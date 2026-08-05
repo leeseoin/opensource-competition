@@ -28,8 +28,8 @@ function validateRequest(body: CandidateRequestBody): string | null {
       && (typeof body.merchant !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(body.merchant))) {
     return "merchant 형식이 올바르지 않습니다.";
   }
-  if (body.limit !== undefined && (!Number.isInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 10)) {
-    return "limit은 1부터 10 사이의 정수여야 합니다.";
+  if (body.limit !== undefined && (!Number.isInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 3)) {
+    return "limit은 1부터 3 사이의 정수여야 합니다.";
   }
   return null;
 }
