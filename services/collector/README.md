@@ -98,7 +98,9 @@ go vet ./...
 
 대량 수집 명령은 PostgreSQL이나 RabbitMQ에 직접 쓰지 않고 루트 `tmp/` 아래에
 `products.ndjson.gz`, `checkpoint.json`, `summary.json`을 저장한다. 한 번에 10,000건을
-시작하지 않고 100건/1,000건/최대 10,000건 순서로 실행한다.
+시작하지 않고 100건/1,000건/최대 10,000건 순서로 실행한다. 이 명령은 판매처 검색
+JSON 수집, 정규화, Contract 검증과 저장 성능을 비교하며 HTML 검증은 실행하지 않는다.
+운영 API와 Worker의 전수 HTML 검증은 그대로 유지하고 별도 검증 지표로 측정한다.
 
 ```bash
 make collector-batch \

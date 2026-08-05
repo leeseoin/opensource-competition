@@ -51,9 +51,9 @@ func main() {
 	var searcher bulk.PageSearcher
 	switch *merchant {
 	case "abcmart":
-		searcher = abcmart.NewSearcher(*timeout)
+		searcher = abcmart.NewBulkSearcher(*timeout)
 	case "29cm":
-		searcher = twentyninecm.NewSearcher(*timeout)
+		searcher = twentyninecm.NewBulkSearcher(*timeout)
 	default:
 		log.Fatalf("지원하지 않는 merchant입니다: %s", *merchant)
 	}

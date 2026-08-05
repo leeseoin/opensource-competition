@@ -116,6 +116,15 @@ func NewSearcher(timeout time.Duration) *Searcher {
 	}, time.Now, minRequestInterval, true, artifact.NewStore("output"))
 }
 
+// NewBulkSearcher는 검색 JSON 수집, 정규화와 Contract 성능만 측정하도록 상세 HTML 검증과 원본 저장을 제외한 검색기를 만든다.
+// 운영 Searcher의 전수 상세 검증은 유지하며 대량 비교에서 상세 요청 시간이 검색 처리량에 섞이지 않게 한다.
+func NewBulkSearcher(timeout time.Duration) *Searcher {
+	return NewSearcherWithDependencies(&http.Client{
+		Timeout:       timeout,
+		CheckRedirect: checkRedirect,
+	}, time.Now, minRequestInterval, false, nil)
+}
+
 // NewSearcherWithClient는 테스트용 HTTP client, 시계, 요청 간격을 주입해 29CM 검색기를 생성한다.
 func NewSearcherWithClient(client *http.Client, now func() time.Time, minInterval time.Duration) *Searcher {
 	return NewSearcherWithDependencies(client, now, minInterval, false, nil)
