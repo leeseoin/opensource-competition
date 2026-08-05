@@ -260,9 +260,9 @@
 - [ ] 데스크톱/모바일 브라우저에서 `/chat`과 `/compare` 수동 화면 검증
 - [ ] Codex·Claude Code 실행 환경 선택 UI
 - [ ] 채팅 입력, 메시지 목록, 응답 stream 표시
-- [ ] DB 상품 검색과 MCP 도구 실행 상태 표시
+- [ ] DB 상품 검색과 MCP 도구 실행 상태 표시 **(부분 구현: Product Backend 직접 DB 후보 조회)**
 - [ ] 오른쪽 상품 비교·근거 panel
-- [ ] 상품 가격·옵션·재고·판매처·마지막 수집 시각 표시
+- [x] DB 후보의 상품 가격/재고/판매처/마지막 수집 시각 표시
 - [ ] 구매 전 재검증 요청과 상태 표시
 - [ ] 오류·취소·timeout 상태 표시
 
@@ -281,7 +281,7 @@
 ### 6.4 API와 검증
 
 - [ ] Spring Boot research session REST API
-- [ ] Agent Gateway API
+- [ ] Agent Gateway API **(부분 구현: Product Backend 후보 조회용 Next.js server route)**
 - [ ] 수집 작업 생성·조회·취소 API
 - [ ] SSE 또는 stream 기반 Agent 응답 전달
 - [ ] SSE 기반 수집 진행 상태 전달

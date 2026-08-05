@@ -43,7 +43,7 @@
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring 단일/다중 페이지 producer, Go 페이지 Worker, Spring 결과 Consumer, ABC마트/29CM E2E, PostgreSQL job 상태 및 retry/DLQ | Redis limiter/중복 차단, 여러 검색어 batch |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
-| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2 화면과 질문 입력 시제품 | Agent Gateway 연결과 `/admin/collections` 구현 |
+| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2와 Product Backend DB 후보 연결 | Agent Gateway 연결과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
 | Python/Go 크롤러 비교 | 완료 | 공통 Contract, 양쪽 pagination/checkpoint, 단계별 실수집, parser benchmark와 결과 보고서 | 후속 운영 확장은 별도 기능 ID로 관리 |
 
@@ -293,11 +293,11 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] Astryx AI Chat Conversation 템플릿과 MIT 라이선스 확인
 - [x] Figma Editorial Commerce Landing V2 정적 화면과 반응형 CSS 구현
 - [ ] Astryx 의존성·neutral theme 적용
-- [ ] `/chat` 사용자 구매 채팅 화면 **(부분 구현: 질문 입력 및 정적 추천 결과)**
-- [x] `/compare` 정적 상품 비교와 선택 근거 화면
+- [ ] `/chat` 사용자 구매 채팅 화면 **(부분 구현: 질문 입력 및 실제 DB 후보 표시)**
+- [x] `/compare` 실제 DB 상품 후보 비교와 출처 시각 표시
 - [ ] `/admin/collections` 관리자 수집 화면
 - [ ] 공통 navigation과 관리자 접근 정책
-- [ ] 공통 API type과 client 구성
+- [x] Product Backend 후보 조회용 공통 API type과 client 구성
 - [ ] 구매 조건 대화 UI
 - [ ] 구조화 조건 profile panel
 - [ ] Spring Boot research session REST endpoint

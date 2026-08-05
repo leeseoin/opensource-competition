@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-08-04
+최종 갱신일: 2026-08-05
 
 ## 이 문서를 공개하는 이유
 
@@ -60,6 +60,16 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 | React DOM type definitions | 19.2.3 | TypeScript 개발 type | [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 
 정확한 Node package 해석 결과는 `frontend/purchase-web/package.json`과 `frontend/purchase-web/package-lock.json`에서 확인한다.
+이번 변경은 새 Node package를 추가하지 않았으며 Node.js 내장 `node:test`를 Next.js server route
+테스트에 사용한다. `next.config.ts`에는 DB 상품 이미지를 화면에 표시하기 위해 ABC마트의
+`image.a-rt.com`과 29CM의 `img.29cm.co.kr` HTTPS host만 허용했다.
+
+### 공개 상품 이미지
+
+`frontend/purchase-web/public/images/landing-v2`의 화면 시제품용 상품 이미지는 ABC마트와
+29CM의 공개 상품 화면에서 확인한 이미지다. 이미지 저작권과 상표권은 각 판매처, 브랜드 또는
+권리자에게 있으며 이 저장소의 오픈소스 라이선스로 재허가되지 않는다. 제출과 배포 전 번들
+유지 여부를 팀이 다시 검토하고, 운영 화면은 Product Backend가 보관한 공개 원본 URL을 우선 사용한다.
 
 ### 로컬 인프라와 CI
 
