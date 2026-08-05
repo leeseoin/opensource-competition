@@ -262,14 +262,14 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] Plugin manifest 작성
 - [x] Plugin MCP 실행 설정 초안 작성
 - [x] 구매 질문·근거·재검증 skill workflow 초안 작성
-- [ ] Next.js 뒤에서 동작하는 공통 Agent Gateway
-- [ ] Codex CLI adapter와 JSON event stream 중계
+- [x] Next.js server에서 동작하는 공통 Agent Gateway
+- [ ] Codex CLI adapter와 JSON event stream 중계 **(부분 구현: 구조화 JSON 완료, stream 남음)**
 - [ ] Claude Code CLI adapter와 stream 중계
-- [ ] 대화 session, timeout, 취소와 동시 요청 상한
+- [ ] 대화 session, timeout, 취소와 동시 요청 상한 **(부분 구현: DB session과 process timeout 완료)**
 - [ ] 장기 서비스용 OpenAI API Agent 교체 경계
 - [ ] Python MCP SDK 의존성 추가
-- [ ] stdout protocol과 stderr log 분리
-- [ ] `search_products` 구현과 테스트
+- [x] stdout protocol과 stderr log 분리
+- [x] `search_products` 구현과 테스트 **(`search_product_candidates`)**
 - [ ] `get_product` 구현과 테스트
 - [ ] `compare_products` 구현과 테스트
 - [ ] `verify_offer` 구현과 테스트
@@ -279,7 +279,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] stale, blocked, partial 상태 사용자 설명 검증
 - [ ] 선택 상품 응답 전 재검증 workflow 연결
 - [ ] Plugin validation과 로컬 설치 검증
-- [ ] Codex E2E: 질문 구체화부터 재검증까지
+- [ ] Codex E2E: 질문 구체화부터 재검증까지 **(부분 구현: 질문/확인/DB 후보 완료, 구매 전 재검증 남음)**
 
 완료 조건: Codex 또는 Claude Code에서 구매 조건 질문, DB 후보 검색, 근거 비교,
 선택 offer 재검증을 같은 MCP 도구로 수행해야 한다.
@@ -293,23 +293,23 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] Astryx AI Chat Conversation 템플릿과 MIT 라이선스 확인
 - [x] Figma Editorial Commerce Landing V2 정적 화면과 반응형 CSS 구현
 - [ ] Astryx 의존성·neutral theme 적용
-- [ ] `/chat` 사용자 구매 채팅 화면 **(부분 구현: 질문 입력 및 실제 DB 후보 표시)**
+- [ ] `/chat` 사용자 구매 채팅 화면 **(부분 구현: Codex 조건 카드/확인/MCP 후보 표시 완료, stream 남음)**
 - [x] `/compare` 실제 DB 상품 후보 비교와 출처 시각 표시
 - [ ] `/admin/collections` 관리자 수집 화면
 - [ ] 공통 navigation과 관리자 접근 정책
 - [x] Product Backend 후보 조회용 공통 API type과 client 구성
-- [ ] 구매 조건 대화 UI
-- [ ] 구조화 조건 profile panel
-- [ ] Spring Boot research session REST endpoint
+- [x] 구매 조건 대화 UI
+- [x] 구조화 조건 profile panel
+- [x] Spring Boot research session REST endpoint
 - [ ] SSE 진행 상태 endpoint와 client
 - [ ] 판매처별 진행·부분 실패 표시
 - [ ] 상품 비교 UI와 점수 구성 표시
 - [ ] evidence panel과 출처·수집 시각 표시
 - [ ] 선택 상품 재검증 UI
 - [ ] 추천 snapshot과 최신 snapshot diff 표시
-- [ ] loading, empty, error, stale 상태 처리
-- [ ] component와 API integration test
-- [ ] 핵심 구매 흐름 E2E test
+- [ ] loading, empty, error, stale 상태 처리 **(loading/empty/error 완료, stale 남음)**
+- [x] component와 API integration test **(server route 정상/조건 부족/AI 오류/MCP 오류/미확정/빈 결과)**
+- [ ] 핵심 구매 흐름 E2E test **(HTTP E2E 통과, 실제 browser 자동화 연결 없음)**
 
 완료 조건: 브라우저에서 조건 입력부터 근거 비교와 구매 전 재검증까지 수행하고 실패·오래된 정보 상태를 명확히 확인할 수 있어야 한다.
 
@@ -1433,6 +1433,38 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 검증:
   - `./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
   - 실제 Go 옵션 재수집 후 Next/Codex/MCP/Spring/PostgreSQL E2E: `구두/검정/270/10만 원 이하` 조건에서 ABC마트 페니 로퍼 69,000원 1건 반환
+
+### 2026-08-06 MCP-002/WEB-002 Codex 구매 조건 확인 E2E
+
+- 진행상황: Next.js server Agent Gateway가 Codex CLI를 읽기 전용으로 실행해 Plugin 규칙과
+  공통 Schema에 맞는 구매 조건을 생성한다. browser에는 DRAFT 조건을 먼저 표시하고, 사용자가
+  수정하거나 확인한 뒤에만 MCP 확인 및 PostgreSQL 후보 검색을 실행한다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:58` `runCodexCommand`: shell 없는 Codex child process/환경 변수 allowlist/90초 timeout
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:123` `structurePurchaseQuestion`: Plugin skill과 공통 Schema 기반 조건 구조화 및 동시 실행 1개 제한
+  - `frontend/purchase-web/app/lib/research-mcp-client.ts:50` `StdioResearchMcpClient`: 공식 MCP client의 조사 세션 도구 호출과 process 정리
+  - `frontend/purchase-web/app/api/research/conditions/handler.ts:36` `handleConditionsRequest`: Codex 결과를 MCP DRAFT로 저장하는 오류 경계
+  - `frontend/purchase-web/app/api/research/confirm/handler.ts:26` `handleConfirmRequest`: 미확정 조건 차단과 확인 후 MCP 검색
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:31` `ChatExperience`: Codex 선택/질문/조건 수정/확인/실제 후보 상태 화면
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:54` `Codex 구조화 동시 실행을 한 개로 제한한다`: 과도한 Codex process 생성 방지 검증
+- 발생 문제: Next.js 16은 `route.ts`의 HTTP method 외 helper export를 거절했고, 기존 Google
+  font가 오프라인 production build를 중단했다. 첫 조건 검색은 최신 Python snapshot에 옵션이
+  없어 0건이었으며 자동 브라우저 목록도 비어 있었다.
+- 원인: Next Route Handler export 계약을 이전 구조가 따르지 않았고 build 시 Google font
+  다운로드에 의존했다. 상품 조건 query는 의도대로 오래된 옵션을 현재 사실로 사용하지 않았다.
+  현재 실행 환경에는 연결 가능한 browser backend가 없다.
+- 해결: 실제 Route 진입점과 테스트 가능한 handler를 분리하고 system font fallback을 사용했다.
+  Go Collector로 최신 옵션을 소량 재수집해 조건이 증명되는 후보만 다시 검증했다. browser 자동
+  검증은 우회 도구를 사용하지 않고 미검증으로 남겼다.
+- 남은 위험: 실제 데스크톱/모바일 browser 클릭과 접근성, 응답 stream, 사용자 취소, stale 표시,
+  구매 전 재검증 및 Plugin marketplace 설치 검증이 남아 있다.
+- 검증:
+  - `cd frontend/purchase-web && npm test`: 정상/조건 부족/잘못된 AI JSON/AI 실패/미확정 차단/MCP 실패/빈 결과/동시 실행 테스트 통과
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build -- --webpack`: production build 통과
+  - 실제 Codex CLI 구조화: `구두/출근/10만 원/검정/270`과 추가 확인 조건 JSON 반환
+  - 실제 Next/Codex/MCP/Spring/PostgreSQL E2E: DRAFT에는 결과 없음, CONFIRMED 후 조건 일치 후보 1건 반환
+  - 자동 browser E2E: browser 목록이 비어 있어 미검증
 
 ## 작업 기록 템플릿
 

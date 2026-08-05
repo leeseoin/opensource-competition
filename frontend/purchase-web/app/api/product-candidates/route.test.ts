@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handleProductCandidateRequest } from "./route.ts";
+import { handleProductCandidateRequest } from "./handler.ts";
 
 /** 정상 요청이 Product Backend 응답을 browser에 전달하는지 검증한다. */
 test("상품 후보 정상 응답을 전달한다", async () => {

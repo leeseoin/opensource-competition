@@ -53,7 +53,7 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 | React DOM | 19.2.4 | browser rendering | [facebook/react](https://github.com/facebook/react) | MIT |
 | Tailwind CSS | 4.3.3 | UI style | [tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) | MIT |
 | TypeScript | 5.9.3 | 정적 type 검사 | [microsoft/TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 |
-| Model Context Protocol TypeScript SDK | 1.30.0 | Purchase Research stdio MCP Server와 client smoke test | [modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
+| Model Context Protocol TypeScript SDK | 1.30.0 | Purchase Research stdio MCP Server와 Next.js Agent Gateway client | [modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
 | Zod | 4.4.3 | MCP 도구 입력 Schema 검증 | [colinhacks/zod](https://github.com/colinhacks/zod) | MIT |
 | ESLint | 9.39.5 | 정적 코드 검사 | [eslint/eslint](https://github.com/eslint/eslint) | MIT |
 | eslint-config-next | 16.2.12 | Next.js ESLint 규칙 | [vercel/next.js](https://github.com/vercel/next.js) | MIT |

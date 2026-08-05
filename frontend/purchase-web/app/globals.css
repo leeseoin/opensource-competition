@@ -3,6 +3,10 @@
 :root {
   --background: #f2efe6;
   --foreground: #101010;
+  --font-geist-sans: "Helvetica Neue", "Apple SD Gothic Neo", Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, monospace;
+  --font-bodoni: Didot, "Times New Roman", serif;
+  --font-noto-kr: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 @theme inline {
