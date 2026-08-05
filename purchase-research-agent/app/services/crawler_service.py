@@ -3,11 +3,12 @@ import json
 from pathlib import Path
 
 from app.crawlers import SITE_CRAWLERS
-from app.crawlers.abcmart import CATEGORIES
+from app.crawlers.abcmart import BRANDS, CATEGORIES
 from app.services.contract_validation import validate_items
 
 SUPPORTED_SITES = list(SITE_CRAWLERS.keys())
 SUPPORTED_CATEGORIES = list(CATEGORIES.keys())
+SUPPORTED_BRANDS = list(BRANDS.keys())
 
 
 class CrawlerService:
@@ -80,6 +81,29 @@ class CrawlerService:
         """
         crawler = SITE_CRAWLERS["abcmart"]()
         products, errors = await crawler.crawl_category(category, max_items)
+
+        if detail_limit > 0 and products:
+            products, detail_errors = await crawler.attach_details(products, limit=detail_limit)
+            errors.extend(detail_errors)
+
+        products, contract_errors = validate_items(products)
+        errors.extend(contract_errors)
+
+        return products, errors
+
+    async def search_by_brand(
+        self,
+        brand: str,
+        max_items: int = 500,
+        detail_limit: int = 10,
+        gender: str = "10000",
+    ) -> tuple[list[dict], list[str]]:
+        """브랜드 기반 수집 + 상위 detail_limit개 상품 리뷰/옵션 수집.
+
+        브랜드 수집은 현재 ABC마트만 지원한다(BRANDS가 ABC마트 brandNo/tChnnlNo 체계라서).
+        """
+        crawler = SITE_CRAWLERS["abcmart"]()
+        products, errors = await crawler.crawl_by_brand(brand, max_items, gender=gender)
 
         if detail_limit > 0 and products:
             products, detail_errors = await crawler.attach_details(products, limit=detail_limit)

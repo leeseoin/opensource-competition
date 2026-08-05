@@ -96,6 +96,9 @@ def _parse_reviews(raw_results: list[dict]) -> list[dict]:
     return reviews
 
 
+_DEFAULT_CONCURRENCY = 10
+
+
 class Cm29DetailFetcher:
 
     async def attach(
@@ -103,116 +106,136 @@ class Cm29DetailFetcher:
         products: list[dict],
         limit: int = 10,
         review_limit: int = 0,
-        delay: float = 0.5,
+        concurrency: int = _DEFAULT_CONCURRENCY,
     ) -> tuple[list[dict], list[str]]:
         """상위 limit개 상품에 상세 페이지 데이터(평점·카테고리·옵션)와 리뷰를 추가한다.
-        review_limit이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다."""
-        errors: list[str] = []
+        review_limit이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다.
+        상품 간 요청은 concurrency로 동시 실행 수를 제한해 병렬 처리한다
+        (요청 폭주로 인한 차단을 피하기 위한 상한이며, 상품 하나당 리뷰 페이지네이션은
+        기존과 동일하게 순차로 가져온다)."""
+        targets = products[:limit]
+        errors_by_index: list[list[str]] = [[] for _ in targets]
+        semaphore = asyncio.Semaphore(concurrency)
 
         detail_client = httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=True)
         review_client = httpx.AsyncClient(headers=_REVIEW_HEADERS, timeout=10, follow_redirects=True)
 
-        async with detail_client, review_client:
-            for i, product in enumerate(products[:limit]):
-                item_id = product.get("source_product_id", "")
-                if not item_id:
-                    continue
+        async def _fetch_detail(item_id: str, product: dict) -> str | None:
+            """상세 페이지(JSON-LD, 옵션)를 가져와 product에 반영한다. 실패 시 에러 메시지를 반환한다."""
+            try:
+                r = await detail_client.get(_DETAIL_URL.format(item_id=item_id))
+                html = r.text
 
-                # ── 상세 페이지 (JSON-LD, 옵션) ──
-                try:
-                    r = await detail_client.get(_DETAIL_URL.format(item_id=item_id))
-                    html = r.text
+                ld_product, ld_breadcrumb = _parse_ld(html)
 
-                    ld_product, ld_breadcrumb = _parse_ld(html)
+                agg = ld_product.get("aggregateRating", {})
+                product["rating"] = agg.get("ratingValue")
+                product["review_count"] = agg.get("reviewCount")
 
-                    agg = ld_product.get("aggregateRating", {})
-                    product["rating"] = agg.get("ratingValue")
-                    product["review_count"] = agg.get("reviewCount")
+                raw_images = ld_product.get("image", [])
+                product["images"] = [
+                    img["contentUrl"] if isinstance(img, dict) else img
+                    for img in raw_images
+                ]
 
-                    raw_images = ld_product.get("image", [])
-                    product["images"] = [
-                        img["contentUrl"] if isinstance(img, dict) else img
-                        for img in raw_images
-                    ]
-
-                    product["category"] = ld_product.get("category", "")
-                    crumbs = ld_breadcrumb.get("itemListElement", [])
-                    product["category_path"] = " > ".join(
-                        c["name"] for c in crumbs if c.get("name") and c["name"] != "홈"
-                    )
-                    product["category_codes"] = {
-                        k: v
-                        for crumb in crumbs
-                        for k, v in re.findall(r"(category\w+Code)=(\d+)", crumb.get("item", ""))
-                    }
-
-                    avail = ld_product.get("offers", {}).get("availability", "")
-                    product["in_stock"] = "InStock" in avail
-                    product["options"] = _parse_options(html)
-
-                    # 색상: options[].value에서 / 또는 : 구분자 앞 부분 추출
-                    # "BLACK (3CM) / KR 230 / IT36" → "BLACK"
-                    # "베이지-인조가죽-1cm:225mm" → "베이지-인조가죽-1cm"
-                    seen_c: set[str] = set()
-                    colors: list[str] = []
-                    for opt in product["options"]:
-                        raw_val = opt.get("value", "")
-                        c = re.split(r"\s*/\s*|:", raw_val)[0]
-                        c = re.sub(r"\s*\(.*?\)", "", c).strip()
-                        c = re.sub(r"^\[[A-Z]+\]", "", c).strip()
-                        if c and c not in seen_c:
-                            seen_c.add(c)
-                            colors.append(c)
-                    product["color"] = ", ".join(colors)
-
-                except Exception as e:
-                    errors.append(f"detail 오류 itemId={item_id}: {e}")
-
-                # ── 리뷰 API (페이지네이션으로 전체 수집, review_limit>0이면 그 개수에서 멈춤) ──
-                try:
-                    reviews: list[dict] = []
-                    rv_count = None
-                    rv_page = 1
-                    while True:
-                        rr = await review_client.get(
-                            _REVIEW_URL,
-                            params={"itemId": item_id, "page": rv_page, "size": _REVIEW_PAGE_SIZE},
-                        )
-                        rv_data = rr.json().get("data", {})
-                        if rv_count is None and rv_data.get("count") is not None:
-                            rv_count = rv_data["count"]
-                        if rv_data.get("averagePoint") is not None:
-                            product["rating"] = rv_data["averagePoint"]
-
-                        results = rv_data.get("results", [])
-                        reviews.extend(_parse_reviews(results))
-
-                        if review_limit and len(reviews) >= review_limit:
-                            reviews = reviews[:review_limit]
-                            break
-                        if len(results) < _REVIEW_PAGE_SIZE or (rv_count is not None and len(reviews) >= rv_count):
-                            break
-
-                        rv_page += 1
-                        await asyncio.sleep(0.3)
-
-                    product["reviews"] = reviews
-                    if rv_count is not None:
-                        product["review_count"] = rv_count
-                except Exception as e:
-                    errors.append(f"review 오류 itemId={item_id}: {e}")
-                    product.setdefault("reviews", [])
-
-                print(
-                    f"[CM29:detail] {i+1}/{min(limit, len(products))}"
-                    f" id={item_id}"
-                    f" rating={product.get('rating')}"
-                    f" reviews={product.get('review_count')} (fetched={len(product.get('reviews', []))})"
-                    f" images={len(product.get('images', []))}"
-                    f" opts={len(product.get('options', []))}"
+                product["category"] = ld_product.get("category", "")
+                crumbs = ld_breadcrumb.get("itemListElement", [])
+                product["category_path"] = " > ".join(
+                    c["name"] for c in crumbs if c.get("name") and c["name"] != "홈"
                 )
+                product["category_codes"] = {
+                    k: v
+                    for crumb in crumbs
+                    for k, v in re.findall(r"(category\w+Code)=(\d+)", crumb.get("item", ""))
+                }
 
-                if delay > 0 and i < limit - 1:
-                    await asyncio.sleep(delay)
+                avail = ld_product.get("offers", {}).get("availability", "")
+                product["in_stock"] = "InStock" in avail
+                product["options"] = _parse_options(html)
 
+                # 색상: options[].value에서 / 또는 : 구분자 앞 부분 추출
+                # "BLACK (3CM) / KR 230 / IT36" → "BLACK"
+                # "베이지-인조가죽-1cm:225mm" → "베이지-인조가죽-1cm"
+                seen_c: set[str] = set()
+                colors: list[str] = []
+                for opt in product["options"]:
+                    raw_val = opt.get("value", "")
+                    c = re.split(r"\s*/\s*|:", raw_val)[0]
+                    c = re.sub(r"\s*\(.*?\)", "", c).strip()
+                    c = re.sub(r"^\[[A-Z]+\]", "", c).strip()
+                    if c and c not in seen_c:
+                        seen_c.add(c)
+                        colors.append(c)
+                product["color"] = ", ".join(colors)
+                return None
+            except Exception as e:
+                return f"detail 오류 itemId={item_id}: {e}"
+
+        async def _fetch_review(item_id: str, product: dict) -> str | None:
+            """리뷰를 페이지네이션으로 전체 수집해 product에 반영한다. 실패 시 에러 메시지를 반환한다."""
+            try:
+                reviews: list[dict] = []
+                rv_count = None
+                rv_page = 1
+                while True:
+                    rr = await review_client.get(
+                        _REVIEW_URL,
+                        params={"itemId": item_id, "page": rv_page, "size": _REVIEW_PAGE_SIZE},
+                    )
+                    rv_data = rr.json().get("data", {})
+                    if rv_count is None and rv_data.get("count") is not None:
+                        rv_count = rv_data["count"]
+                    if rv_data.get("averagePoint") is not None:
+                        product["rating"] = rv_data["averagePoint"]
+
+                    results = rv_data.get("results", [])
+                    reviews.extend(_parse_reviews(results))
+
+                    if review_limit and len(reviews) >= review_limit:
+                        reviews = reviews[:review_limit]
+                        break
+                    if len(results) < _REVIEW_PAGE_SIZE or (rv_count is not None and len(reviews) >= rv_count):
+                        break
+
+                    rv_page += 1
+                    await asyncio.sleep(0.3)
+
+                product["reviews"] = reviews
+                if rv_count is not None:
+                    product["review_count"] = rv_count
+                return None
+            except Exception as e:
+                product.setdefault("reviews", [])
+                return f"review 오류 itemId={item_id}: {e}"
+
+        async def _fetch_one(index: int, product: dict) -> None:
+            item_id = product.get("source_product_id", "")
+            if not item_id:
+                return
+            item_errors = errors_by_index[index]
+
+            async with semaphore:
+                # 상세 페이지와 리뷰는 서로 결과를 참조하지 않으므로 한 상품 안에서도 동시에 호출한다.
+                detail_error, review_error = await asyncio.gather(
+                    _fetch_detail(item_id, product),
+                    _fetch_review(item_id, product),
+                )
+                if detail_error:
+                    item_errors.append(detail_error)
+                if review_error:
+                    item_errors.append(review_error)
+
+            print(
+                f"[CM29:detail] {index+1}/{len(targets)}"
+                f" id={item_id}"
+                f" rating={product.get('rating')}"
+                f" reviews={product.get('review_count')} (fetched={len(product.get('reviews', []))})"
+                f" images={len(product.get('images', []))}"
+                f" opts={len(product.get('options', []))}"
+            )
+
+        async with detail_client, review_client:
+            await asyncio.gather(*(_fetch_one(i, p) for i, p in enumerate(targets)))
+
+        errors = [error for bucket in errors_by_index for error in bucket]
         return products, errors

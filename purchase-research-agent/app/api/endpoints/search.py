@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
-from app.services.crawler_service import SUPPORTED_CATEGORIES, SUPPORTED_SITES, CrawlerService
+from app.services.crawler_service import SUPPORTED_BRANDS, SUPPORTED_CATEGORIES, SUPPORTED_SITES, CrawlerService
 
 router = APIRouter()
 
@@ -276,6 +276,73 @@ async def search_by_category(
 async def list_categories():
     """ABC마트 지원 카테고리 목록"""
     return {"categories": SUPPORTED_CATEGORIES}
+
+
+@router.post("/brand")
+async def search_by_brand(
+    brand: str,
+    max_items: int = 500,
+    detail_limit: int = 10,
+    gender: str = "10000",
+):
+    """
+    ABC마트 브랜드 기반 크롤링 + 리뷰/옵션 수집
+
+    - **brand**: 브랜드 키 (예: `나이키`, `아디다스`)
+    - **max_items**: 최대 수집 개수 (기본 500)
+    - **detail_limit**: 리뷰/옵션을 수집할 상위 상품 수 (기본 10, 0이면 미수집)
+    - **gender**: genderGbnCode (10000=남성, 10001=여성, 10002=아동, 기본 남성)
+    """
+    if brand not in SUPPORTED_BRANDS:
+        return {"status": "error", "message": f"지원 브랜드: {SUPPORTED_BRANDS}"}
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
+    started_at = time.time()
+
+    try:
+        crawler = CrawlerService()
+        products, errors = await crawler.search_by_brand(
+            brand, max_items=max_items, detail_limit=detail_limit, gender=gender,
+        )
+    except Exception:
+        tb = traceback.format_exc()
+        errors = [f"치명적 오류:\n{tb}"]
+        products = []
+
+    elapsed = round(time.time() - started_at, 2)
+    analysis = _analyze(products)
+    crawler = CrawlerService()
+    refined, output_file, report_file = _save_and_log(
+        crawler, products, errors, analysis,
+        label=brand, site="abcmart", ts=ts, ts_file=ts_file, elapsed=elapsed, max_items=max_items,
+    )
+    raw_file = str(Path("output/raw") / f"abcmart_{brand}_raw_{ts_file}.json")
+
+    print(f"[DONE] [abcmart:brand] '{brand}' {len(refined)}개 / {elapsed}s")
+
+    return {
+        "status": "ok",
+        "site": "abcmart",
+        "brand": brand,
+        "timestamp": ts,
+        "elapsed_seconds": elapsed,
+        "max_requested": max_items,
+        "total_found": analysis["total"],
+        "returned": len(refined),
+        "errors": errors,
+        "analysis": analysis,
+        "output_file": output_file,
+        "raw_file": raw_file,
+        "report_file": report_file,
+        "items": refined,
+    }
+
+
+@router.get("/brands")
+async def list_brands():
+    """ABC마트 지원 브랜드 목록"""
+    return {"brands": SUPPORTED_BRANDS}
 
 
 def _append_summary_log(

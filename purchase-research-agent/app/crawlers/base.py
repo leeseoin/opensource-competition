@@ -1,4 +1,20 @@
+import asyncio
+import random
 from abc import ABC, abstractmethod
+
+
+async def jittered_sleep(seconds: float, *, spread: float = 0.2) -> None:
+    """페이지/키워드 사이 대기를 고정 간격 대신 약간의 무작위 편차로 흩어지게 한다.
+
+    여러 키워드를 동시에 병렬로 돌릴 때 사이트에는 매 요청이 정확히 N초 간격인
+    기계적인 패턴 대신 자연스러운 간격으로 보이게 하려는 목적이다.
+    """
+
+    if seconds <= 0:
+        return
+    low = max(0.0, seconds - spread)
+    high = seconds + spread
+    await asyncio.sleep(random.uniform(low, high))
 
 
 class SiteCrawler(ABC):

@@ -1,11 +1,10 @@
-import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
 
 import httpx
 
-from ..base import SiteCrawler
+from ..base import SiteCrawler, jittered_sleep
 from .detail_fetcher import Cm29DetailFetcher
 from .verification import verify_products
 
@@ -94,7 +93,7 @@ class Cm29Crawler(SiteCrawler):
                     break
 
                 page += 1
-                await asyncio.sleep(1)
+                await jittered_sleep(1.0)
 
         print(f"[29CM:search] 최종 {len(all_products)}개")
         return all_products[:max_items], errors
