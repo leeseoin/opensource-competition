@@ -244,19 +244,20 @@
 
 ### 6.1 공통 기반
 
-- [ ] Next.js + React + TypeScript 구조 **(부분 구현: `frontend/purchase-web` 기본 scaffold 생성)**
+- [ ] Next.js + React + TypeScript 구조 **(부분 구현: 기본 scaffold와 Figma Landing/Chat/Compare V2 구현)**
 - [x] Astryx MIT 라이선스와 Next.js 지원 여부 확인
 - [x] Astryx `AI Chat Conversation` 템플릿을 채팅 화면 기준 UI로 선정
-- [ ] Astryx core, neutral theme, CLI 의존성 추가
+- [ ] Astryx core/neutral theme/CLI 의존성 추가
 - [ ] Astryx 초기화와 theme provider 적용
-- [ ] 기본 생성 화면을 Astryx 템플릿 기반 화면으로 교체
+- [x] 기본 생성 화면을 Figma Editorial Commerce Landing V2 기반 화면으로 교체
 - [ ] 사용자 화면과 관리자 화면의 공통 navigation 구성
-- [ ] 데스크톱·모바일 반응형 동작 확인
+- [ ] 데스크톱/모바일 반응형 동작 확인 **(CSS 구현 완료, 브라우저 수동 확인 필요)**
 
 ### 6.2 사용자 구매 채팅 화면 `/chat`
 
 - [ ] Astryx AI Chat Conversation 템플릿을 가능한 그대로 적용
-- [ ] 정적인 사용자 질문·Agent 답변 예제로 화면 검증
+- [x] 정적인 사용자 질문/Agent 답변 예제와 상품 비교 화면 구현
+- [ ] 데스크톱/모바일 브라우저에서 `/chat`과 `/compare` 수동 화면 검증
 - [ ] Codex·Claude Code 실행 환경 선택 UI
 - [ ] 채팅 입력, 메시지 목록, 응답 stream 표시
 - [ ] DB 상품 검색과 MCP 도구 실행 상태 표시
