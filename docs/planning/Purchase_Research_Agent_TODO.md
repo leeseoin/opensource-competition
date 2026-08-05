@@ -53,7 +53,7 @@
 - [ ] Java DTO가 같은 정상/무효 예제를 검증하는 contract test 추가
 - [ ] Schema, Go DTO, Java DTO 변경을 함께 검사하는 CI 추가
 - [ ] v1 필수 필드, 실패 상태, 호환성 정책 최종 검토
-- [ ] Python/Go 비교용 `v1-unified` adapter와 언어별 contract test **(진행 중: Python Adapter/20건 contract test 완료, Go Adapter 남음)**
+- [x] Python/Go 비교용 `v1-unified` adapter와 언어별 contract test
 
 완료 기준: 실제 Go 응답과 Java DTO가 같은 v1 Schema 및 예제로 검증되고, 두 서비스의 책임과 실패 상태를 설명할 수 있다.
 
@@ -311,14 +311,14 @@
 - [x] 정우님 Python 결과를 현재 Spring Boot `CollectorResult`로 변환하고 최대 500개를 50개 batch로 나누는 수동 PostgreSQL 적재 API 연결
 - [x] Python ABC마트 JSON 기본 수집/HTML 전수 대조/상품별 DB 검증 결과 저장
 - [x] Python 29CM 검색 JSON 기본 수집/상품별 상세 HTML JSON-LD 전수 대조/DB 검증 결과 저장
-- [ ] Go ABC마트에 Python과 동일한 JSON 기본 수집/HTML 전수 대조/DB 검증 저장 구현
-- [ ] Go 29CM에 Python과 동일한 검색 JSON 기본 수집/상세 HTML JSON-LD 전수 대조/DB 검증 저장 구현
-- [ ] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
-- [ ] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산 **(진행 중: Python 완료, Go 남음)**
-- [ ] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장 **(진행 중: Python 완료, Go 남음)**
-- [ ] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집 **(진행 중: Python ABC마트/29CM 100개와 1,000개 완료)**
-- [ ] 동일 fixture parser/normalizer CPU 및 메모리 benchmark
-- [ ] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
+- [x] Go ABC마트에 Python과 동일한 JSON 기본 수집/HTML 전수 대조/DB 검증 저장 구현
+- [x] Go 29CM에 Python과 동일한 검색 JSON 기본 수집/상세 HTML JSON-LD 전수 대조/DB 검증 저장 구현
+- [x] Python/Go 공통 `v1-unified` 비교 Adapter와 fixture contract test
+- [x] 판매처별 pagination, 상품 ID 중복 제거와 최대 상품/요청 예산
+- [x] 중단 가능한 checkpoint와 압축 NDJSON 결과 저장
+- [x] 100개/1,000개/최대 10,000개 단계별 opt-in 실수집
+- [x] 동일 fixture parser/normalizer CPU 및 메모리 benchmark
+- [x] 순차 실수집 E2E 시간/요청/오류/완전성 비교 보고서
 
 ## Phase 9: 여러 AI 실행 환경 지원
 

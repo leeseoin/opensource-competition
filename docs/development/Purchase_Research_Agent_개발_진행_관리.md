@@ -42,10 +42,10 @@
 | Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 API | 작업 상태 DB, 동시 저장 보강, 실제 전체 Queue E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring producer, Go Worker, Spring 결과 Consumer 및 retry/DLQ | 실제 전체 Queue E2E, Redis limiter, 다중 페이지 |
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
-| MCP와 Codex Plugin | 부분 구현 | 별도 MCP Server 디렉토리, Plugin manifest와 workflow 초안 | MCP tool과 Product Backend REST API 연결 |
-| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2와 Product Backend DB 후보 연결 | Agent Gateway 연결과 `/admin/collections` 구현 |
+| MCP와 Codex Plugin | 부분 구현 | stdio MCP 도구, Product Backend REST 연결, Codex 조건 구조화와 확인 후 검색 E2E | stream/취소/Plugin 설치와 Claude Code 실행 경계 |
+| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 | 실제 browser/접근성/stream과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
-| Python/Go 크롤러 비교 | 부분 구현 | 비교 Contract/20건 예제/최대 10,000개 수집과 benchmark 설계 | 언어별 adapter, pagination/checkpoint와 단계별 실수집 |
+| Python/Go 크롤러 비교 | 완료 | 공통 Contract, pagination/checkpoint, 양쪽 판매처 최대 10,000개 실수집과 최신 비교 보고서 | 새 판매처 또는 수집 방식 변경 시 회귀 측정 |
 
 ## 영역별 상세 체크리스트
 
@@ -1366,12 +1366,13 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   수정하거나 확인한 뒤에만 MCP 확인 및 PostgreSQL 후보 검색을 실행한다.
 - 구현 위치:
   - `frontend/purchase-web/app/lib/codex-runtime.ts:58` `runCodexCommand`: shell 없는 Codex child process/환경 변수 allowlist/90초 timeout
-  - `frontend/purchase-web/app/lib/codex-runtime.ts:123` `structurePurchaseQuestion`: Plugin skill과 공통 Schema 기반 조건 구조화 및 동시 실행 1개 제한
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:122` `normalizePurchaseCondition`: 색상이 중복된 AI 상품 종류 검색어 정규화
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:140` `structurePurchaseQuestion`: Plugin skill과 공통 Schema 기반 조건 구조화 및 동시 실행 1개 제한
   - `frontend/purchase-web/app/lib/research-mcp-client.ts:50` `StdioResearchMcpClient`: 공식 MCP client의 조사 세션 도구 호출과 process 정리
   - `frontend/purchase-web/app/api/research/conditions/handler.ts:36` `handleConditionsRequest`: Codex 결과를 MCP DRAFT로 저장하는 오류 경계
   - `frontend/purchase-web/app/api/research/confirm/handler.ts:26` `handleConfirmRequest`: 미확정 조건 차단과 확인 후 MCP 검색
   - `frontend/purchase-web/app/chat/chat-experience.tsx:31` `ChatExperience`: Codex 선택/질문/조건 수정/확인/실제 후보 상태 화면
-  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:54` `Codex 구조화 동시 실행을 한 개로 제한한다`: 과도한 Codex process 생성 방지 검증
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:38` `상품 종류에서 구조화된 색상 중복을 제거한다`: AI 조건 중복이 DB 검색을 과도하게 좁히지 않는지 검증
 - 발생 문제: Next.js 16은 `route.ts`의 HTTP method 외 helper export를 거절했고, 기존 Google
   font가 오프라인 production build를 중단했다. 첫 조건 검색은 최신 Python snapshot에 옵션이
   없어 0건이었으며 자동 브라우저 목록도 비어 있었다.
@@ -1390,6 +1391,63 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 실제 Codex CLI 구조화: `구두/출근/10만 원/검정/270`과 추가 확인 조건 JSON 반환
   - 실제 Next/Codex/MCP/Spring/PostgreSQL E2E: DRAFT에는 결과 없음, CONFIRMED 후 조건 일치 후보 1건 반환
   - 자동 browser E2E: browser 목록이 비어 있어 미검증
+
+### 2026-08-06 MCP-002/WEB-002 Python 브랜치 동일 사용자 E2E
+
+- 진행상황: Python 크롤러 브랜치에 공통 PurchaseCondition, Spring 조사 세션, MCP Server와
+  Next.js Codex Gateway를 동기화했다. Python 29CM 실제 수집 결과를 Spring Boot로 저장한 뒤
+  같은 화면 API에서 사용자 확인 전 DRAFT와 확인 후 후보 검색을 검증했다.
+- 구현 위치:
+  - `purchase-research-agent/app/api/endpoints/store.py:38` `collect_and_store`: Python 수집 결과를 Spring Boot 저장 API에 전달
+  - `purchase-research-agent/app/services/verification_summary.py:17` `summarize_verifications`: Python JSON/HTML 검증을 공통 상태로 집계
+  - `services/product-backend/src/main/resources/db/migration/V4__add_collection_job_tracking.sql:1` `collection_jobs`: Go/Python 브랜치가 같은 Flyway 이력을 해석하도록 유지하는 공통 migration
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/service/ResearchSessionService.java:45` `create`: DRAFT 저장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/service/ResearchSessionService.java:60` `confirm`: 사용자 확인 조건 저장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/service/ResearchSessionService.java:78` `search`: 확인 세션만 후보 검색 허용
+  - `services/mcp-server/src/index.ts:35` `main`: 조사 세션 MCP 도구 세 개 등록
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:122` `normalizePurchaseCondition`: 구조화 색상과 상품 종류 중복 제거
+- 발생 문제: 공용 PostgreSQL에는 Go 브랜치 V4 migration이 적용됐지만 Python 브랜치에는 같은
+  파일이 없어 Flyway 검증이 서버 시작을 차단했다. 실제 Codex가 색상을 `colors`와
+  `productType` 양쪽에 넣어 첫 DB 검색 결과가 0건이었다.
+- 원인: 브랜치별 Spring migration 이력이 달랐고 AI 출력 Schema는 필드 형식만 검사했으며
+  의미상 중복까지 제한하지 않았다.
+- 해결: V4 migration 파일을 같은 내용으로 공유하고, 프롬프트에서 상품 종류와 속성을 분리하도록
+  명시했다. 출력 후에도 구조화 색상을 상품 종류에서 제거해 DB 검색어를 안정화했다.
+- 남은 위험: 실제 browser 클릭과 접근성 검증은 연결 가능한 browser가 없어 미검증이다. 의미 조건
+  검색, stream, 사용자 취소와 구매 전 재검증도 후속 범위다.
+- 검증:
+  - Python 원본 크롤러 단위 테스트 13개: 통과
+  - Python 비교 Collector 단위 테스트 10개: 통과
+  - `cd services/product-backend && ./gradlew test`: 통과
+  - `cd services/mcp-server && npm test`: 통과, 3개
+  - `cd frontend/purchase-web && npm test`: 통과, 17개
+  - `npm run lint`, `npm run build`, `npm audit --omit=dev --offline`: 통과
+  - 실제 Python 29CM 수집/HTML 검증/Spring 저장: 3건 수집, 3건 MATCHED, 3건 저장
+  - 실제 Next/Codex/MCP/Spring/PostgreSQL E2E: DRAFT 결과 없음, 확인 후 페니 로퍼 69,000원 1건
+
+### 2026-08-06 OPS-004 Python/Go 최대 10,000개 최신 성능 재검증
+
+- 진행상황: 양쪽 언어에서 ABC마트와 29CM 공개 검색을 같은 10개 검색어, 페이지 크기 50,
+  요청 간격 1초, timeout 15초와 요청 예산 500으로 순차 실행했다. 검색 JSON 수집, 정규화,
+  공통 Contract 검증, 중복 제거와 gzip NDJSON 저장을 같은 측정 경계로 사용했다.
+- 구현 위치:
+  - `services/python-collector/src/purchase_collector/runner.py:110` `_collect`: Python pagination, 중복 제거, Contract와 checkpoint 실행
+  - `services/collector/internal/bulk/runner.go:168` `Runner.collect`: Go pagination, 중복 제거, Contract와 checkpoint 실행
+  - `services/collector/internal/merchants/abcmart/search.go:112` `NewBulkSearcher`: Go 검색 성능 측정에서 운영 HTML rendering 경계를 분리
+  - `services/collector/internal/merchants/twentyninecm/search.go:121` `NewBulkSearcher`: Go 검색 성능 측정에서 상세 HTML 검증 경계를 분리
+- 발생 문제: Go 비교 명령이 운영용 Searcher를 사용해 ABC마트 첫 페이지에서 Chrome HTML 검증까지
+  실행했고 50개 처리에 약 166초가 걸렸다.
+- 원인: 운영 전수 검증 기능을 추가하면서 대량 검색 benchmark 생성자도 같은 기능을 자동 사용했다.
+- 해결: 운영 API와 Worker는 JSON/HTML 전수 검증을 유지하고, 비교 CLI만 검색 JSON 처리 성능을
+  측정하는 별도 생성자를 사용하도록 경계를 분리했다. 중단한 첫 실행은 최종 결과에서 제외했다.
+- 남은 위험: wall 시간 대부분은 판매처 응답과 의도적인 1초 간격이므로 언어 자체의 parser 성능은
+  저장 fixture benchmark를 함께 봐야 한다. 누락 필드 수는 언어별 계산 범위가 달라 품질 비교에
+  직접 사용하지 않는다.
+- 검증:
+  - Go ABC마트: 고유 9,429/받음 20,744/중복 11,315/요청 421/오류 0/wall 484.601초/CPU 2.529초/메모리 23,248 KiB/검색어 소진
+  - Python ABC마트: 고유 9,429/받음 20,744/중복 11,315/요청 421/오류 0/wall 482.928초/CPU 4.876초/메모리 49,888 KiB/검색어 소진
+  - Go 29CM: 고유 10,000/받음 10,675/중복 653/요청 214/오류 0/wall 258.517초/CPU 1.129초/메모리 23,056 KiB/목표 도달
+  - Python 29CM: 고유 10,000/받음 10,675/중복 664/요청 214/오류 0/wall 259.126초/CPU 2.654초/메모리 47,024 KiB/목표 도달
 
 ## 작업 기록 템플릿
 
@@ -1416,4 +1474,4 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - `collection_jobs`와 `collection_tasks` 작업 상태 저장
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
-- Python/Go `v1-unified` Adapter와 대량 수집 benchmark
+- 실제 browser 기반 구매 질문 E2E와 접근성 검증
