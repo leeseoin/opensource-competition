@@ -30,6 +30,7 @@ import com.purchasesearch.product_backend.product.repository.MerchantProductRepo
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
 import com.purchasesearch.product_backend.product.repository.ProductRepository;
+import com.purchasesearch.product_backend.research.repository.ResearchSessionRepository;
 
 import jakarta.validation.ConstraintViolationException;
 import tools.jackson.databind.ObjectMapper;
@@ -70,6 +71,9 @@ class ProductStorageIntegrationTests {
 
 	@Autowired
 	private ProductVerificationRepository productVerificationRepository;
+
+	@Autowired
+	private ResearchSessionRepository researchSessionRepository;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -320,6 +324,96 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * AI 조건 구조화 결과를 저장하면 상품 검색 없이 DRAFT 조사 세션만 생성되는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void createsDraftResearchSessionWithoutSearchingProducts() throws Exception {
+		mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]")))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.status").value("DRAFT"))
+				.andExpect(jsonPath("$.runtime").value("codex"))
+				.andExpect(jsonPath("$.pluginId").value("purchase-research-agent"))
+				.andExpect(jsonPath("$.conditions.productType").value("구두"))
+				.andExpect(jsonPath("$.result").doesNotExist());
+
+		assertThat(researchSessionRepository.count()).isEqualTo(1);
+	}
+
+	/**
+	 * 사용자가 조건을 확인하기 전에 검색을 요청하면 DB 상품 노출 없이 409로 차단하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void blocksProductSearchBeforeUserConfirmation() throws Exception {
+		String response = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]")))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("RESEARCH_SESSION_NOT_READY"));
+	}
+
+	/**
+	 * AI가 추가 질문이 필요하다고 표시한 조건은 사용자가 확정할 수 없는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void rejectsConfirmationWhileRequiredConditionsAreMissing() throws Exception {
+		String response = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[\"사이즈\"]")))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + purchaseCondition("[\"사이즈\"]") + "}"))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("RESEARCH_SESSION_NOT_READY"));
+	}
+
+	/**
+	 * 사용자 확인 뒤 별도 검색 요청에서만 실제 PostgreSQL 후보 최대 3개를 반환하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void searchesCandidatesOnlyAfterResearchSessionConfirmation() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		String response = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]")))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + purchaseCondition("[]") + "}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CONFIRMED"))
+				.andExpect(jsonPath("$.result").doesNotExist());
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CONFIRMED"))
+				.andExpect(jsonPath("$.result.candidates.length()").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].merchant").value("abcmart"))
+				.andExpect(jsonPath("$.result.candidates[0].source.sourceUrl").exists());
+	}
+
+	/**
 	 * search 결과에 query가 없으면 검색 문맥 없는 snapshot을 만들지 않고 400으로
 	 * 거절하는지 검증한다.
 	 *
@@ -422,5 +516,46 @@ class ProductStorageIntegrationTests {
 				"v1",
 				"examples",
 				"collector-result.abcmart-success.json").normalize();
+	}
+
+	/**
+	 * 조사 세션 생성 API에 사용할 Codex 실행 결과 JSON을 만든다.
+	 *
+	 * @param missingConditions 추가 확인이 필요한 조건 JSON 배열
+	 * @return 조사 세션 생성 요청 JSON
+	 */
+	private String researchSessionRequest(String missingConditions) {
+		return """
+				{
+				  "question": "출근용 검정 구두를 찾아줘",
+				  "runtime": "codex",
+				  "pluginId": "purchase-research-agent",
+				  "conditions": %s
+				}
+				""".formatted(purchaseCondition(missingConditions));
+	}
+
+	/**
+	 * 테스트에서 사용자 확인 전후에 사용할 구매 조건 JSON을 만든다.
+	 *
+	 * @param missingConditions 추가 확인이 필요한 조건 JSON 배열
+	 * @return PurchaseCondition JSON
+	 */
+	private String purchaseCondition(String missingConditions) {
+		return """
+				{
+				  "productType": "구두",
+				  "usage": ["출근"],
+				  "price": {"min": null, "max": 100000, "currency": "KRW"},
+				  "colors": ["검정"],
+				  "sizes": ["270"],
+				  "requirements": ["편안함"],
+				  "merchant": "abcmart",
+				  "missingConditions": %s,
+				  "assumptions": [],
+				  "confidence": 0.92,
+				  "requiresConfirmation": true
+				}
+				""".formatted(missingConditions);
 	}
 }

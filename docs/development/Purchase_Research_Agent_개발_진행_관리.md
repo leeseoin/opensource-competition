@@ -1242,6 +1242,29 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ## 작업 기록 템플릿
 
+### 2026-08-05 MCP-002 AI 구매 조건과 조사 세션 확인 경계
+
+- 진행상황: AI가 자연어 질문에서 생성할 `PurchaseCondition` 공통 Schema를 정의하고,
+  Spring Boot가 이를 DRAFT 조사 세션으로 저장하도록 구현했다. 사용자가 조건을 확인하기 전
+  상품 검색은 HTTP 409로 차단하며, CONFIRMED 이후에만 기존 PostgreSQL 후보 검색을 실행한다.
+- 구현 위치:
+  - `contracts/research/v1/purchase-condition.schema.json:1` `PurchaseCondition`: AI 구조화 출력 공통 계약
+  - `services/product-backend/src/main/resources/db/migration/V5__add_research_sessions.sql:1` `research_sessions`: 질문, AI 실행 환경, Plugin과 조건 확인 상태 저장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/dto/PurchaseCondition.java:20` `PurchaseCondition`: Java Bean Validation 계약
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/service/ResearchSessionService.java:20` `ResearchSessionService`: DRAFT 생성, 사용자 확인과 확인 후 검색 경계
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/controller/ResearchSessionController.java:27` `ResearchSessionController`: 조사 세션 생성/확인/검색 REST API
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:330` `createsDraftResearchSessionWithoutSearchingProducts`: 실제 PostgreSQL 조사 세션 통합 검증
+- 발생 문제: 사용자 확인과 상품 검색을 한 API에서 함께 처리하면 MCP의 검색 도구가 확인 상태를
+  독립적으로 검사했다는 사실을 검증하기 어려웠다.
+- 원인: 최초 구현은 confirm 처리 안에서 즉시 상품을 검색해 미확정 검색 요청 자체가 존재하지 않았다.
+- 해결: confirm과 search API를 분리하고 search가 저장된 CONFIRMED 상태를 다시 검사하도록 했다.
+- 남은 위험: 현재 조건 검색은 상품 종류와 판매처만 적용하며 가격/색상/사이즈 조건 적용은 후속
+  검색 Adapter에서 구현해야 한다. Codex 구조화 출력과 MCP 연결은 아직 진행 중이다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+
+## 작업 기록 템플릿
+
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
 
 ```md
