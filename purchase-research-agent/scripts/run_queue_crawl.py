@@ -12,9 +12,10 @@
 "세마포어가 프로세스를 못 넘어간다"는 근본 한계를 비켜간다.
 
 지금은 RabbitMQ 브로커가 이 환경에 없어(Docker 미설치) multiprocessing.Queue로
-같은 구조를 검증한다. 검증되면 워커 본체(_crawl_one, _worker_main의 크롤링 로직)는
-그대로 두고 큐 트랜스포트만 aio-pika/RabbitMQ로 교체할 수 있도록 큐 인터페이스를
-job_queue.get()/put(None) 정도로 최소화해뒀다.
+같은 구조를 검증했다. 실제 크롤링 로직(app/services/crawl_job.py의 crawl_one)은
+큐 트랜스포트와 분리해뒀으므로, RabbitMQ로 옮긴 scripts/rabbitmq_crawl.py도 같은
+함수를 그대로 재사용한다 — 두 스크립트는 "조합을 한 번에 하나씩 꺼내 처리"하는
+워커 로직은 동일하고 큐 트랜스포트(multiprocessing.Queue vs RabbitMQ)만 다르다.
 
 사용법:
     python scripts/run_queue_crawl.py [keyword[,keyword2,...]] [max_items] [detail_limit] [worker_count]
@@ -31,20 +32,7 @@ from pathlib import Path
 from app.crawlers import SITE_CRAWLERS
 from app.normalizer import normalize
 from app.services.contract_validation import validate_items
-
-_RAW_DIR = Path("output/queue_raw")
-
-
-async def _crawl_one(site: str, keyword: str, max_items: int, detail_limit: int) -> tuple[list[dict], list[str]]:
-    crawler = SITE_CRAWLERS[site]()
-    products, errors = await crawler.crawl(keyword, max_items)
-
-    effective_limit = len(products) if detail_limit < 0 else detail_limit
-    if effective_limit > 0 and products:
-        products, detail_errors = await crawler.attach_details(products, limit=effective_limit)
-        errors.extend(detail_errors)
-
-    return products, errors
+from app.services.crawl_job import crawl_one
 
 
 def _worker_main(
@@ -69,7 +57,7 @@ def _worker_main(
         started_at = datetime.now().strftime("%H:%M:%S")
         print(f"[WORKER {worker_id}] 시작 {started_at}: {keyword}/{site}")
         try:
-            products, errors = asyncio.run(_crawl_one(site, keyword, max_items, detail_limit))
+            products, errors = asyncio.run(crawl_one(site, keyword, max_items, detail_limit))
         except Exception as e:
             products, errors = [], [f"{keyword}/{site} 워커 예외: {e}"]
         elapsed = time.perf_counter() - t0
