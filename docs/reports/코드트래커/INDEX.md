@@ -4,6 +4,8 @@
 
 ## 최신 기록
 
+- 2026-08-06 / [`ANALYSIS-003` 검토형 구매 도메인 Wiki](2026-08-06-ANALYSIS-003-검토형_구매_도메인_Wiki.md) / Python `0cf1761` / Go `dfebe4a` / source 기반 DRAFT Wiki를 같은 검색 평가에 비교하고 nDCG@3 하락으로 운영 비활성화
+- 2026-08-06 / [`ANALYSIS-002` Hybrid 상품 후보 검색](2026-08-06-ANALYSIS-002-Hybrid_상품_후보_검색.md) / Python `0cf1761` / Go `dfebe4a` / 필수/선호 조건, FTS/trigram, 선택적 pgvector fallback과 60개/10,000개 평가 구현
 - 2026-08-06 / [`WEB-002` 구매 조건 확인 채팅 화면](2026-08-06-WEB-002-구매_조건_확인_채팅_화면.md) / `72fcfa4` / Codex 선택부터 조건 확인 후 실제 후보 표시까지 `/chat` 상태 흐름 구현
 - 2026-08-06 / [`MCP-002` Codex 구매 조건 Agent Gateway](2026-08-06-MCP-002-Codex_구매_조건_Agent_Gateway.md) / `72fcfa4` / Codex 구조화와 사용자 확인 후 MCP 검색을 server 전용 경계로 연결
 - 2026-08-06 / [`BACKEND-001` 확정 구매 조건 DB 필터](2026-08-06-BACKEND-001-확정_구매_조건_DB_필터.md) / `e56090e` / 사용자 확인 가격/재고/사이즈/색상을 최신 snapshot과 옵션에 적용

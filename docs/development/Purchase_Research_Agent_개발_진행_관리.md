@@ -232,9 +232,37 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 완료 조건: 개발자가 저장소 루트에서 `make help`를 보고 Go, Spring Boot, Next.js와
 로컬 인프라의 기본 실행·검증 명령을 찾을 수 있어야 한다.
 
-### 4. 리뷰 분석과 상품 비교
+### 4. 상품 후보 검색, 지식과 리뷰 분석
 
-상태: **미착수**
+상태: **부분 구현**
+
+#### `ANALYSIS-002` Hybrid 상품 후보 검색
+
+- [x] 현재 SQL `AND` 검색 baseline과 고정 평가 snapshot
+- [x] `required`/`preferred` 구매 조건 계약
+- [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정
+- [x] PostgreSQL 전문 검색/trigram 검색 문서와 index
+- [x] embedding provider port와 content hash/model version
+- [x] PostgreSQL 벡터 검색과 전문 검색 후보 결합
+- [x] embedding 실패 시 전문 검색 fallback
+- [x] 설명 가능한 후보 원시 점수/완화 조건/일치 이유 응답
+- [ ] 필수 조건 위반율/Recall@20/nDCG@3/0건 반환율/p95 평가 **(진행 중: SQL/FTS/DRAFT Wiki와 10,000개 FTS p95 완료, 실제 vector 평가 남음)**
+- [x] 정상/옵션 unknown/조건 완화/embedding 실패/빈 결과 테스트
+
+#### `ANALYSIS-003` 검토형 구매 도메인 Wiki
+
+- [x] immutable source와 source metadata
+- [x] page/relation/claim/version schema
+- [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태와 사람 승인 **(진행 중: schema/lint 완료, 전이와 사람 승인 남음)**
+- [x] `derived`/confidence/source ID 검증
+- [ ] 신발 용도/상품군/색상/판매처 category seed **(진행 중: 상품군/한영 표현 DRAFT 완료)**
+- [ ] Product Backend의 검토 Wiki index 적재
+- [ ] 의미 확장 REST API와 MCP 도구
+- [x] source 없는 Published claim 차단과 Wiki lint
+- [ ] Wiki 없음/오래됨/충돌/조회 실패 fallback
+- [x] 동일 평가 data 기반 Wiki 적용 전후 품질 비교
+
+#### `ANALYSIS-001` 리뷰 분석과 상품 비교
 
 - [ ] 리뷰 최소 저장·개인정보 제거 정책 구현
 - [ ] size signal 규칙 기반 추출
@@ -253,7 +281,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] 과거 추천과 최신 offer 차이 계산
 - [ ] 단위 테스트: 추출·filter·score·diff 경계값
 
-완료 조건: 후보 3개를 필수 조건, 점수 구성, 출처, 수집 시각, 주의사항과 함께 비교하고 동일 입력으로 결과를 재현할 수 있어야 한다.
+완료 조건: 고정 상품 snapshot과 평가 질문에서 필수 조건 위반 없이 후보 검색 단계를
+재현하고, 후보 3개를 검색/비교 점수 구성, 출처, 수집 시각, 완화 조건과 주의사항과
+함께 반환해야 한다. Wiki가 실패해도 전문 검색 fallback이 동작해야 한다.
 
 ### 5. MCP, Agent Gateway와 Plugin
 
@@ -1465,6 +1495,46 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 실제 Codex CLI 구조화: `구두/출근/10만 원/검정/270`과 추가 확인 조건 JSON 반환
   - 실제 Next/Codex/MCP/Spring/PostgreSQL E2E: DRAFT에는 결과 없음, CONFIRMED 후 조건 일치 후보 1건 반환
   - 자동 browser E2E: browser 목록이 비어 있어 미검증
+
+### 2026-08-06 ANALYSIS-002/003 Hybrid 검색 공통 구현 동기화
+
+- 진행상황: **부분 구현**
+- 구현 commit: Python `0cf1761` / Go `dfebe4a`
+- 코드트래커:
+  - `docs/reports/코드트래커/2026-08-06-ANALYSIS-002-Hybrid_상품_후보_검색.md:1`
+  - `docs/reports/코드트래커/2026-08-06-ANALYSIS-003-검토형_구매_도메인_Wiki.md:1`
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V7__add_product_embeddings.sql:1`
+    `vector/product_embeddings`: pgvector extension, 1024차원 embedding과 HNSW index
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/embedding/ProductEmbeddingService.java:21`
+    `ProductEmbeddingService`: 검색 문서 hash 기반 갱신과 provider 실패 fallback
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:256`
+    `searchCandidates`: 구조화 필터를 유지한 FTS/trigram/vector 후보 결합
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:113`
+    `assessCandidate`: 검색/최신성/근거 완전성 점수와 옵션/완화 근거 응답
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:52`
+    `comparesSqlBaselineAndFullTextRetrievalOnDraftDataset`: 20개 snapshot/60개 DRAFT 질문 평가
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalPerformanceIntegrationTests.java:42`
+    `keepsTenThousandSnapshotFullTextSearchBelowOneSecondP95`: 10,000개 검색 p95 평가
+  - `knowledge/wiki/shoes-taxonomy-v1.json:1` `shoes-taxonomy`: 상품군/한영 표현 DRAFT claim
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:252` `ChatExperience`: 후보 신호와 일치/완화/확인 필요 근거 표시
+- 측정 결과: SQL Recall@20 0.7333/nDCG@3 0.6671, FTS Recall@20 0.7533/nDCG@3
+  0.6871, DRAFT Wiki Recall@20 0.7667/nDCG@3 0.6848다. Go 브랜치 10,000개
+  FTS/trigram은 5회 warm-up/30회 측정에서 p50 328.789ms/p95 337.514ms/max
+  346.547ms였다.
+- 발생 문제: DRAFT Wiki는 Recall을 높였지만 nDCG@3을 낮췄다. 첫 전체 검증은 sandbox가
+  사용자 Gradle cache 잠금 파일 접근을 차단해 중단됐다.
+- 원인: 여러 하위 상품군 확장이 상위 relevance 순서를 일부 바꿨고, 첫 검증 실패는 코드가
+  아닌 작업 환경 권한 경계였다.
+- 해결: Wiki를 운영 검색에 연결하지 않고 DRAFT로 유지했다. 같은 `make check`를 허용된
+  Gradle cache 접근으로 다시 실행해 전체 통과를 확인했다. BGE-M3는 다운로드하지 않았고
+  provider는 기본 비활성화했다.
+- 남은 위험: 실제 BGE-M3 비교, 합계 가중치와 결정론적 재정렬, 비동기 embedding 작업,
+  60개 relevance와 Wiki claim 사람 검토가 남았다.
+- 검증:
+  - 루트 `make check`: Go Collector/Spring Boot/MCP/Next.js test/lint/build와 문서/평가/Wiki/Compose 검사 통과
+  - 루트 `make retrieval-perf-test`: 10,000개 p95 337.514ms로 1초 기준 통과
+  - 공통 runtime index와 `sandbox-python-crawler/ls` 비교: 차이 없음
 
 ## 작업 기록 템플릿
 

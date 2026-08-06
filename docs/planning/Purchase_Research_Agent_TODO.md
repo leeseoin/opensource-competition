@@ -294,7 +294,43 @@
 
 완료 기준: 사용자는 `/chat`에서 Codex 또는 Claude Code의 근거 기반 구매 답변을 받고, 운영자는 `/admin/collections`에서 백그라운드 수집 작업과 진행 상태를 관리한다.
 
-## Phase 7: 리뷰 분석과 비교
+## Phase 7: 상품 후보 검색, 지식, 리뷰 분석과 비교
+
+### 7.1 Hybrid 상품 후보 검색
+
+- [x] 현재 SQL `AND` 검색의 고정 snapshot baseline smoke 측정
+- [x] 평가 질문/필수 조건/relevance/정답 없음 판정 schema 작성
+- [x] 정확 검색/의미 검색/조건 완화/정답 없음/재검증 질문 60개 DRAFT 작성
+- [ ] 60개 질문의 필수/선호 조건과 relevance 사람 검토
+- [x] `PurchaseCondition`의 `required`/`preferred` 계약 작성
+- [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정 규칙 작성
+- [x] PostgreSQL 전문 검색/trigram index와 상품명/브랜드 검색 문서 구현
+- [ ] 전문 검색 실패와 빈 검색 문서 fallback 구현
+- [x] embedding provider port와 전송 data/timeout/실패 계약 작성
+- [ ] 상품 검색 문서 content hash/model version 기반 embedding 갱신 구현 **(진행 중: commit 후 batch 갱신 완료, 비동기 작업 분리 남음)**
+- [x] PostgreSQL vector 후보와 전문 검색 후보 결합 구현
+- [x] embedding 생성/조회 실패 시 전문 검색 fallback 구현
+- [x] 후보별 검색 점수/옵션 상태/최신성/근거 완전성 응답 구현
+- [ ] 필수 조건 위반 없이 조건 완화와 완화 이유를 반환하는 재정렬 구현 **(진행 중: 필수 조건 filter와 선호 조건 완화 설명 완료, 결정론적 재정렬 남음)**
+- [ ] SQL/전문 검색/벡터 검색 단계별 offline 평가와 10,000개 p95 측정 **(진행 중: 60개 DRAFT SQL/FTS 비교와 Go 브랜치 10,000개 FTS p95 337.514ms 완료, 실제 BGE-M3 품질 비교 남음)**
+- [x] 정상/필수 조건 위반/옵션 unknown/embedding 실패/빈 결과 통합/단위 테스트
+
+### 7.2 검토형 구매 도메인 Wiki
+
+- [x] `knowledge/raw`, `knowledge/wiki`, `knowledge/schema`, `knowledge/eval` 구조 작성
+- [x] source/page/relation/claim/version/review status schema 작성
+- [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태 전이와 사람 승인 규칙 작성
+- [x] source 없는 claim의 Published 전환 lint 차단 구현
+- [ ] 신발 용도/상품군/색상/판매처 category seed Wiki 작성 **(진행 중: 근거가 있는 상품군/한영 표현 DRAFT 작성, 용도/색상/사람 검토 남음)**
+- [x] Wiki relation의 `derived`/confidence/source ID 검증 구현
+- [ ] 검토된 Wiki를 Product Backend가 PostgreSQL index에 적재하는 경로 구현
+- [ ] Wiki 기반 의미 확장 REST API와 MCP 도구 구현
+- [ ] Wiki 없음/오래됨/충돌/조회 실패 시 Hybrid 검색 fallback 구현
+- [ ] orphan/깨진 link/출처 누락/충돌/superseded 상태 lint 구현 **(진행 중: source 해시/claim source/중복 ID/Published 사람 검토 검사 완료)**
+- [ ] 전문 검색 + 벡터 검색과 Wiki 결합 검색의 동일 평가 data 비교 **(진행 중: FTS와 DRAFT Wiki 모의 비교 완료, 실제 BGE-M3 결합 남음)**
+- [x] Wiki가 검색 품질을 개선하지 않거나 출처 정확성을 낮출 때 운영 비활성화 검증
+
+### 7.3 리뷰 분석과 상품 비교
 
 - [ ] 개인정보 제거와 최소 저장 정책
 - [ ] 규칙 기반 size/foot-width/fit signal 추출
@@ -304,7 +340,9 @@
 - [ ] 설명 가능한 가중치 점수
 - [ ] 주장과 evidence 연결
 
-완료 기준: 후보 3개를 점수 구성, 근거, 주의사항과 함께 비교한다.
+완료 기준: 고정된 상품 snapshot과 평가 질문으로 후보 검색 단계를 재현하고, 후보 3개를
+필수 조건, 검색/비교 점수 구성, 근거, 완화 조건과 주의사항과 함께 반환한다. Wiki는
+검토된 출처 기반 지식만 사용하며 실패해도 전문 검색 기반 후보 조회가 동작해야 한다.
 
 ## Phase 8: 확장
 
