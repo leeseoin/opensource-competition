@@ -230,8 +230,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] PostgreSQL 벡터 검색과 전문 검색 후보 결합
 - [x] embedding 실패 시 전문 검색 fallback
 - [x] 설명 가능한 후보 원시 점수/완화 조건/일치 이유 응답
-- [ ] 필수 조건 위반율/Recall@20/nDCG@3/0건 반환율/p95 평가
-- [ ] 정상/옵션 unknown/조건 완화/embedding 실패/빈 결과 테스트 **(진행 중)**
+- [ ] 필수 조건 위반율/Recall@20/nDCG@3/0건 반환율/p95 평가 **(진행 중: SQL/FTS/DRAFT Wiki와 10,000개 FTS p95 완료, 실제 vector 평가 남음)**
+- [x] 정상/옵션 unknown/조건 완화/embedding 실패/빈 결과 테스트
 
 #### `ANALYSIS-003` 검토형 구매 도메인 Wiki
 
@@ -508,6 +508,10 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 ### 2026-08-06 ANALYSIS-002/003 검색 평가, 선택적 벡터와 DRAFT Wiki Lite
 
 - 진행상황: **부분 구현**
+- 구현 commit: `0cf1761`
+- 코드트래커:
+  - `docs/reports/코드트래커/2026-08-06-ANALYSIS-002-Hybrid_상품_후보_검색.md:1`
+  - `docs/reports/코드트래커/2026-08-06-ANALYSIS-003-검토형_구매_도메인_Wiki.md:1`
 - 구현 위치:
   - `services/product-backend/src/main/resources/db/migration/V7__add_product_embeddings.sql:1`
     `vector/product_embeddings`: pgvector extension, 1024차원 embedding과 HNSW index

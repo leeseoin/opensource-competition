@@ -108,8 +108,8 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `ANALYSIS-001` | 리뷰 신호 추출과 상품 비교 | 계획 | P1 | 리뷰 신호, confidence, 점수, 근거와 주의사항 | 후보 비교 값이 공개 출처 또는 derived 표기와 confidence를 포함함 | 시스템 구조 / 공통 수집 데이터 명세 | 리뷰 저장 계약과 비교 규칙 |
-| `ANALYSIS-002` | Hybrid 상품 후보 검색 | 계획 | P0 | 필수/선호 조건, 전문 검색, 벡터 검색, 순위 결합, 설명 가능한 재정렬과 fallback | 고정 상품 snapshot과 평가 질문으로 SQL baseline/전문 검색/벡터 검색을 재현 가능하게 비교하고 필수 조건 위반 0%, 판매처 사실 출처 연결 100%, 완화 조건 표시 100%를 충족함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 / 시스템 구조 | 필수/선호 조건, 옵션 상태, FTS/trigram, 선택적 pgvector/BGE-M3와 60개 DRAFT 평가 부분 구현 |
-| `ANALYSIS-003` | 검토형 구매 도메인 Wiki | 계획 | P1 | immutable source, DRAFT/PUBLISHED/SUPERSEDED page, 관계, derived/confidence, 사람 승인과 의미 확장 | Published claim이 source/version/review status를 추적하고 출처 없는 claim 0건을 유지하며 Wiki 실패 시 Hybrid 검색 fallback이 동작함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 신발 상품군/한영 표현 DRAFT Wiki와 lint/offline 비교 구현, nDCG@3 하락으로 운영 비활성화 |
+| `ANALYSIS-002` | Hybrid 상품 후보 검색 | 부분 구현 | P0 | 필수/선호 조건, 전문 검색, 벡터 검색, 순위 결합, 설명 가능한 재정렬과 fallback | 고정 상품 snapshot과 평가 질문으로 SQL baseline/전문 검색/벡터 검색을 재현 가능하게 비교하고 필수 조건 위반 0%, 판매처 사실 출처 연결 100%, 완화 조건 표시 100%를 충족함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 / 시스템 구조 | 2026-08-06 점검 / DRAFT relevance 사람 검토, 실제 vector 평가와 합계 가중 재정렬 |
+| `ANALYSIS-003` | 검토형 구매 도메인 Wiki | 부분 구현 | P1 | immutable source, DRAFT/PUBLISHED/SUPERSEDED page, 관계, derived/confidence, 사람 승인과 의미 확장 | Published claim이 source/version/review status를 추적하고 출처 없는 claim 0건을 유지하며 Wiki 실패 시 Hybrid 검색 fallback이 동작함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 2026-08-06 점검 / 사람 검토, 상태 전이/index/API와 순위 품질 개선 전 운영 비활성화 |
 | `VERIFY-001` | 구매 전 상품 재검증 | 계획 | P1 | 현재 가격/재고/옵션 재수집과 추천 snapshot 비교 | 변경 항목, 확인 불가 항목과 최신 출처를 분리해 반환함 | 시스템 구조 / 공통 수집 데이터 명세 | 재검증 요청/응답 계약 |
 
 ### 운영과 실행 환경

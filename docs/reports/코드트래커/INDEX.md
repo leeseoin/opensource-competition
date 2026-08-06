@@ -4,6 +4,8 @@
 
 ## 최신 기록
 
+- 2026-08-06 / [`ANALYSIS-003` 검토형 구매 도메인 Wiki](2026-08-06-ANALYSIS-003-검토형_구매_도메인_Wiki.md) / `0cf1761` / source 기반 DRAFT Wiki를 같은 검색 평가에 비교하고 nDCG@3 하락으로 운영 비활성화
+- 2026-08-06 / [`ANALYSIS-002` Hybrid 상품 후보 검색](2026-08-06-ANALYSIS-002-Hybrid_상품_후보_검색.md) / `0cf1761` / 필수/선호 조건, FTS/trigram, 선택적 pgvector fallback과 60개/10,000개 평가 구현
 - 2026-08-06 / [`MCP-002`, `WEB-002` Codex 인증 오류 비노출](2026-08-06-MCP-002-Codex_인증_오류_비노출.md) / `eb55cef` / 폐기된 OAuth token과 Plugin prompt 원문을 browser에 노출하지 않고 빈 실행 설정을 기본값으로 복구
 - 2026-08-06 / [`MCP-002`, `WEB-002` Python 브랜치 동일 사용자 E2E](2026-08-06-MCP-002-Python_브랜치_동일_E2E.md) / `914990f`, `8c10286`, `fa57978` / Python 수집 DB 저장과 Codex 조건 확인 후 MCP 후보 검색을 같은 화면 흐름으로 검증
 - 2026-08-06 / [`OPS-004` Python/Go 10,000개 최신 성능 재검증](2026-08-06-OPS-004-Python_Go_10000개_최신_성능_재검증.md) / Go `2d2e64f`, Python `82aa8cd` / ABC마트 결과 소진과 29CM 10,000개를 최신 조건으로 재측정
