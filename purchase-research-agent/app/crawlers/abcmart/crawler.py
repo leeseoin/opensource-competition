@@ -105,48 +105,62 @@ class AbcMartCrawler(SiteCrawler):
                 html_url = self._search_url(keyword, page, _PAGE_SIZE)
                 print(f"[ABCMART:full] page={page} keyword={keyword}")
 
-                try:
-                    json_page = await json_fetcher.fetch_page(
-                        client, keyword, page, _PAGE_SIZE, ts_file,
-                    )
-                    result = await crawler.arun(url=html_url, delay_before_return_html=2.0)
-                    remaining = max_items - len(all_products)
-                    selected_json_products = json_page.products[:remaining]
-                    if result.success:
-                        _save_html(result.html, keyword, page, ts_file)
-                        html_items = self._parse(BeautifulSoup(result.html, "html.parser"))
-                        selected_ids = {
-                            str(product.get("source_product_id") or "")
-                            for product in selected_json_products
-                        }
-                        selected_html_items = [
-                            product for product in html_items
-                            if str(product.get("source_product_id") or "") in selected_ids
-                        ]
-                        page_items, verification_errors = reconcile_page(
-                            selected_json_products,
-                            selected_html_items,
-                            json_source_url=json_page.source_url,
-                            html_source_url=html_url,
+                # 페이지 요청 1건의 일시적 네트워크 예외로 남은 페이지 전체를 포기하지
+                # 않도록, 실패 시 짧은 대기 후 한 번 더 시도한다(2026-08-06 실측:
+                # 동시 워커 부하 중 순간적인 연결 예외가 재시도 없이 pagination을
+                # 통째로 끊어 목표치의 88%를 날린 사례 확인).
+                page_succeeded = False
+                last_tb = ""
+                for attempt in range(2):
+                    try:
+                        json_page = await json_fetcher.fetch_page(
+                            client, keyword, page, _PAGE_SIZE, ts_file,
                         )
-                    else:
-                        page_items, verification_errors = mark_failed(
-                            selected_json_products,
-                            json_source_url=json_page.source_url,
-                            html_source_url=html_url,
-                            reason=f"page {page} browser 로드 실패",
-                        )
-                    errors.extend(verification_errors)
-                    new = self._dedup(page_items, seen_prdt_nos)
-                    all_products.extend(new)
-                    print(f"[ABCMART:full] page={page} +{len(new)}개 / 누적 {len(all_products)}개")
-
-                    if not new or not json_page.has_next:
+                        result = await crawler.arun(url=html_url, delay_before_return_html=2.0)
+                        remaining = max_items - len(all_products)
+                        selected_json_products = json_page.products[:remaining]
+                        if result.success:
+                            _save_html(result.html, keyword, page, ts_file)
+                            html_items = self._parse(BeautifulSoup(result.html, "html.parser"))
+                            selected_ids = {
+                                str(product.get("source_product_id") or "")
+                                for product in selected_json_products
+                            }
+                            selected_html_items = [
+                                product for product in html_items
+                                if str(product.get("source_product_id") or "") in selected_ids
+                            ]
+                            page_items, verification_errors = reconcile_page(
+                                selected_json_products,
+                                selected_html_items,
+                                json_source_url=json_page.source_url,
+                                html_source_url=html_url,
+                            )
+                        else:
+                            page_items, verification_errors = mark_failed(
+                                selected_json_products,
+                                json_source_url=json_page.source_url,
+                                html_source_url=html_url,
+                                reason=f"page {page} browser 로드 실패",
+                            )
+                        errors.extend(verification_errors)
+                        new = self._dedup(page_items, seen_prdt_nos)
+                        all_products.extend(new)
+                        print(f"[ABCMART:full] page={page} +{len(new)}개 / 누적 {len(all_products)}개")
+                        page_succeeded = True
                         break
 
-                except Exception:
-                    tb = traceback.format_exc()
-                    errors.append(f"page {page} 예외:\n{tb}")
+                    except Exception:
+                        last_tb = traceback.format_exc()
+                        if attempt == 0:
+                            print(f"[ABCMART:full] page={page} 예외, 재시도 1회")
+                            await jittered_sleep(2.0, spread=1.0)
+
+                if not page_succeeded:
+                    errors.append(f"page {page} 예외(재시도 후에도 실패):\n{last_tb}")
+                    break
+
+                if not new or not json_page.has_next:
                     break
 
                 page += 1

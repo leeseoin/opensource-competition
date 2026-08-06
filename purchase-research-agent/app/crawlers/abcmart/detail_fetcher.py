@@ -3,7 +3,7 @@ import re
 import statistics
 
 import httpx
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher
 
 _BASE = "https://abcmart.a-rt.com"
 _REVIEW_URL = f"{_BASE}/product/review/get-review-list"
@@ -14,7 +14,15 @@ _HEADERS = {
 }
 _BROWSER_CFG = BrowserConfig(ignore_https_errors=True, headless=True)
 # networkidle 대신 load: JS 실행 완료 후 즉시 반환 → 더 빠르고 결과 동일
-_DETAIL_RUN_CFG = CrawlerRunConfig(wait_until="load", page_timeout=20000)
+# max_retries=1: 동시 연결 폭주로 인한 일시적 타임아웃을 한 번 더 시도해 흡수
+_DETAIL_RUN_CFG = CrawlerRunConfig(wait_until="load", page_timeout=20000, max_retries=1)
+
+# 상품 상세 브라우저 탭 동시 개수. crawl4ai arun_many 기본값(20)은 브라우저 탭 기준으로는
+# 너무 높아, 프로세스 내부에서 combo가 여러 개 겹치거나 프로세스를 여러 개 띄우면
+# 로컬 리소스/네트워크 연결이 폭주해 타임아웃이 급증한다(2026-08-06 실측 확인).
+_DEFAULT_BROWSER_CONCURRENCY = 5
+# 리뷰/옵션 API(httpx)는 브라우저 탭보다 가벼워 좀 더 높게 허용.
+_DEFAULT_API_CONCURRENCY = 10
 
 _EVAL_LABELS: dict[int, str] = {
     10000: "종합",
@@ -150,31 +158,40 @@ class DetailFetcher:
         limit: int = 10,
         reviews_per_item: int = 0,
         delay: float = 0.0,
+        browser_concurrency: int = _DEFAULT_BROWSER_CONCURRENCY,
+        api_concurrency: int = _DEFAULT_API_CONCURRENCY,
     ) -> tuple[list[dict], list[str]]:
         """상위 limit개 상품에 images/category/in_stock/리뷰/옵션/rating을 추가한다.
         crawl4ai는 arun_many로 병렬 실행, 리뷰/옵션 API는 asyncio.gather로 병렬 호출.
-        reviews_per_item이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다."""
+        reviews_per_item이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다.
+        browser_concurrency/api_concurrency는 동시 연결 수 상한이다 — 상한 없이 쏘면
+        combo가 여러 개 겹치거나 프로세스를 여러 개 띄웠을 때 로컬 리소스/네트워크
+        연결이 폭주해 타임아웃이 급증한다(2026-08-06 실측 확인)."""
         errors: list[str] = []
         targets = products[:limit]
         pnos = [_prdtno(p.get("link", "")) for p in targets]
 
-        # ── 1) 상세 페이지 병렬 크롤링 ──
+        # ── 1) 상세 페이지 병렬 크롤링 (동시 탭 수를 dispatcher로 제한) ──
         urls = [p["link"] for p in targets]
+        dispatcher = MemoryAdaptiveDispatcher(max_session_permit=browser_concurrency)
 
         async with AsyncWebCrawler(config=_BROWSER_CFG) as crawler:
-            raw_results = await crawler.arun_many(urls, config=_DETAIL_RUN_CFG)
+            raw_results = await crawler.arun_many(urls, config=_DETAIL_RUN_CFG, dispatcher=dispatcher)
         # arun_many는 입력 순서대로 결과를 반환한다
         detail_list = [_extract_detail(res.html or "") for res in raw_results]
 
-        # ── 2) 리뷰 + 옵션 병렬 API 호출 ──
-        async with httpx.AsyncClient(headers=_HEADERS, verify=False, timeout=10, follow_redirects=True) as client:
-            tasks = [
-                asyncio.gather(
+        # ── 2) 리뷰 + 옵션 병렬 API 호출 (세마포어로 동시 요청 수 제한) ──
+        api_semaphore = asyncio.Semaphore(api_concurrency)
+
+        async def _fetch_bounded(client: httpx.AsyncClient, pno: str | None):
+            async with api_semaphore:
+                return await asyncio.gather(
                     _fetch_review(client, pno, reviews_per_item) if pno else _noop(),
                     _fetch_option(client, pno) if pno else _noop(),
                 )
-                for pno in pnos
-            ]
+
+        async with httpx.AsyncClient(headers=_HEADERS, verify=False, timeout=10, follow_redirects=True) as client:
+            tasks = [_fetch_bounded(client, pno) for pno in pnos]
             api_results = await asyncio.gather(*tasks)
 
         # ── 3) 결과 병합 ──
