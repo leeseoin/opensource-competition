@@ -1,13 +1,22 @@
 import type { ProductCandidateResponse } from "./product-candidates.ts";
 
+/** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
+export type ConditionPriority = "required" | "preferred";
+
+/** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
+export interface PrioritizedText {
+  value: string;
+  priority: ConditionPriority;
+}
+
 /** PurchaseCondition은 AI가 구조화하고 사용자가 확인할 공통 구매 조건이다. */
 export interface PurchaseCondition {
-  productType: string;
-  usage: string[];
-  price: { min: number | null; max: number | null; currency: string };
-  colors: string[];
-  sizes: string[];
-  requirements: string[];
+  productType: PrioritizedText;
+  usage: PrioritizedText[];
+  price: { min: number | null; max: number | null; currency: string; priority: ConditionPriority };
+  colors: PrioritizedText[];
+  sizes: PrioritizedText[];
+  requirements: PrioritizedText[];
   merchant: string | null;
   missingConditions: string[];
   assumptions: string[];
@@ -27,6 +36,27 @@ export interface ResearchSessionResponse {
   result: ProductCandidateResponse | null;
 }
 
+/** 알 수 없는 값이 필수/선호 강도인지 확인한다. */
+function isConditionPriority(value: unknown): value is ConditionPriority {
+  return value === "required" || value === "preferred";
+}
+
+/** 알 수 없는 값이 강도를 포함한 비어 있지 않은 문자열 조건인지 확인한다. */
+function isPrioritizedText(value: unknown): value is PrioritizedText {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const condition = value as Record<string, unknown>;
+  return typeof condition.value === "string"
+    && condition.value.trim().length > 0
+    && isConditionPriority(condition.priority);
+}
+
+/** 강도를 포함한 문자열 조건 배열인지 확인한다. */
+function isPrioritizedTextArray(value: unknown): value is PrioritizedText[] {
+  return Array.isArray(value) && value.every(isPrioritizedText);
+}
+
 /** 문자열 배열인지와 각 값이 비어 있지 않은지 확인한다. */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim().length > 0);
@@ -42,17 +72,17 @@ export function isPurchaseCondition(value: unknown): value is PurchaseCondition 
   const nullableNonNegativeInteger = (amount: unknown) => amount === null
     || (Number.isInteger(amount) && Number(amount) >= 0);
 
-  return typeof condition.productType === "string"
-    && condition.productType.trim().length > 0
-    && isStringArray(condition.usage)
+  return isPrioritizedText(condition.productType)
+    && isPrioritizedTextArray(condition.usage)
     && price !== null
     && nullableNonNegativeInteger(price.min)
     && nullableNonNegativeInteger(price.max)
     && typeof price.currency === "string"
     && /^[A-Z]{3}$/.test(price.currency)
-    && isStringArray(condition.colors)
-    && isStringArray(condition.sizes)
-    && isStringArray(condition.requirements)
+    && isConditionPriority(price.priority)
+    && isPrioritizedTextArray(condition.colors)
+    && isPrioritizedTextArray(condition.sizes)
+    && isPrioritizedTextArray(condition.requirements)
     && (condition.merchant === null
       || (typeof condition.merchant === "string" && /^[a-z0-9][a-z0-9-]*$/.test(condition.merchant)))
     && isStringArray(condition.missingConditions)

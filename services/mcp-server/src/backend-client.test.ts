@@ -4,12 +4,12 @@ import test from "node:test";
 import { BackendRequestError, ProductBackendClient, type PurchaseCondition } from "./backend-client.js";
 
 const conditions: PurchaseCondition = {
-  productType: "구두",
-  usage: ["출근"],
-  price: { min: null, max: 100000, currency: "KRW" },
-  colors: ["검정"],
-  sizes: ["270"],
-  requirements: ["편안함"],
+  productType: { value: "구두", priority: "required" },
+  usage: [{ value: "출근", priority: "preferred" }],
+  price: { min: null, max: 100000, currency: "KRW", priority: "required" },
+  colors: [{ value: "검정", priority: "preferred" }],
+  sizes: [{ value: "270", priority: "required" }],
+  requirements: [{ value: "편안함", priority: "preferred" }],
   merchant: null,
   missingConditions: [],
   assumptions: [],

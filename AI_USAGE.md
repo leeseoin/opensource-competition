@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-05
+최종 갱신일: 2026-08-06
 
 ## 이 문서를 공개하는 이유
 
@@ -38,6 +38,14 @@
   `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
 - 사용자가 조건을 확인한 뒤 공식 MCP client가 MCP Server의 확인 및 검색 도구를 호출한다.
   Codex 인증정보와 Product Backend 내부 주소는 browser에 전달하지 않는다.
+- Product Backend의 PostgreSQL 전문 검색과 `pg_trgm` 유사도 검색은 결정론적 DB 검색이며
+  runtime AI model이나 embedding을 사용하지 않는다.
+- 선택 설정 `EMBEDDING_PROVIDER=ollama`는 상품명/브랜드/category/수집 검색어/판매처와
+  사용자의 검색 질문을 로컬 Ollama `bge-m3:567m`에 전송해 1024차원 embedding을 만든다.
+  model 제공자는 BAAI, 공개 weight/license 표시는 MIT, 실행 위치는 운영자가 설정한 로컬
+  Ollama endpoint다. 가격/재고/옵션/개인정보는 embedding 입력에 포함하지 않는다.
+- embedding adapter는 기본 비활성화 상태다. model 없음/timeout/응답 계약 오류 시
+  PostgreSQL 전문 검색과 trigram 검색만 사용하며 weight를 이 저장소에 포함하지 않는다.
 - Claude Code 연동, Ollama, llama.cpp 및 GPU model server는 계획 단계다.
 - 현재 저장소에 직접 포함한 AI model weight는 없다.
 - runtime model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 기록한다.
@@ -72,3 +80,5 @@
 | 2026-08-04 | Codex를 사용해 Python/Go 저장 fixture parser benchmark, 단계별 최대 실수집과 성능 비교 보고서를 구현 | 사용자가 정한 판매처/검색어/안전 상한을 적용하고 Go 전체/race/vet, Python 10개 테스트, 최대 결과 38,834개 Schema 검증 및 실제 오류/429 0을 확인 |
 | 2026-08-05 | Codex를 사용해 Go Collector Swagger UI와 Spring Boot 수집 job 영구 상태 및 조회 API를 구현 | Go 전체 test/vet, Java PostgreSQL/RabbitMQ Testcontainers, Flyway V4 실제 적용 및 ABC마트/29CM 각각 상품 3개 Queue E2E에서 `COMPLETED`와 `matched=3`을 확인 |
 | 2026-08-05 | Codex를 사용해 Python ABC마트/29CM의 JSON/HTML 검증 집계를 Go Collector와 동일한 CollectorResult 구조로 정렬하고 전송 전 JSON Schema 검사를 추가 | 사용자가 실제 두 판매처 3개 수집과 PostgreSQL 저장을 확인했으며 Python 13개 테스트와 Spring Boot Testcontainers 전체 테스트로 계약 호환성을 검증 |
+| 2026-08-06 | Codex를 사용해 필수/선호 구매 조건 계약과 PostgreSQL 전문 검색/pg_trgm 후보 검색을 구현 | 공통 JSON Schema, Java/MCP/Web 계약 대조와 PostgreSQL Testcontainers 통합 테스트 및 Next.js/MCP build/test로 검증 / runtime AI model과 embedding은 추가하지 않음 |
+| 2026-08-06 | Codex를 사용해 pgvector 0.8.2와 선택적 로컬 BGE-M3/Ollama embedding adapter 및 전문 검색 fallback을 구현 | provider port, 1024차원/schema validation/content hash와 pgvector cosine 검색을 unit/integration test로 검증 / model weight 미포함 및 품질 평가 전 기본 비활성화 |

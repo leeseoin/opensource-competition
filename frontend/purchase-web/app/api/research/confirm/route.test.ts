@@ -7,12 +7,12 @@ import { handleConfirmRequest } from "./handler.ts";
 
 const sessionId = "00000000-0000-4000-8000-000000000001";
 const testConditions: PurchaseCondition = {
-  productType: "구두",
-  usage: ["출근"],
-  price: { min: null, max: 100000, currency: "KRW" },
-  colors: ["검정"],
-  sizes: ["270"],
-  requirements: ["편안함"],
+  productType: { value: "구두", priority: "required" },
+  usage: [{ value: "출근", priority: "preferred" }],
+  price: { min: null, max: 100000, currency: "KRW", priority: "required" },
+  colors: [{ value: "검정", priority: "preferred" }],
+  sizes: [{ value: "270", priority: "required" }],
+  requirements: [{ value: "편안함", priority: "preferred" }],
   merchant: null,
   missingConditions: [],
   assumptions: [],
@@ -68,7 +68,14 @@ test("확정 조건으로 MCP 상품 후보를 검색한다", async () => {
     ...sessionResponse(),
     status: "CONFIRMED",
     confirmedAt: "2026-08-05T23:00:00+09:00",
-    result: { question: "출근용 검정 구두", query: "구두", totalCount: 0, hasNext: false, candidates: [] },
+    result: {
+      question: "출근용 검정 구두",
+      query: "구두",
+      totalCount: 0,
+      hasNext: false,
+      candidates: [],
+      assessments: [],
+    },
   };
   const response = await handleConfirmRequest(new Request("http://localhost/api/research/confirm", {
     method: "POST",

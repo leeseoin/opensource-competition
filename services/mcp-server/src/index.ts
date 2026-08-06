@@ -4,19 +4,32 @@ import { z } from "zod";
 
 import { ProductBackendClient, type PurchaseCondition } from "./backend-client.js";
 
+const prioritySchema = z.enum(["required", "preferred"]);
+
+const prioritizedTextSchema = z.object({
+  value: z.string().min(1).max(100),
+  priority: prioritySchema,
+});
+
+const prioritizedRequirementSchema = z.object({
+  value: z.string().min(1).max(200),
+  priority: prioritySchema,
+});
+
 const priceSchema = z.object({
   min: z.number().int().nonnegative().nullable(),
   max: z.number().int().nonnegative().nullable(),
   currency: z.string().regex(/^[A-Z]{3}$/),
+  priority: prioritySchema,
 });
 
 const conditionSchema = z.object({
-  productType: z.string().min(1).max(200),
-  usage: z.array(z.string().min(1).max(100)).max(20),
+  productType: prioritizedRequirementSchema,
+  usage: z.array(prioritizedTextSchema).max(20),
   price: priceSchema,
-  colors: z.array(z.string().min(1).max(100)).max(20),
-  sizes: z.array(z.string().min(1).max(100)).max(20),
-  requirements: z.array(z.string().min(1).max(200)).max(30),
+  colors: z.array(prioritizedTextSchema).max(20),
+  sizes: z.array(prioritizedTextSchema).max(20),
+  requirements: z.array(prioritizedRequirementSchema).max(30),
   merchant: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(64).nullable(),
   missingConditions: z.array(z.string().min(1).max(200)).max(20),
   assumptions: z.array(z.string().min(1).max(500)).max(20),

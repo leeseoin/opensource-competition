@@ -17,14 +17,38 @@ export type CodexCommandRunner = (
 
 /** CodexRuntimeError는 AI 실행 실패 유형을 API 상태로 변환할 수 있게 보존한다. */
 export class CodexRuntimeError extends Error {
-  readonly code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID";
+  readonly code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED";
 
   /** AI 실행 오류 코드와 사용자에게 노출 가능한 설명을 생성한다. */
-  constructor(code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID", message: string) {
+  constructor(code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED", message: string) {
     super(message);
     this.code = code;
     this.name = "CodexRuntimeError";
   }
+}
+
+/** resolveCodexCommand는 빈 환경변수가 실행 파일 기본값을 무력화하지 않게 한다. */
+export function resolveCodexCommand(configured = process.env.CODEX_CLI_PATH): string {
+  return configured?.trim() || "codex";
+}
+
+/** classifyCodexProcessFailure는 민감한 stderr를 노출하지 않고 인증 실패와 일반 실패를 구분한다. */
+export function classifyCodexProcessFailure(stderr: string): CodexRuntimeError {
+  const normalized = stderr.toLowerCase();
+  const authenticationFailed = [
+    "token_invalidated",
+    "token_revoked",
+    "refresh_token_invalidated",
+    "refresh token was revoked",
+    "please log out and sign in again",
+  ].some((indicator) => normalized.includes(indicator));
+  if (authenticationFailed) {
+    return new CodexRuntimeError(
+      "AI_AUTH_REQUIRED",
+      "Codex 로그인이 만료되었습니다. 서버에서 codex logout 후 codex login을 실행해 주세요.",
+    );
+  }
+  return new CodexRuntimeError("AI_UNAVAILABLE", "Codex CLI 실행에 실패했습니다. 서버 로그를 확인해 주세요.");
 }
 
 /** 저장소 표식 파일을 찾을 때까지 상위 디렉토리를 탐색한다. */
@@ -68,7 +92,7 @@ export function runCodexCommand(
         environment[key] = process.env[key];
       }
     }
-    const child = spawn(process.env.CODEX_CLI_PATH ?? "codex", args, {
+    const child = spawn(resolveCodexCommand(), args, {
       cwd: options.cwd,
       env: environment,
       shell: false,
@@ -112,11 +136,31 @@ export function runCodexCommand(
       if (code === 0) {
         finish();
       } else {
-        finish(new CodexRuntimeError("AI_UNAVAILABLE", `Codex 실행이 실패했습니다. ${stderr.trim()}`.trim()));
+        finish(classifyCodexProcessFailure(stderr));
       }
     });
     child.stdin.end(input);
   });
+}
+
+/** productType에 중복 포함된 구조화 색상을 제거해 DB 검색어가 상품 종류에 집중되게 한다. */
+function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondition {
+  let productType = condition.productType.value.trim();
+  for (const color of condition.colors) {
+    const token = color.value.trim();
+    if (!token) {
+      continue;
+    }
+    productType = productType.replaceAll(token, " ");
+  }
+  productType = productType.replace(/\s+/g, " ").trim();
+  return {
+    ...condition,
+    productType: {
+      ...condition.productType,
+      value: productType || condition.productType.value.trim(),
+    },
+  };
 }
 
 /** 사용자 질문을 Plugin 규칙과 공통 Schema에 따라 구매 조건 JSON으로 구조화한다. */
@@ -132,6 +176,10 @@ export async function structurePurchaseQuestion(
     "당신은 Purchase Research Agent의 구매 조건 구조화 단계다.",
     "아래 Plugin 규칙을 적용하되 상품을 검색하거나 사실을 추측하지 않는다.",
     pluginRules,
+    "productType에는 구두, 운동화처럼 상품 종류만 기록한다.",
+    "색상, 사이즈, 가격, 판매처와 용도는 각각의 전용 필드에만 기록하고 productType에 중복하지 않는다.",
+    "각 조건의 priority는 구매 불가능 조건이면 required, 가능하면 만족할 선호이면 preferred로 기록한다.",
+    "productType은 required, 용도와 색상은 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
     "사용자 질문에 명시되지 않았지만 결과를 크게 바꾸는 조건은 missingConditions에 기록한다.",
     "assumptions에는 추론한 내용만 기록하고 requiresConfirmation은 반드시 true로 둔다.",
     "사용자 질문:",
@@ -165,5 +213,5 @@ export async function structurePurchaseQuestion(
   if (!isPurchaseCondition(parsed)) {
     throw new CodexRuntimeError("AI_OUTPUT_INVALID", "Codex 응답이 PurchaseCondition 계약과 일치하지 않습니다.");
   }
-  return parsed;
+  return normalizePurchaseCondition(parsed);
 }

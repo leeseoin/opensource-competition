@@ -7,12 +7,12 @@ import type { PurchaseCondition, ResearchSessionResponse } from "../../../lib/re
 import { handleConditionsRequest } from "./handler.ts";
 
 export const testConditions: PurchaseCondition = {
-  productType: "구두",
-  usage: ["출근"],
-  price: { min: null, max: 100000, currency: "KRW" },
-  colors: ["검정"],
-  sizes: ["270"],
-  requirements: ["편안함"],
+  productType: { value: "구두", priority: "required" },
+  usage: [{ value: "출근", priority: "preferred" }],
+  price: { min: null, max: 100000, currency: "KRW", priority: "required" },
+  colors: [{ value: "검정", priority: "preferred" }],
+  sizes: [{ value: "270", priority: "required" }],
+  requirements: [{ value: "편안함", priority: "preferred" }],
   merchant: null,
   missingConditions: [],
   assumptions: [],
@@ -104,6 +104,24 @@ test("AI 실행 실패를 503으로 변환한다", async () => {
   });
   assert.equal(response.status, 503);
   assert.equal((await response.json()).code, "AI_UNAVAILABLE");
+});
+
+/** Codex 인증 만료를 stderr 없이 사용자가 조치할 수 있는 503 응답으로 변환하는지 검증한다. */
+test("Codex 인증 만료를 안전한 503 응답으로 변환한다", async () => {
+  const response = await handleConditionsRequest(new Request("http://localhost/api/research/conditions", {
+    method: "POST",
+    body: JSON.stringify({ question: "구두", runtime: "codex" }),
+  }), {
+    structure: async () => {
+      throw new CodexRuntimeError("AI_AUTH_REQUIRED", "Codex 로그인이 만료되었습니다.");
+    },
+    mcp: mcpStub(),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.code, "AI_AUTH_REQUIRED");
+  assert.equal(body.message, "Codex 로그인이 만료되었습니다.");
 });
 
 /** MCP 연결 실패를 browser에 503으로 반환하는지 검증한다. */

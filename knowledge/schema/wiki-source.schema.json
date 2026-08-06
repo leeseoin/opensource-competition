@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research.local/knowledge/schema/wiki-source.schema.json",
+  "title": "WikiSource",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sourceId", "sourceType", "uri", "sha256", "collectedAt", "license", "containsMerchantFacts"],
+  "properties": {
+    "sourceId": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "sourceType": { "enum": ["repository_snapshot", "official_document", "public_web"] },
+    "uri": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "collectedAt": { "type": "string", "format": "date-time" },
+    "license": { "type": "string", "minLength": 1 },
+    "containsMerchantFacts": { "type": "boolean" }
+  }
+}
