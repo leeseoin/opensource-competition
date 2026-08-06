@@ -1,11 +1,20 @@
+/** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
+export type ConditionPriority = "required" | "preferred";
+
+/** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
+export interface PrioritizedText {
+  value: string;
+  priority: ConditionPriority;
+}
+
 /** PurchaseCondition은 MCP가 Product Backend에 전달할 사용자 확인 대상 구매 조건이다. */
 export interface PurchaseCondition {
-  productType: string;
-  usage: string[];
-  price: { min: number | null; max: number | null; currency: string };
-  colors: string[];
-  sizes: string[];
-  requirements: string[];
+  productType: PrioritizedText;
+  usage: PrioritizedText[];
+  price: { min: number | null; max: number | null; currency: string; priority: ConditionPriority };
+  colors: PrioritizedText[];
+  sizes: PrioritizedText[];
+  requirements: PrioritizedText[];
   merchant: string | null;
   missingConditions: string[];
   assumptions: string[];

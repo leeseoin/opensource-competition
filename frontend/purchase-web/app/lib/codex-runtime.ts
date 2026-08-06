@@ -145,9 +145,9 @@ export function runCodexCommand(
 
 /** productType에 중복 포함된 구조화 색상을 제거해 DB 검색어가 상품 종류에 집중되게 한다. */
 function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondition {
-  let productType = condition.productType.trim();
+  let productType = condition.productType.value.trim();
   for (const color of condition.colors) {
-    const token = color.trim();
+    const token = color.value.trim();
     if (!token) {
       continue;
     }
@@ -156,7 +156,10 @@ function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondi
   productType = productType.replace(/\s+/g, " ").trim();
   return {
     ...condition,
-    productType: productType || condition.productType.trim(),
+    productType: {
+      ...condition.productType,
+      value: productType || condition.productType.value.trim(),
+    },
   };
 }
 
@@ -175,6 +178,8 @@ export async function structurePurchaseQuestion(
     pluginRules,
     "productType에는 구두, 운동화처럼 상품 종류만 기록한다.",
     "색상, 사이즈, 가격, 판매처와 용도는 각각의 전용 필드에만 기록하고 productType에 중복하지 않는다.",
+    "각 조건의 priority는 구매 불가능 조건이면 required, 가능하면 만족할 선호이면 preferred로 기록한다.",
+    "productType은 required, 용도와 색상은 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
     "사용자 질문에 명시되지 않았지만 결과를 크게 바꾸는 조건은 missingConditions에 기록한다.",
     "assumptions에는 추론한 내용만 기록하고 requiresConfirmation은 반드시 true로 둔다.",
     "사용자 질문:",

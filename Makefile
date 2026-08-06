@@ -2,6 +2,13 @@
 
 -include .env
 
+# .env가 없을 때도 빈 환경변수가 Spring의 disabled 기본값을 덮어쓰지 않게 한다.
+EMBEDDING_PROVIDER ?= disabled
+EMBEDDING_BASE_URL ?= http://127.0.0.1:11434
+EMBEDDING_MODEL ?= bge-m3:567m
+EMBEDDING_MODEL_VERSION ?= ollama-bge-m3-567m-q4_0
+EMBEDDING_TIMEOUT_MS ?= 3000
+
 # .env에서 읽은 인프라 설정을 Gradle, Go와 Python 하위 프로세스에도 전달한다.
 export POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
 export REDIS_PORT REDIS_PASSWORD
@@ -10,6 +17,7 @@ export PURCHASE_RESEARCH_RABBITMQ_URL
 export COLLECTOR_HTTP_ADDRESS COLLECTOR_READ_TIMEOUT COLLECTOR_WRITE_TIMEOUT
 export COLLECTOR_IDLE_TIMEOUT COLLECTOR_SHUTDOWN_TIMEOUT COLLECTOR_WORKER_TIMEOUT COLLECTOR_CHROME_BIN
 export PRODUCT_BACKEND_BASE_URL PRODUCT_BACKEND_REQUEST_TIMEOUT_MS
+export EMBEDDING_PROVIDER EMBEDDING_BASE_URL EMBEDDING_MODEL EMBEDDING_MODEL_VERSION EMBEDDING_TIMEOUT_MS
 export CODEX_CLI_PATH CODEX_GATEWAY_TIMEOUT_MS PURCHASE_RESEARCH_REPO_ROOT PURCHASE_RESEARCH_MCP_ENTRY
 
 COLLECTOR_DIR := services/collector
@@ -32,7 +40,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 	python-crawler-env python-crawler-setup python-crawler-run python-crawler-test \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
-	web-install web-dev web-test web-lint web-build docs-check test check
+	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-perf-test wiki-check branch-common-check docs-check test check
 
 help: ## 사용할 수 있는 명령을 보여준다.
 	@printf '%s\n' \
@@ -54,6 +62,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
 		'  make web-dev         Next.js 개발 서버 실행' \
+		'  make retrieval-eval-check 60개 검색 평가 data 검사' \
 		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
 		'  make test            Go, Spring Boot, Next.js lint 일괄 검증' \
 		'  make check           Compose 설정과 전체 코드 검증' \
@@ -149,12 +158,24 @@ web-lint: ## Next.js ESLint 검사를 실행한다.
 web-build: mcp-server-build ## MCP Server와 Next.js production bundle을 빌드한다.
 	cd $(WEB_DIR) && npm run build
 
+retrieval-eval-check: ## 60개 검색 평가 질문, 유형과 snapshot 참조를 검증한다.
+	./scripts/check-retrieval-evaluation.sh
+
+retrieval-perf-test: ## 10,000개 PostgreSQL FTS/trigram 검색 p95를 opt-in 측정한다.
+	cd $(PRODUCT_BACKEND_DIR) && RETRIEVAL_PERFORMANCE_ENABLED=true ./gradlew test --tests com.purchasesearch.product_backend.RetrievalPerformanceIntegrationTests --info
+
+wiki-check: ## Wiki source 해시, claim 출처와 사람 검토 계약을 검증한다.
+	./scripts/check-wiki.sh
+
+branch-common-check: ## 두 Collector 브랜치의 공통 runtime 파일 동일성을 검사한다.
+	./scripts/check-common-branch-files.sh
+
 docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
 	./scripts/check-document-sync.sh
 
 test: collector-test python-collector-test product-backend-test mcp-server-test web-test web-lint ## Go, Python, Spring Boot, MCP, Next.js를 검증한다.
 
-check: docs-check ## 문서 동기화, Compose 설정, 테스트, Next.js production build를 모두 검증한다.
+check: docs-check retrieval-eval-check wiki-check ## 문서 동기화, 검색 평가/Wiki data, Compose 설정과 전체 코드를 검증한다.
 	docker compose config --quiet
 	$(MAKE) test
 	$(MAKE) web-build

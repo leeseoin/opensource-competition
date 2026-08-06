@@ -1,6 +1,8 @@
 package com.purchasesearch.product_backend.product.service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,7 +19,10 @@ import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.Sour
 import com.purchasesearch.product_backend.product.entity.MerchantProduct;
 import com.purchasesearch.product_backend.product.entity.OfferSnapshot;
 import com.purchasesearch.product_backend.product.entity.ProductOption;
+import com.purchasesearch.product_backend.product.embedding.ProductEmbeddingService;
+import com.purchasesearch.product_backend.product.embedding.ProductEmbeddingService.QueryEmbedding;
 import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
+import com.purchasesearch.product_backend.product.repository.MerchantProductRepository.CandidateRetrievalSignalProjection;
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
 
@@ -27,9 +32,20 @@ import com.purchasesearch.product_backend.product.repository.ProductOptionReposi
 @Service
 public class ProductQueryService {
 
+	/** CandidateSearchResult는 후보 상품과 후보별 원시 검색 점수를 함께 보존한다. */
+	public record CandidateSearchResult(
+			ProductSearchResponse response,
+			Map<Long, RetrievalSignal> signals) {
+	}
+
+	/** RetrievalSignal은 가중치 적용 전 keyword/vector 점수를 표현한다. */
+	public record RetrievalSignal(double keywordScore, Double semanticScore) {
+	}
+
 	private final MerchantProductRepository merchantProductRepository;
 	private final OfferSnapshotRepository offerSnapshotRepository;
 	private final ProductOptionRepository productOptionRepository;
+	private final ProductEmbeddingService productEmbeddingService;
 
 	/**
 	 * 상품 조회에 필요한 repository를 연결한다.
@@ -37,14 +53,17 @@ public class ProductQueryService {
 	 * @param merchantProductRepository 판매처 상품 repository
 	 * @param offerSnapshotRepository offer snapshot repository
 	 * @param productOptionRepository 상품 옵션 repository
+	 * @param productEmbeddingService 선택적 질문 embedding과 전문 검색 fallback 서비스
 	 */
 	public ProductQueryService(
 			MerchantProductRepository merchantProductRepository,
 			OfferSnapshotRepository offerSnapshotRepository,
-			ProductOptionRepository productOptionRepository) {
+			ProductOptionRepository productOptionRepository,
+			ProductEmbeddingService productEmbeddingService) {
 		this.merchantProductRepository = merchantProductRepository;
 		this.offerSnapshotRepository = offerSnapshotRepository;
 		this.productOptionRepository = productOptionRepository;
+		this.productEmbeddingService = productEmbeddingService;
 	}
 
 	/**
@@ -80,10 +99,10 @@ public class ProductQueryService {
 	 * @param sizesCsv 검색할 사이즈 목록
 	 * @param colorsCsv 검색할 색상 목록
 	 * @param limit 최대 후보 수
-	 * @return 조건과 일치하는 전체 개수와 후보 목록
+	 * @return 조건과 일치하는 전체 개수, 후보 목록과 원시 검색 점수
 	 */
 	@Transactional(readOnly = true)
-	public ProductSearchResponse searchCandidates(
+	public CandidateSearchResult searchCandidates(
 			String merchant,
 			String query,
 			Long minPrice,
@@ -92,19 +111,43 @@ public class ProductQueryService {
 			String sizesCsv,
 			String colorsCsv,
 			int limit) {
+		String normalizedQuery = normalize(query);
+		QueryEmbedding embedding = normalizedQuery == null
+				? null
+				: productEmbeddingService.embedQuery(normalizedQuery).orElse(null);
 		Page<MerchantProduct> page = merchantProductRepository.searchCandidates(
 				normalize(merchant),
-				normalize(query),
+				normalizedQuery,
 				minPrice,
 				maxPrice,
 				normalize(currency),
 				normalize(sizesCsv),
 				normalize(colorsCsv),
+				true,
+				embedding == null ? null : embedding.provider(),
+				embedding == null ? null : embedding.model() + "@" + embedding.modelVersion(),
+				embedding == null ? null : embedding.vectorLiteral(),
 				PageRequest.of(0, limit));
 		List<ProductSummary> products = page.getContent().stream()
 				.map(this::toSummary)
 				.toList();
-		return new ProductSearchResponse(page.getTotalElements(), page.hasNext(), products);
+		List<Long> candidateIds = products.stream().map(ProductSummary::id).toList();
+		Map<Long, RetrievalSignal> signals = candidateIds.isEmpty()
+				? Map.of()
+				: merchantProductRepository.findCandidateRetrievalSignals(
+						candidateIds,
+						normalizedQuery,
+						embedding == null ? null : embedding.provider(),
+						embedding == null ? null : embedding.model() + "@" + embedding.modelVersion(),
+						embedding == null ? null : embedding.vectorLiteral()).stream()
+						.collect(Collectors.toUnmodifiableMap(
+								CandidateRetrievalSignalProjection::getCandidateId,
+								projection -> new RetrievalSignal(
+										projection.getKeywordScore(),
+										projection.getSemanticScore())));
+		return new CandidateSearchResult(
+				new ProductSearchResponse(page.getTotalElements(), page.hasNext(), products),
+				signals);
 	}
 
 	/**

@@ -1,7 +1,7 @@
 # Purchase Research Agent 구현 계획
 
 작성일: 2026-07-13
-최종 수정일: 2026-08-03
+최종 수정일: 2026-08-06
 상태: in progress
 
 ## 체크박스 관리 규칙
@@ -24,7 +24,7 @@
 | Phase 4 | `QUEUE-001`부터 `QUEUE-003`, `REDIS-001`, `BACKEND-002` |
 | Phase 5 | `MCP-001`, `MCP-002` |
 | Phase 6 | `WEB-001`부터 `WEB-003` |
-| Phase 7 | `ANALYSIS-001`, `VERIFY-001` |
+| Phase 7 | `ANALYSIS-001`부터 `ANALYSIS-003`, `VERIFY-001` |
 | Phase 8 | 기존 기능의 판매처 및 운영 확장 |
 | Phase 9 | `RUNTIME-001` |
 | 제출 준비 | `OPS-002`부터 `OPS-004` |
@@ -42,6 +42,7 @@
 - [x] 판매처 공통 수집 데이터 v1 초안 문서 작성
 - [x] Go Collector 판매처 원본→공통 Product 변환 동작 문서 작성
 - [x] 기능 ID 기반 기능 목록/코드트래커/진행상황 스킬 구성과 실제 기능 감사
+- [x] 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 문서 작성 및 문서 검사
 - [ ] 첫 판매처 선정과 공개 접근 범위 확인 **(진행 중: ABC마트 검색·robots 확인, 상세·리뷰 확인 필요)**
 - [ ] Go `CollectorResult` JSON schema 확정 **(공통 수집 데이터 명세의 검색 조건·가격·페이지·재고 상태 반영 필요)**
 - [ ] 상품 상세 수집 요청 Schema 작성
@@ -176,8 +177,8 @@
 - [x] RabbitMQ의 `CollectorResult`를 소비하는 Spring Boot Worker 구현
 - [x] Contract 검증 실패 결과를 DB에 저장하지 않고 결과 DLQ로 이동
 - [x] 검증된 결과를 JPA transaction으로 저장
-- [ ] `collection_jobs`, `collection_tasks` JPA entity 작성
-- [ ] `collection_jobs`, `collection_tasks` Flyway migration 작성
+- [x] `collection_jobs`, `collection_tasks` JPA entity 작성
+- [x] `collection_jobs`, `collection_tasks` Flyway migration 작성
 - [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록
 - [ ] Redis에 짧은 수집 진행 상태를 저장하고 PostgreSQL에 최종 상태 보존
 - [ ] Worker 또는 Backend 장애 후 작업 상태 복구 정책 구현
@@ -281,7 +282,43 @@
 
 완료 기준: 사용자는 `/chat`에서 Codex 또는 Claude Code의 근거 기반 구매 답변을 받고, 운영자는 `/admin/collections`에서 백그라운드 수집 작업과 진행 상태를 관리한다.
 
-## Phase 7: 리뷰 분석과 비교
+## Phase 7: 상품 후보 검색, 지식, 리뷰 분석과 비교
+
+### 7.1 Hybrid 상품 후보 검색
+
+- [x] 현재 SQL `AND` 검색의 고정 snapshot baseline smoke 측정
+- [x] 평가 질문/필수 조건/relevance/정답 없음 판정 schema 작성
+- [x] 정확 검색/의미 검색/조건 완화/정답 없음/재검증 질문 60개 DRAFT 작성
+- [ ] 60개 질문의 필수/선호 조건과 relevance 사람 검토
+- [x] `PurchaseCondition`의 `required`/`preferred` 계약 작성
+- [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정 규칙 작성
+- [x] PostgreSQL 전문 검색/trigram index와 상품명/브랜드 검색 문서 구현
+- [ ] 전문 검색 실패와 빈 검색 문서 fallback 구현
+- [x] embedding provider port와 전송 data/timeout/실패 계약 작성
+- [ ] 상품 검색 문서 content hash/model version 기반 embedding 갱신 구현 **(진행 중: commit 후 batch 갱신 완료, 비동기 작업 분리 남음)**
+- [x] PostgreSQL vector 후보와 전문 검색 후보 결합 구현
+- [x] embedding 생성/조회 실패 시 전문 검색 fallback 구현
+- [x] 후보별 검색 점수/옵션 상태/최신성/근거 완전성 응답 구현
+- [ ] 필수 조건 위반 없이 조건 완화와 완화 이유를 반환하는 재정렬 구현 **(진행 중: 필수 조건 filter와 선호 조건 완화 설명 완료, 결정론적 재정렬 남음)**
+- [ ] SQL/전문 검색/벡터 검색 단계별 offline 평가와 10,000개 p95 측정 **(진행 중: 60개 DRAFT SQL/FTS 비교와 10,000개 FTS p95 336.220ms 완료, 실제 BGE-M3 품질 비교 남음)**
+- [ ] 정상/필수 조건 위반/옵션 unknown/embedding 실패/빈 결과 통합 테스트 **(진행 중: 각 경로 통합/단위 테스트 작성, 전체 완료 기준 대조 남음)**
+
+### 7.2 검토형 구매 도메인 Wiki
+
+- [x] `knowledge/raw`, `knowledge/wiki`, `knowledge/schema`, `knowledge/eval` 구조 작성
+- [x] source/page/relation/claim/version/review status schema 작성
+- [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태 전이와 사람 승인 규칙 작성
+- [x] source 없는 claim의 Published 전환 lint 차단 구현
+- [ ] 신발 용도/상품군/색상/판매처 category seed Wiki 작성 **(진행 중: 근거가 있는 상품군/한영 표현 DRAFT 작성, 용도/색상/사람 검토 남음)**
+- [x] Wiki relation의 `derived`/confidence/source ID 검증 구현
+- [ ] 검토된 Wiki를 Product Backend가 PostgreSQL index에 적재하는 경로 구현
+- [ ] Wiki 기반 의미 확장 REST API와 MCP 도구 구현
+- [ ] Wiki 없음/오래됨/충돌/조회 실패 시 Hybrid 검색 fallback 구현
+- [ ] orphan/깨진 link/출처 누락/충돌/superseded 상태 lint 구현 **(진행 중: source 해시/claim source/중복 ID/Published 사람 검토 검사 완료)**
+- [ ] 전문 검색 + 벡터 검색과 Wiki 결합 검색의 동일 평가 data 비교 **(진행 중: FTS와 DRAFT Wiki 모의 비교 완료, 실제 BGE-M3 결합 남음)**
+- [x] Wiki가 검색 품질을 개선하지 않거나 출처 정확성을 낮출 때 운영 비활성화 검증
+
+### 7.3 리뷰 분석과 상품 비교
 
 - [ ] 개인정보 제거와 최소 저장 정책
 - [ ] 규칙 기반 size/foot-width/fit signal 추출
@@ -291,7 +328,9 @@
 - [ ] 설명 가능한 가중치 점수
 - [ ] 주장과 evidence 연결
 
-완료 기준: 후보 3개를 점수 구성, 근거, 주의사항과 함께 비교한다.
+완료 기준: 고정된 상품 snapshot과 평가 질문으로 후보 검색 단계를 재현하고, 후보 3개를
+필수 조건, 검색/비교 점수 구성, 근거, 완화 조건과 주의사항과 함께 반환한다. Wiki는
+검토된 출처 기반 지식만 사용하며 실패해도 전문 검색 기반 후보 조회가 동작해야 한다.
 
 ## Phase 8: 확장
 
@@ -357,6 +396,8 @@
 → Spring Boot Contract와 Flyway/JPA DB 적재
 → Redis/RabbitMQ 기반 batch 수집
 → PostgreSQL 상품 데이터 확보
+→ Hybrid 상품 후보 검색 baseline/전문 검색/벡터 검색
+→ 검토형 구매 도메인 Wiki 품질 비교
 → MCP 상품 검색
 → Codex·Claude Code Agent Gateway
 → Astryx 채팅 화면과 수집 관리 화면

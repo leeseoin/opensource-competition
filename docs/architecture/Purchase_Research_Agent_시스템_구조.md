@@ -1,7 +1,7 @@
 # Purchase Research Agent 시스템 구조
 
 작성일: 2026-07-13
-최종 수정일: 2026-07-30
+최종 수정일: 2026-08-06
 상태: in progress
 
 이 문서는 현재 합의된 전체 구조와 각 폴더의 책임을 설명하는 기준 문서다. 날짜별 보고서는 당시 상황을 보존하고, 구조가 바뀌면 이 문서를 먼저 갱신한다.
@@ -73,7 +73,7 @@ MCP Server는 PostgreSQL, RabbitMQ, 외부 판매처에 직접 접근하지 않�
 ```text
 사용자 질문
   ↓
-DB에서 조건 검색
+DB에서 조건과 의미 검색
   ├── 정보 충분 → 근거가 있는 후보 반환
   └── 정보 부족 → 제한된 추가 수집 요청
                     ├── 빠른 보완: 최대 100개 후보
@@ -81,6 +81,33 @@ DB에서 조건 검색
 ```
 
 `100개`와 `1000개`는 판매처가 보장한 허용량이 아니라 시스템 안전 상한의 초기 제안이다. 실제 구현에서는 판매처별 요청 간격, 최대 페이지, 최대 상품, 요청 예산을 함께 적용한다.
+
+### 상품 후보 검색 전략
+
+현재 구현은 PostgreSQL의 상품명, 브랜드, 수집 검색어와 확인된 가격/재고/옵션을
+SQL 조건으로 검색한다. 필수/선호 조건, PostgreSQL FTS/trigram과 선택적
+pgvector/BGE-M3 adapter 및 실패 fallback까지 부분 구현했다. 구매 도메인 Wiki는
+DRAFT source/page/lint와 offline 품질 비교만 구현했으며 운영 검색에는 연결하지 않았다.
+
+목표 흐름은 다음과 같다.
+
+```text
+사용자 확인 구매 조건
+  ↓ required/preferred 분리
+검토형 구매 도메인 Wiki
+  ↓ 용도/상품군/동의어 확장
+PostgreSQL 구조화 필터 + 전문 검색 + 벡터 검색
+  ↓
+설명 가능한 후보 재정렬
+  ↓
+후보 3개와 일치/불일치/확인 불가 근거
+```
+
+Wiki는 가격, 재고와 옵션을 저장하지 않는다. 가격/재고/옵션은 Collector가 수집한
+최신 snapshot을 사용하고, Wiki는 구매 목적과 상품군 관계, 동의어, 색상 계열과
+판매처 category 대응처럼 상대적으로 안정적인 지식만 제공한다. 상세 설계와 품질
+기준은 [상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계](상품_후보_Hybrid_RAG와_LLM_Wiki_설계.md)를
+따른다.
 
 ## 4. 구성요소 책임
 
@@ -99,6 +126,7 @@ Go Collector는 DB에 저장하거나 최종 추천을 판단하지 않는다.
 
 - 브라우저와 MCP Server가 사용할 REST API 제공
 - PostgreSQL 상품 검색과 조건 필터
+- PostgreSQL 전문 검색/벡터 검색과 검토된 구매 도메인 지식 결합(planned)
 - RabbitMQ 수집 작업 발행과 결과 소비
 - Contract 검증, 판매처 공통 모델 정규화, 중복 처리
 - Flyway migration과 JPA repository를 통한 최종 DB 쓰기
@@ -221,10 +249,10 @@ com.purchasesearch.product_backend
 |---|---|---|
 | Go Collector | 부분 구현 | ABC마트/29CM 검색, Registry, RabbitMQ 작업 소비와 결과 발행 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
-| Product Backend | 부분 구현 | 수집 작업 발행, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 상품 조회 API |
-| PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 저장 검증 |
-| MCP Server | 계획 | 디렉토리와 책임 문서만 생성 |
-| Next.js Web | 부분 구현 | Figma Landing/Chat/Compare V2와 Product Backend DB 후보 server route / Agent Gateway 연결 전 |
+| Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 필수/선호 조건 조회, PostgreSQL FTS/trigram, 선택적 pgvector/BGE-M3 adapter / Wiki 운영 연결은 planned |
+| PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 및 collection job/task 상태 저장 검증 |
+| MCP Server | 부분 구현 | 조사 세션 생성/확인/후보 검색 도구와 Product Backend REST 연결 |
+| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 / stream과 관리자 화면 남음 |
 | RabbitMQ | 부분 구현 | Spring 작업 발행, Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |
@@ -232,8 +260,10 @@ com.purchasesearch.product_backend
 ## 9. 구현 순서
 
 1. Product Backend부터 Go Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
-2. 수집 작업 상태를 PostgreSQL에 저장한다.
-3. MCP Server가 REST API를 호출하도록 연결한다.
-4. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다.
+2. 수집 작업 상태를 PostgreSQL에 저장한다. **(구현/통합 테스트 완료)**
+3. 상품 후보 검색 baseline과 품질 평가 data를 만들고 전문 검색을 구현한다. **(DRAFT 평가까지 완료)**
+4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(adapter/DRAFT 비교 완료, 실제 BGE-M3 평가 남음)**
+5. MCP Server가 REST API를 호출하도록 연결한다. **(조사 세션 경로 완료)**
+6. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다. **(채팅 후보 경로 부분 구현)**
 
 세부 체크박스와 완료 조건은 [구현 계획](../planning/Purchase_Research_Agent_TODO.md)과 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에서 관리한다.

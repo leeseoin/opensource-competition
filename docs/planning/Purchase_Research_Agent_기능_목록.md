@@ -3,6 +3,7 @@
 작성일: 2026-07-31
 최종 점검일: 2026-08-06
 최종 점검 범위: `MCP-001`, `MCP-002`, `WEB-002`, `OPS-004` 실제 코드와 E2E 재검증
+최종 기능 동기화일: 2026-08-06
 상태: 선택 기능 감사 완료
 
 ## 목적
@@ -20,6 +21,7 @@
 - [판매처 데이터 수집과 DB 적재 설계](../architecture/판매처_데이터_수집_DB_적재와_확장_설계.md)
 - [현재 수집 데이터와 DB 저장 흐름](../architecture/현재_수집_데이터와_DB_저장_흐름.md)
 - [Python/Go 크롤러 확장성과 성능 비교 설계](../architecture/Python_Go_크롤러_확장성과_성능_비교_설계.md)
+- [상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계](../architecture/상품_후보_Hybrid_RAG와_LLM_Wiki_설계.md)
 
 ## 관리 규칙
 
@@ -75,7 +77,7 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `QUEUE-001` | 검색 작업 계약과 Go Worker | 부분 구현 | P0 | RabbitMQ topology, 작업/결과 계약, Go 소비, retry와 DLQ | fixture 작업의 성공/실패/재시도/ACK/DLQ 통합 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | ACK/DLQ 통합 테스트와 복구 검증 |
-| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Go 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | 실제 판매처 Queue E2E와 작업 상태 저장 검증 |
+| `QUEUE-002` | Spring Boot 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | P0 | Product Backend producer, 결과 consumer, 검증 실패 처리와 DB transaction 연결 | Product Backend가 작업을 발행하고 Collector 결과를 검증해 PostgreSQL에 저장함 | 시스템 구조 / 현재 DB 저장 흐름 | 실제 판매처 Queue E2E와 장애 후 작업 상태 복구 검증 |
 | `QUEUE-003` | 여러 검색어와 페이지 수집 | 계획 | P1 | batch, pagination, request budget, priority와 Worker 수 제한 | 여러 판매처 작업이 상한 안에서 분배되고 결과 수량과 실패가 보고됨 | 데이터 수집과 DB 적재 설계 | pagination과 작업 예산 계약 |
 | `REDIS-001` | 속도 제한/중복 방지/짧은 상태 | 부분 구현 | P1 | 판매처 전체 limiter, 중복 key, 진행 상태와 cache | 여러 Worker에서도 요청 간격과 중복 차단이 일관되고 만료 정책 테스트가 통과함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | application adapter와 key 정책 구현 |
 
@@ -106,6 +108,8 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `ANALYSIS-001` | 리뷰 신호 추출과 상품 비교 | 계획 | P1 | 리뷰 신호, confidence, 점수, 근거와 주의사항 | 후보 비교 값이 공개 출처 또는 derived 표기와 confidence를 포함함 | 시스템 구조 / 공통 수집 데이터 명세 | 리뷰 저장 계약과 비교 규칙 |
+| `ANALYSIS-002` | Hybrid 상품 후보 검색 | 계획 | P0 | 필수/선호 조건, 전문 검색, 벡터 검색, 순위 결합, 설명 가능한 재정렬과 fallback | 고정 상품 snapshot과 평가 질문으로 SQL baseline/전문 검색/벡터 검색을 재현 가능하게 비교하고 필수 조건 위반 0%, 판매처 사실 출처 연결 100%, 완화 조건 표시 100%를 충족함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 / 시스템 구조 | 필수/선호 조건, 옵션 상태, FTS/trigram, 선택적 pgvector/BGE-M3와 60개 DRAFT 평가 부분 구현 |
+| `ANALYSIS-003` | 검토형 구매 도메인 Wiki | 계획 | P1 | immutable source, DRAFT/PUBLISHED/SUPERSEDED page, 관계, derived/confidence, 사람 승인과 의미 확장 | Published claim이 source/version/review status를 추적하고 출처 없는 claim 0건을 유지하며 Wiki 실패 시 Hybrid 검색 fallback이 동작함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 신발 상품군/한영 표현 DRAFT Wiki와 lint/offline 비교 구현, nDCG@3 하락으로 운영 비활성화 |
 | `VERIFY-001` | 구매 전 상품 재검증 | 계획 | P1 | 현재 가격/재고/옵션 재수집과 추천 snapshot 비교 | 변경 항목, 확인 불가 항목과 최신 출처를 분리해 반환함 | 시스템 구조 / 공통 수집 데이터 명세 | 재검증 요청/응답 계약 |
 
 ### 운영과 실행 환경
@@ -121,6 +125,8 @@
 ## 다음 우선순위
 
 1. `BACKEND-001` 실제 전체 Queue 경로 PostgreSQL 적재 E2E
-2. `BACKEND-002` 수집 작업 영구 상태
-3. `MCP-001` 상품 검색 MCP 도구
-4. `WEB-002` 사용자 구매 채팅 화면
+2. `ANALYSIS-002` 현재 SQL baseline과 전문 검색 기반 후보 회수
+3. `ANALYSIS-003` 신발 도메인 검토형 Wiki와 단계별 품질 비교
+4. `BACKEND-002` 수집 작업 영구 상태
+5. `MCP-001` 새 후보 검색 응답을 사용하는 MCP 도구
+6. `WEB-002` 조건 강도/후보 근거/완화 상태를 표시하는 사용자 구매 채팅 화면

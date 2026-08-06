@@ -15,8 +15,9 @@ Spring Boot 기반 상품 데이터 서버다.
 - RabbitMQ `CollectionResult` 검증, 수동 ACK, 결과 DLQ와 PostgreSQL 자동 저장 Consumer 구현
 - RabbitMQ `CollectionTask` 검색 작업 발행 API와 publisher confirm 구현
 - 저장된 최신 상품 검색 API 구현
+- 필수/선호 조건, PostgreSQL 전문 검색/pg_trgm/선택적 pgvector 후보 검색 구현
 - OpenAPI JSON과 Swagger UI 기반 내부 API 수동 검증
-- 수집 작업 상태의 PostgreSQL 저장은 아직 구현 전
+- `collection_jobs`/`collection_tasks` PostgreSQL 상태 저장과 job 결과 조회 API 구현
 
 ## Package 구조
 
@@ -37,6 +38,7 @@ com.purchasesearch.product_backend
 │   ├── controller/                  # 상품 REST API
 │   ├── dto/                         # 상품 API 요청과 응답
 │   ├── entity/                      # 상품, 판매처 상품, snapshot, 옵션
+│   ├── embedding/                   # 선택적 embedding port, Ollama adapter와 pgvector 저장
 │   ├── repository/                  # 상품 JPA repository
 │   └── service/                     # 상품 조회 use case
 ├── evidence/
@@ -70,6 +72,21 @@ make infra-up
 make product-backend-run
 ```
 
+기본 설정은 embedding을 사용하지 않고 PostgreSQL 전문 검색과 trigram 검색만 수행한다.
+평가를 위해 로컬 Ollama `bge-m3:567m`을 준비한 경우에만 다음 환경변수로 선택 경로를
+활성화한다. model이 없거나 timeout/응답 검증에 실패하면 전문 검색 fallback을 사용한다.
+
+```bash
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_BASE_URL=http://127.0.0.1:11434
+EMBEDDING_MODEL=bge-m3:567m
+EMBEDDING_MODEL_VERSION=ollama-bge-m3-567m-q4_0
+```
+
+embedding 입력은 상품명/브랜드/category/수집 검색어/판매처와 사용자 검색 질문이다.
+가격/재고/옵션과 개인정보는 model 입력에 포함하지 않는다. model weight는 이 저장소와
+PostgreSQL image에 포함하지 않는다.
+
 저장된 상품 조회 예시는 다음과 같다.
 
 ```bash
@@ -95,8 +112,11 @@ Swagger UI에서 수동 적재는 다음 순서로 실행한다.
 
 전체 Queue 흐름은 `Collection Tasks` 구역의
 `POST /internal/v1/collection-tasks`에서 시작한다. 요청이 `202`와 `QUEUED`를
-반환하면 RabbitMQ가 작업을 확인한 상태다. Go Worker가 실행 중이면 판매처 수집 후
-결과 Consumer가 PostgreSQL에 자동 저장한다.
+반환하면 RabbitMQ가 작업을 확인한 상태다. Collector Worker가 실행 중이면 판매처 수집 후
+결과 Consumer가 PostgreSQL에 자동 저장한다. 응답의 `jobId`를 복사한 뒤
+`Collection Jobs` 구역의 `GET /internal/v1/collection-jobs/{jobId}`를 실행하면
+`QUEUED`/`PROCESSING`/`COMPLETED`/`PARTIAL`/`FAILED` 상태, 페이지별 결과,
+저장 상품 수와 `verificationSummary`를 확인할 수 있다.
 
 OpenAPI JSON 원문은 다음 주소에서 확인한다.
 

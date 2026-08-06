@@ -1,8 +1,11 @@
 package com.purchasesearch.product_backend.collection.service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,8 @@ import com.purchasesearch.product_backend.product.entity.MerchantProduct;
 import com.purchasesearch.product_backend.product.entity.OfferSnapshot;
 import com.purchasesearch.product_backend.product.entity.Product;
 import com.purchasesearch.product_backend.product.entity.ProductOption;
+import com.purchasesearch.product_backend.product.embedding.ProductSearchDocumentsChanged;
+import com.purchasesearch.product_backend.product.embedding.ProductSearchDocumentsChanged.ProductSearchDocument;
 import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
@@ -44,6 +49,7 @@ public class CollectorResultStoreService {
 	private final ProductOptionRepository productOptionRepository;
 	private final EvidenceRepository evidenceRepository;
 	private final ProductVerificationRepository productVerificationRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
 	/**
 	 * Collector 결과 저장에 필요한 validator와 repository를 연결한다.
@@ -56,6 +62,7 @@ public class CollectorResultStoreService {
 	 * @param productOptionRepository 상품 옵션 repository
 	 * @param evidenceRepository 공개 출처 근거 repository
 	 * @param productVerificationRepository JSON/HTML 상품 검증 repository
+	 * @param eventPublisher commit 뒤 embedding 갱신용 application event publisher
 	 */
 	public CollectorResultStoreService(
 			Validator validator,
@@ -65,7 +72,8 @@ public class CollectorResultStoreService {
 			OfferSnapshotRepository offerSnapshotRepository,
 			ProductOptionRepository productOptionRepository,
 			EvidenceRepository evidenceRepository,
-			ProductVerificationRepository productVerificationRepository) {
+			ProductVerificationRepository productVerificationRepository,
+			ApplicationEventPublisher eventPublisher) {
 		this.validator = validator;
 		this.collectionSearchContextRepository = collectionSearchContextRepository;
 		this.productRepository = productRepository;
@@ -74,6 +82,7 @@ public class CollectorResultStoreService {
 		this.productOptionRepository = productOptionRepository;
 		this.evidenceRepository = evidenceRepository;
 		this.productVerificationRepository = productVerificationRepository;
+		this.eventPublisher = eventPublisher;
 	}
 
 	/**
@@ -96,13 +105,17 @@ public class CollectorResultStoreService {
 		int optionCount = 0;
 		int evidenceCount = 0;
 		int verificationCount = 0;
+		List<ProductSearchDocument> searchDocuments = new ArrayList<>();
 		for (CollectorResult.Product product : result.products()) {
 			MerchantProduct merchantProduct = upsertMerchantProduct(result, product);
+			searchDocuments.add(new ProductSearchDocument(
+					merchantProduct.getId(), buildSearchDocument(result, product)));
 			OfferSnapshot snapshot = saveOfferSnapshot(result, product, merchantProduct);
 			optionCount += saveOptions(product, snapshot);
 			evidenceCount += saveEvidence(product, merchantProduct, snapshot);
 			verificationCount += saveVerification(product, merchantProduct, snapshot);
 		}
+		eventPublisher.publishEvent(new ProductSearchDocumentsChanged(List.copyOf(searchDocuments)));
 
 		return new StoreReport(
 				result.products().size(),
@@ -110,6 +123,16 @@ public class CollectorResultStoreService {
 				optionCount,
 				evidenceCount,
 				verificationCount);
+	}
+
+	/** 상품명/브랜드/category/수집 검색어와 판매처만 사용해 embedding 검색 문서를 만든다. */
+	private String buildSearchDocument(CollectorResult result, CollectorResult.Product product) {
+		return String.join(" / ",
+				product.name(),
+				product.brand() == null ? "" : product.brand(),
+				String.join(" / ", product.categoryPath()),
+				result.query() == null ? "" : result.query(),
+				result.merchant());
 	}
 
 	/**

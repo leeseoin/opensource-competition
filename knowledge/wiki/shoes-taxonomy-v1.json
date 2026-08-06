@@ -1,0 +1,22 @@
+{
+  "pageId": "shoes-taxonomy",
+  "version": 1,
+  "status": "DRAFT",
+  "title": "구두 상품군과 한영 판매처 표현",
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "supersedes": null,
+  "claims": [
+    {"claimId":"shoes-loafer","subject":"구두","relation":"narrower","object":"로퍼","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010093845.category_path=신발 > 구두 > 플랫","1010102872.category_path=신발 > 캐주얼 > 로퍼"]},
+    {"claimId":"shoes-maryjane","subject":"구두","relation":"narrower","object":"메리제인","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010103543.category_path=신발 > 구두 > 메리제인","1010124721.category_path=신발 > 구두 > 메리제인"]},
+    {"claimId":"shoes-flat","subject":"구두","relation":"narrower","object":"플랫","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010093845.category_path=신발 > 구두 > 플랫","1010124722.category_path=신발 > 구두 > 플랫"]},
+    {"claimId":"shoes-pumps","subject":"구두","relation":"narrower","object":"펌프스","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010103255.category_path=신발 > 구두 > 힐/펌프스","3069582.category_path=여성슈즈 > 힐/펌프스 > 미드힐"]},
+    {"claimId":"shoes-slingback","subject":"구두","relation":"narrower","object":"슬링백","derived":true,"confidence":0.95,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010110646.category_path=신발 > 구두 > 토오픈/슬링백","2468262.title=[29EDITION] BELLA SLINGBACK / BLACK"]},
+    {"claimId":"shoes-wedge","subject":"구두","relation":"narrower","object":"웨지","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010103856.category_path=신발 > 구두 > 웨지","1010110648.category_path=신발 > 구두 > 웨지"]},
+    {"claimId":"alias-loafer","subject":"로퍼","relation":"synonym","object":"LOAFER","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["1010093845.title=마이크로 라이트 로퍼"]},
+    {"claimId":"alias-flat","subject":"플랫","relation":"synonym","object":"FLAT","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["2468262.title=[29EDITION] BELLA SLINGBACK / BLACK","2468262.category_path=여성슈즈 > 플랫슈즈 > 플랫"]},
+    {"claimId":"alias-pumps","subject":"펌프스","relation":"synonym","object":"PUMPS","derived":true,"confidence":0.95,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["3069582.title=Ring 리본 새틴 포인티드 토 펌프스"]},
+    {"claimId":"alias-slingback","subject":"슬링백","relation":"synonym","object":"SLINGBACK","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["2468262.title=[29EDITION] BELLA SLINGBACK / BLACK","2748804.title=아린스 베이직 슬링백"]},
+    {"claimId":"alias-kittenheel","subject":"키튼힐","relation":"synonym","object":"KITTEN HEEL","derived":true,"confidence":0.99,"sourceIds":["unified-shoes-20260803"],"evidencePointers":["3959973.title=Ciel Jelly Kitten heel","3959973.category_path=여성슈즈 > 힐/펌프스 > 키튼힐"]}
+  ]
+}

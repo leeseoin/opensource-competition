@@ -1,15 +1,26 @@
 package com.purchasesearch.product_backend.product.service;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 
 import com.purchasesearch.product_backend.product.dto.ProductCandidateRequest;
 import com.purchasesearch.product_backend.product.dto.ProductCandidateResponse;
+import com.purchasesearch.product_backend.product.dto.ProductCandidateResponse.CandidateAssessment;
+import com.purchasesearch.product_backend.product.dto.ProductCandidateResponse.MatchStatus;
 import com.purchasesearch.product_backend.product.dto.ProductSearchResponse;
+import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.OptionView;
+import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.ProductSummary;
+import com.purchasesearch.product_backend.product.service.ProductQueryService.CandidateSearchResult;
+import com.purchasesearch.product_backend.product.service.ProductQueryService.RetrievalSignal;
 import com.purchasesearch.product_backend.research.dto.PurchaseCondition;
+import com.purchasesearch.product_backend.research.dto.PurchaseCondition.ConditionPriority;
+import com.purchasesearch.product_backend.research.dto.PurchaseCondition.PrioritizedShortText;
 
 /**
  * ProductCandidateService는 사용자 질문 문맥을 보존하면서 기존 DB 상품 검색 결과를 후보 계약으로 변환한다.
@@ -59,7 +70,8 @@ public class ProductCandidateService {
 				query,
 				result.totalCount(),
 				result.hasNext(),
-				result.products());
+				result.products(),
+				List.of());
 	}
 
 	/**
@@ -70,31 +82,198 @@ public class ProductCandidateService {
 	 * @return 공통 조건을 적용한 상품 후보 최대 3개
 	 */
 	public ProductCandidateResponse findCandidates(String question, PurchaseCondition conditions) {
-		String sizesCsv = toCsv(conditions.sizes(), true);
-		String colorsCsv = toCsv(conditions.colors(), false);
-		ProductSearchResponse result = productQueryService.searchCandidates(
+		boolean requiredPrice = conditions.price().priority() == ConditionPriority.required;
+		String sizesCsv = toRequiredCsv(conditions.sizes(), true);
+		String colorsCsv = toRequiredCsv(conditions.colors(), false);
+		CandidateSearchResult searchResult = productQueryService.searchCandidates(
 				conditions.merchant(),
-				conditions.productType(),
-				conditions.price().min(),
-				conditions.price().max(),
-				conditions.price().currency(),
+				conditions.productType().value(),
+				requiredPrice ? conditions.price().min() : null,
+				requiredPrice ? conditions.price().max() : null,
+				requiredPrice ? conditions.price().currency() : null,
 				sizesCsv,
 				colorsCsv,
 				DEFAULT_LIMIT);
+		ProductSearchResponse result = searchResult.response();
 		return new ProductCandidateResponse(
 				question.trim(),
-				conditions.productType().trim(),
+				conditions.productType().value().trim(),
 				result.totalCount(),
 				result.hasNext(),
-				result.products());
+				result.products(),
+				result.products().stream()
+						.map(product -> assessCandidate(
+								product,
+								conditions,
+								searchResult.signals().get(product.id())))
+						.toList());
 	}
 
-	/** 사용자 조건 목록을 SQL의 정확한 목록 비교에 사용할 쉼표 경계 문자열로 변환한다. */
-	private String toCsv(List<String> values, boolean size) {
-		if (values.isEmpty()) {
+	/** 최신 상품 사실과 옵션을 구매 조건에 대조해 후보별 설명 가능한 판정을 만든다. */
+	private CandidateAssessment assessCandidate(
+			ProductSummary product,
+			PurchaseCondition conditions,
+			RetrievalSignal retrievalSignal) {
+		MatchStatus sizeStatus = assessOptions(conditions.sizes(), product.options(), OptionView::size, true);
+		MatchStatus colorStatus = assessOptions(conditions.colors(), product.options(), OptionView::color, false);
+		List<String> reasons = new java.util.ArrayList<>();
+		List<String> relaxed = new java.util.ArrayList<>();
+		List<String> unknown = new java.util.ArrayList<>();
+
+		addOptionAssessment("사이즈", conditions.sizes(), sizeStatus, reasons, relaxed, unknown);
+		addOptionAssessment("색상", conditions.colors(), colorStatus, reasons, relaxed, unknown);
+		addPriceAssessment(product, conditions, reasons, relaxed, unknown);
+		conditions.usage().forEach(condition -> addUnsupportedAssessment(
+				"용도", condition.value(), condition.priority(), relaxed, unknown));
+		conditions.requirements().forEach(condition -> addUnsupportedAssessment(
+				"추가 조건", condition.value(), condition.priority(), relaxed, unknown));
+
+		return new CandidateAssessment(
+				product.id(),
+				retrievalSignal == null ? 0.0 : roundScore(retrievalSignal.keywordScore()),
+				retrievalSignal == null || retrievalSignal.semanticScore() == null
+						? null
+						: roundScore(retrievalSignal.semanticScore()),
+				null,
+				freshnessScore(product),
+				evidenceCompletenessScore(product),
+				sizeStatus,
+				colorStatus,
+				reasons,
+				relaxed,
+				unknown);
+	}
+
+	/** 수집 경과 시간을 1일/7일/30일 경계의 설명 가능한 최신성 점수로 변환한다. */
+	private double freshnessScore(ProductSummary product) {
+		if (product.source() == null || product.source().collectedAt() == null) {
+			return 0.0;
+		}
+		OffsetDateTime now = OffsetDateTime.now(product.source().collectedAt().getOffset());
+		long ageDays = Math.max(0, Duration.between(product.source().collectedAt(), now).toDays());
+		if (ageDays <= 1) {
+			return 1.0;
+		}
+		if (ageDays <= 7) {
+			return 0.8;
+		}
+		if (ageDays <= 30) {
+			return 0.5;
+		}
+		return 0.2;
+	}
+
+	/** 최신 가격/재고와 provenance 3개 필드의 제공 비율을 계산한다. */
+	private double evidenceCompletenessScore(ProductSummary product) {
+		int present = 0;
+		present += product.price() == null ? 0 : 1;
+		present += product.stockStatus() == null || product.stockStatus().isBlank() ? 0 : 1;
+		if (product.source() != null) {
+			present += product.source().sourceUrl() == null || product.source().sourceUrl().isBlank() ? 0 : 1;
+			present += product.source().collectedAt() == null ? 0 : 1;
+			present += product.source().collectorVersion() == null
+					|| product.source().collectorVersion().isBlank() ? 0 : 1;
+		}
+		return roundScore(present / 5.0);
+	}
+
+	/** API 점수가 실행 환경의 부동소수점 표현에 흔들리지 않도록 소수 넷째 자리로 고정한다. */
+	private double roundScore(double value) {
+		return Math.round(Math.max(0.0, Math.min(1.0, value)) * 10_000.0) / 10_000.0;
+	}
+
+	/** 최신 재고 옵션에 확인 가능한 값이 있는지와 요청 값의 일치 여부를 판정한다. */
+	private MatchStatus assessOptions(
+			List<PrioritizedShortText> conditions,
+			List<OptionView> options,
+			Function<OptionView, String> valueExtractor,
+			boolean size) {
+		if (conditions.isEmpty()) {
+			return MatchStatus.UNKNOWN;
+		}
+		List<String> observed = options.stream()
+				.filter(option -> "available".equals(option.stockStatus()))
+				.map(valueExtractor)
+				.filter(value -> value != null && !value.isBlank())
+				.map(value -> normalizeValue(value, size))
+				.distinct()
+				.toList();
+		if (observed.isEmpty()) {
+			return MatchStatus.UNKNOWN;
+		}
+		boolean matched = conditions.stream()
+				.map(PrioritizedShortText::value)
+				.map(value -> normalizeValue(value, size))
+				.anyMatch(observed::contains);
+		return matched ? MatchStatus.MATCH : MatchStatus.MISMATCH;
+	}
+
+	/** 옵션 판정을 확인된 이유, 완화된 선호 또는 확인 불가 조건으로 분류한다. */
+	private void addOptionAssessment(
+			String label,
+			List<PrioritizedShortText> conditions,
+			MatchStatus status,
+			List<String> reasons,
+			List<String> relaxed,
+			List<String> unknown) {
+		if (conditions.isEmpty()) {
+			return;
+		}
+		String values = conditions.stream().map(PrioritizedShortText::value).distinct()
+				.reduce((left, right) -> left + "/" + right).orElse("");
+		if (status == MatchStatus.MATCH) {
+			reasons.add(label + " " + values + " 재고 확인");
+			return;
+		}
+		boolean required = conditions.stream()
+				.anyMatch(condition -> condition.priority() == ConditionPriority.required);
+		String description = label + " " + values + " "
+				+ (status == MatchStatus.UNKNOWN ? "판매처 정보 없음" : "불일치");
+		(required ? unknown : relaxed).add(description);
+	}
+
+	/** 가격 조건의 충족, 선호 완화 또는 가격 정보 부족을 후보 설명에 반영한다. */
+	private void addPriceAssessment(
+			ProductSummary product,
+			PurchaseCondition conditions,
+			List<String> reasons,
+			List<String> relaxed,
+			List<String> unknown) {
+		if (product.price() == null) {
+			unknown.add("가격 판매처 정보 없음");
+			return;
+		}
+		boolean matched = product.price().currency().equals(conditions.price().currency())
+				&& (conditions.price().min() == null || product.price().amount() >= conditions.price().min())
+				&& (conditions.price().max() == null || product.price().amount() <= conditions.price().max());
+		if (matched) {
+			reasons.add("가격 조건 충족");
+		} else if (conditions.price().priority() == ConditionPriority.preferred) {
+			relaxed.add("선호 가격 범위 불일치");
+		} else {
+			unknown.add("필수 가격 범위 불일치");
+		}
+	}
+
+	/** 아직 검색 근거가 없는 용도와 추가 조건을 강도에 따라 완화 또는 확인 불가로 표시한다. */
+	private void addUnsupportedAssessment(
+			String label,
+			String value,
+			ConditionPriority priority,
+			List<String> relaxed,
+			List<String> unknown) {
+		String description = label + " " + value + " 평가 근거 없음";
+		(priority == ConditionPriority.required ? unknown : relaxed).add(description);
+	}
+
+	/** 필수 조건만 SQL의 정확한 목록 비교에 사용할 쉼표 경계 문자열로 변환한다. */
+	private String toRequiredCsv(List<PrioritizedShortText> conditions, boolean size) {
+		if (conditions.isEmpty()) {
 			return null;
 		}
-		String joined = values.stream()
+		String joined = conditions.stream()
+				.filter(condition -> condition.priority() == ConditionPriority.required)
+				.map(PrioritizedShortText::value)
 				.map(value -> normalizeValue(value, size))
 				.filter(value -> !value.isBlank())
 				.distinct()

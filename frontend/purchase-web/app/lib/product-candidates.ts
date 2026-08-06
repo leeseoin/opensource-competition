@@ -39,6 +39,21 @@ export interface ProductCandidate {
   source: ProductSource;
 }
 
+/** CandidateAssessment는 후보별 옵션 일치와 완화 또는 확인 불가 조건을 표현한다. */
+export interface CandidateAssessment {
+  candidateId: number;
+  keywordScore: number;
+  semanticScore: number | null;
+  wikiConceptScore: number | null;
+  freshnessScore: number;
+  evidenceCompletenessScore: number;
+  sizeStatus: "MATCH" | "MISMATCH" | "UNKNOWN";
+  colorStatus: "MATCH" | "MISMATCH" | "UNKNOWN";
+  matchReasons: string[];
+  relaxedConditions: string[];
+  unknownConditions: string[];
+}
+
 /** ProductCandidateResponse는 질문에 연결된 DB 상품 후보 API 응답이다. */
 export interface ProductCandidateResponse {
   question: string;
@@ -46,6 +61,7 @@ export interface ProductCandidateResponse {
   totalCount: number;
   hasNext: boolean;
   candidates: ProductCandidate[];
+  assessments: CandidateAssessment[];
 }
 
 const knownProductQueries = [

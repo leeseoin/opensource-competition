@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-08-03
+최종 갱신일: 2026-08-06
 
 ## 목적
 
@@ -39,9 +39,11 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 API | 작업 상태 DB, 동시 저장 보강, 실제 전체 Queue E2E |
+| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, 작업 상태 DB, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 API | 동시 저장 보강, 실제 전체 Queue E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring producer, Go Worker, Spring 결과 Consumer 및 retry/DLQ | 실제 전체 Queue E2E, Redis limiter, 다중 페이지 |
-| 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수·근거·주의사항 연결 |
+| Hybrid 상품 후보 검색 | 부분 구현 | 필수/선호 조건, FTS/trigram, 선택적 pgvector adapter와 60개 DRAFT 평가 | 실제 BGE-M3/10,000개 p95/결정론적 점수 구현 |
+| 검토형 구매 도메인 Wiki | 부분 구현 | DRAFT source/page/schema/lint와 offline 품질 비교 | 사람 검토와 품질 개선 전 운영 비활성화 |
+| 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수, 근거와 주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | stdio MCP 도구, Product Backend REST 연결, Codex 조건 구조화와 확인 후 검색 E2E | stream/취소/Plugin 설치와 Claude Code 실행 경계 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 | 실제 browser/접근성/stream과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
@@ -214,9 +216,37 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 완료 조건: 개발자가 저장소 루트에서 `make help`를 보고 Go, Spring Boot, Next.js와
 로컬 인프라의 기본 실행·검증 명령을 찾을 수 있어야 한다.
 
-### 4. 리뷰 분석과 상품 비교
+### 4. 상품 후보 검색, 지식과 리뷰 분석
 
-상태: **미착수**
+상태: **부분 구현**
+
+#### `ANALYSIS-002` Hybrid 상품 후보 검색
+
+- [x] 현재 SQL `AND` 검색 baseline과 고정 평가 snapshot
+- [x] `required`/`preferred` 구매 조건 계약
+- [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정
+- [x] PostgreSQL 전문 검색/trigram 검색 문서와 index
+- [x] embedding provider port와 content hash/model version
+- [x] PostgreSQL 벡터 검색과 전문 검색 후보 결합
+- [x] embedding 실패 시 전문 검색 fallback
+- [x] 설명 가능한 후보 원시 점수/완화 조건/일치 이유 응답
+- [ ] 필수 조건 위반율/Recall@20/nDCG@3/0건 반환율/p95 평가
+- [ ] 정상/옵션 unknown/조건 완화/embedding 실패/빈 결과 테스트 **(진행 중)**
+
+#### `ANALYSIS-003` 검토형 구매 도메인 Wiki
+
+- [x] immutable source와 source metadata
+- [x] page/relation/claim/version schema
+- [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태와 사람 승인 **(진행 중: schema/lint 완료, 전이와 사람 승인 남음)**
+- [x] `derived`/confidence/source ID 검증
+- [ ] 신발 용도/상품군/색상/판매처 category seed **(진행 중: 상품군/한영 표현 DRAFT 완료)**
+- [ ] Product Backend의 검토 Wiki index 적재
+- [ ] 의미 확장 REST API와 MCP 도구
+- [x] source 없는 Published claim 차단과 Wiki lint
+- [ ] Wiki 없음/오래됨/충돌/조회 실패 fallback
+- [x] 동일 평가 data 기반 Wiki 적용 전후 품질 비교
+
+#### `ANALYSIS-001` 리뷰 분석과 상품 비교
 
 - [ ] 리뷰 최소 저장·개인정보 제거 정책 구현
 - [ ] size signal 규칙 기반 추출
@@ -235,7 +265,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] 과거 추천과 최신 offer 차이 계산
 - [ ] 단위 테스트: 추출·filter·score·diff 경계값
 
-완료 조건: 후보 3개를 필수 조건, 점수 구성, 출처, 수집 시각, 주의사항과 함께 비교하고 동일 입력으로 결과를 재현할 수 있어야 한다.
+완료 조건: 고정 상품 snapshot과 평가 질문에서 필수 조건 위반 없이 후보 검색 단계를
+재현하고, 후보 3개를 검색/비교 점수 구성, 출처, 수집 시각, 완화 조건과 주의사항과
+함께 반환해야 한다. Wiki가 실패해도 전문 검색 fallback이 동작해야 한다.
 
 ### 5. MCP, Agent Gateway와 Plugin
 
@@ -346,7 +378,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | Spring Boot Product Backend 초기화 | 완료 | `services/product-backend/build.gradle:1` `plugins/dependencies`; `src/main/java/com/purchasesearch/product_backend/ProductBackendApplication.java:11` `ProductBackendApplication` | `./gradlew test`: Testcontainers를 포함해 통과 |
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
 | `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌과 Queue E2E 남음 |
-| `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java:71` `publish`; `collection/service/CollectionTaskPublisher.java:73` `publish`, `:111` `createTask`; `collection/config/RabbitCollectionConfiguration.java:48` `collectionSearchTaskQueue`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:71` `publishesSearchTaskThroughHttpEndpoint`; `CollectionResultConsumerIntegrationTests.java:93` `consumesSuccessfulResultAndStoresProducts` | RabbitMQ Testcontainers에서 HTTP 202, 작업 계약/persistent/confirm/멱등성/미지원 page 거절과 결과 저장/DLQ 통과 / 실제 판매처 전체 E2E와 작업 상태 DB 남음 |
+| `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java` `publish/publishPages`; `collection/service/CollectionTaskPublisher.java` `publish/publishPages`; `collection/service/CollectionJobService.java` `register/recordCompleted/recordFailed`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java`; `CollectionResultConsumerIntegrationTests.java` | RabbitMQ Testcontainers에서 단일/다중 페이지 발행, 작업 상태 DB, persistent/confirm/멱등성, 결과 저장/DLQ 통과 / 실제 판매처 전체 E2E와 장애 복구 남음 |
 | `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
 | `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
@@ -367,6 +399,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-07-31 | Product Backend 실행 | Flyway가 비어 있지 않은 `public` schema와 없는 `flyway_schema_history`를 감지해 서버 시작을 중단 | 이전 Python/Alembic 테이블과 데이터가 PostgreSQL Docker Volume에 남아 있음 | 로컬 schema를 정리한 뒤 Flyway V1 적용과 서버 실행 성공 / `flyway_schema_history` 존재, `alembic_version` 없음, Swagger 실제 적재 확인 | 해결 |
 | 2026-07-31 | Spring Boot 검증 | 최종 Gradle 재실행이 사용자 Gradle cache의 lock 파일 접근 권한 때문에 실패 | 격리 실행 환경이 workspace 밖의 `~/.gradle` lock 파일 쓰기를 제한 | 승인된 프로젝트 Gradle Wrapper 명령으로 재실행해 전체 테스트 통과 | 해결 |
 | 2026-08-02 | 29CM 저장 상품 검색 | DB에는 29CM 상품 3개가 있지만 `merchant=29cm&query=구두` 조회 결과가 0개 | Product Backend가 상품명과 브랜드만 검색했고 CollectorResult와 DB에 요청 검색어가 없었음 | CollectorResult에 query/filters를 추가하고 `collection_search_contexts`와 snapshot을 requestId로 연결 / 수집 검색어 조회 통합 테스트 통과 | 해결 |
+| 2026-08-06 | 상품 후보 검색 | `구두`, `면접`, `brown`, `265`, 10만 원 조건을 확인한 뒤 DB 후보가 0개가 됨 | 후보 SQL이 모든 조건을 정확 `AND`로 묶고 용도 의미와 옵션 unknown을 구분하지 않음 | 필수/선호 조건, FTS/trigram, 선택적 vector fallback, 후보 원시 점수와 DRAFT Wiki 품질 gate 구현 | 부분 해결 / 실제 BGE-M3 평가 남음 |
+| 2026-08-06 | 브랜치 공통 기능 | Python Collector 브랜치에 Spring 작업 상태 DB와 다중 페이지 API가 없고 Go Collector 브랜치에는 최신 Codex 인증 수정이 없음 | Collector 실험을 병렬 진행하면서 공통 애플리케이션 commit을 양쪽에 모두 이식하지 않음 | 현재 브랜치에 `sandbox/ls`의 Product Backend 공통 파일 16개를 동일 hash로 복원하고 통합 테스트 통과 / 반대 브랜치에는 commit 승인 후 Hybrid/Codex 공통 변경 이식 예정 | 진행 중 |
+| 2026-08-06 | 동일성 검사 명령 | 첫 파일 hash loop에서 `shasum`, `awk`, `git` 명령을 찾지 못함 | zsh 특수 배열 `path`를 반복 변수로 덮어써 해당 shell의 PATH가 비워짐 | 반복 변수명을 `file_path`로 바꾸고 16개 공통 파일 SHA-256 비교를 재실행 | 해결 |
 | 2026-07-16 | 판매처 정책 | 무신사 검색 구현 후 일반 Collector user-agent가 robots에서 전체 차단됨을 확인 | 무신사 `robots.txt`의 `User-agent: * / Disallow: /` 정책 | 무신사 구현을 제거하고 `User-agent: * / Allow: /`인 ABC마트로 전환 | 해결 |
 | 2026-07-16 | 무신사 parser test | 폐기 전 최소 HTML의 `__NEXT_DATA__` JSON 해석 실패 | 테스트 자료를 줄이는 과정에서 닫는 중괄호가 하나 많았음 | JSON을 수정해 원인을 확인했으나 robots 정책 확인 후 무신사 코드는 최종 제거 | 해결 |
 | 2026-07-16 | ABC마트 검색 조건 | 결과 개수 1개와 270 사이즈를 함께 요청하면 앞 상품이 맞지 않아 결과가 비어 보임 | 서버에서 1개만 받은 뒤 Collector가 사이즈 조건을 적용함 | 서버에서는 최소 30개를 받은 뒤 조건을 적용하고 마지막에 요청 개수만큼 잘라 반환 | 해결 |
@@ -377,6 +412,166 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 2026-07-26 | Queue 통합 검증 | 먼저 실행한 Python 결과 Worker가 결과 도착 직전에 30초 timeout으로 종료 | 권한 승인과 최초 Go Worker 빌드가 결과 Worker 대기 시간보다 오래 걸림 | RabbitMQ에 남아 있던 persistent 결과를 Worker 재실행으로 정상 저장; 상시 Worker에서는 계속 대기하도록 구성 | 해결 |
 | 2026-07-26 | Queue JSON 계약 | 실제 Python 작업 JSON에 선택 가격 필드가 `null`로 포함됐지만 Schema는 정수 또는 필드 생략만 허용 | Pydantic JSON 직렬화가 기본적으로 `None`을 포함 | RabbitMQ 발행과 멱등성 canonical JSON에 `exclude_none=True` 적용, 성공·실패 Schema 예제 재검증 | 해결 |
 | 2026-07-26 | 로컬 명령 보안 | Make가 AMQP URL을 포함한 Worker 실행 명령을 터미널에 그대로 출력 | Make recipe의 기본 echo 동작 | Queue recipe에 `@`를 적용해 비밀번호 포함 URL을 숨기고 루트 `.env` 값을 읽도록 구성 | 해결 |
+
+### 2026-08-06 Python/Go 브랜치 공통 Product Backend 작업 상태 동기화
+
+- 진행상황: **부분 완료**
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionJobController.java:29`
+    `CollectionJobController`: PostgreSQL job 상태 조회 API
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java:103`
+    `publishPages`: 같은 jobId의 연속 페이지 작업 발행 API
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionJobService.java:24`
+    `CollectionJobService`: QUEUED/PROCESSING/COMPLETED/PARTIAL/FAILED 상태와 저장 개수 집계
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionTaskPublisher.java:103`
+    `publishPages`: 페이지별 persistent 메시지와 publisher confirm
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:40`
+    `CollectionTaskPublisherIntegrationTests`: 단일/다중 페이지 발행과 상태 저장 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:47`
+    `CollectionResultConsumerIntegrationTests`: 성공/실패/DLQ 결과와 job 집계 검증
+- 발생 문제: 두 Collector 실험 브랜치의 Spring Boot/MCP/Next.js 공통 영역이 서로 다른
+  시점의 기능을 가지고 있었다.
+- 원인: `sandbox/ls`의 작업 상태 DB/다중 페이지 구현과 `sandbox-python-crawler/ls`의
+  Codex 인증/상품 종류 정규화 수정을 상대 브랜치에 다시 이식하지 않았다.
+- 해결: 현재 Python Collector 브랜치에는 `sandbox/ls`의 공통 Product Backend 구현 16개를
+  파일 SHA-256이 같도록 복원했다. Collector 전용 Go/Python 코드는 복사하지 않았다.
+- 남은 위험: 실제 commit과 반대 브랜치의 Hybrid/Codex 변경 이식은 사용자 commit 승인 뒤
+  진행해야 한다. 최종 공통 경로 hash 감사 전에는 두 브랜치 동일성을 완료로 판정하지 않는다.
+- 검증:
+  - `./gradlew test --tests com.purchasesearch.product_backend.CollectionTaskPublisherIntegrationTests --tests com.purchasesearch.product_backend.CollectionResultConsumerIntegrationTests --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+  - `sandbox/ls` 원본과 16개 Product Backend 공통 파일 SHA-256 비교: 모두 일치
+
+### 2026-08-06 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계
+
+- 진행상황: 현재 SQL 정확 조건 검색의 0건 반환 문제를 재현 가능한 검색 품질 문제로
+  정의하고, Hybrid 상품 후보 검색과 검토형 구매 도메인 Wiki를 각각
+  `ANALYSIS-002`, `ANALYSIS-003` planned 기능으로 분리했다.
+- 설계 위치:
+  - `docs/architecture/상품_후보_Hybrid_RAG와_LLM_Wiki_설계.md:1` 전체 검색/지식/평가 설계
+  - `docs/architecture/Purchase_Research_Agent_시스템_구조.md` 상품 후보 검색 전략과 책임 경계
+  - `docs/planning/Purchase_Research_Agent_기능_목록.md` 새 기능 ID와 완료 기준
+  - `docs/planning/Purchase_Research_Agent_TODO.md` 단계별 원자 작업
+- 발생 문제: 사용자가 확인한 상품 종류, 가격, 통화, 재고, 사이즈와 색상을 모두 정확
+  조건으로 적용하면 용도와 동의어를 해석하지 못하고 옵션 정보가 없는 판매처 상품도
+  제외될 수 있다.
+- 해결 방향: 판매처 사실은 최신 snapshot의 구조화 필터로 유지하고, 전문 검색/벡터
+  검색/검토형 Wiki를 단계별로 비교한다. Wiki는 가격과 재고를 저장하지 않고 출처가
+  있는 구매 목적/상품군/동의어 관계만 사람 승인 후 검색에 사용한다.
+- AI 사용과 사람 검토: OpenAI Codex가 기존 코드와 문서, 사용자의 방향 제시를 바탕으로
+  설계 문서와 기능 분해 초안을 작성했다. 사용자는 구현 전에 문서를 먼저 작성하는
+  방향을 확인했으며, embedding provider/모델과 Wiki seed claim의 상세 내용은 구현 전
+  사람이 추가 검토해야 한다.
+- 남은 위험: 평가 질문과 relevance 판정 data가 아직 없으므로 Recall@20, nDCG@3와
+  latency 목표는 설계 기준일 뿐 실제 통과 결과가 아니다. 새 의존성/모델을 추가하지
+  않았으므로 이번 문서 작업에서는 `THIRD_PARTY_NOTICES.md`와 `AI_USAGE.md`의 runtime
+  구성은 변경하지 않는다.
+
+### 2026-08-06 ANALYSIS-002 SQL baseline/조건 강도/PostgreSQL 전문 검색
+
+- 진행상황: **부분 구현**
+- 구현 위치:
+  - `contracts/research/v1/purchase-condition.schema.json:1` `PurchaseCondition`: 각 조건의
+    `required`/`preferred` 강도 계약
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/dto/PurchaseCondition.java:15`
+    `PurchaseCondition`: Java 조건 강도 DTO와 validation
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:72`
+    `findCandidates`: 필수 가격/사이즈/색상만 SQL 제외 조건으로 적용
+  - `services/product-backend/src/main/resources/db/migration/V6__add_product_full_text_search.sql:1`
+    `pg_trgm/search_text/index`: PostgreSQL 전문 검색과 trigram index
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:82`
+    `searchCandidates`: SQL baseline 선택과 전문 검색/trigram fallback
+  - `services/mcp-server/src/index.ts:7` `conditionSchema`: MCP 조건 강도 입력 검증
+  - `frontend/purchase-web/app/lib/research-session.ts:3` `PurchaseCondition`: Web 공통 조건
+    type guard
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:35` `ChatExperience`: 조건별 필수/선호
+    확인 UI
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:512`
+    `measuresExactMatchForSqlAndCandidateBaseline` 외: SQL 정확 일치/false zero/조건 강도/
+    한국어 오타 복구 검증
+- 발생 문제: baseline 정확 일치 테스트가 최초 0건을 반환했고, 기본 trigram operator로는
+  `구두우` 오타를 복구하지 못했다.
+- 원인: ABC마트 고정 fixture의 option color가 `null`인데 테스트가 `black` 정확 조건을
+  넣었으며, PostgreSQL `word_similarity_threshold` 기본값이 짧은 한국어 오타 사례보다
+  높았다.
+- 해결: baseline은 fixture가 실제 제공하는 사이즈만 정확 조건으로 사용했다. 전문 검색은
+  전역 DB 설정을 바꾸지 않고 `WORD_SIMILARITY` 점수 0.3 이상을 query에 명시해 재현성을
+  확보했다. 선호 색상과 가격은 후보를 제거하지 않고 필수 조건만 제외 조건으로 적용했다.
+- 남은 위험: 현재 0.3 임계값은 60개 평가 질문과 10,000개 snapshot benchmark로 조정하지
+  않았다. 한국어 동의어/용도 의미 검색, 옵션 `MATCH`/`MISMATCH`/`UNKNOWN`, 후보 점수와
+  완화 이유, 벡터 검색과 Wiki는 아직 구현 전이다.
+- 검증:
+  - `services/product-backend`에서 `./gradlew test --tests 'com.purchasesearch.product_backend.ProductStorageIntegrationTests'`: 통과
+  - `services/mcp-server`에서 `npm test`: 통과
+  - `frontend/purchase-web`에서 `npm test`: 통과
+  - `frontend/purchase-web`에서 `npm run build`: 통과
+
+### 2026-08-06 ANALYSIS-002/003 검색 평가, 선택적 벡터와 DRAFT Wiki Lite
+
+- 진행상황: **부분 구현**
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V7__add_product_embeddings.sql:1`
+    `vector/product_embeddings`: pgvector extension, 1024차원 embedding과 HNSW index
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/embedding/EmbeddingProvider.java:6`
+    `EmbeddingProvider`: provider 비종속 embedding port
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/embedding/OllamaEmbeddingProvider.java:21`
+    `OllamaEmbeddingProvider`: 선택적 로컬 BGE-M3 호출/차원/유한값/timeout 검증
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/embedding/ProductEmbeddingService.java:21`
+    `ProductEmbeddingService`: 검색 문서 hash 기반 갱신과 provider 실패 fallback
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:242`
+    `searchCandidates`: 구조화 필터를 유지한 FTS/trigram/vector 후보 결합
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:329`
+    `findCandidateRetrievalSignals`: exact/FTS/trigram/vector 원시 점수 계산
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:113`
+    `assessCandidate`: 검색/최신성/근거 완전성 점수와 옵션/완화 근거 응답
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:52`
+    `comparesSqlBaselineAndFullTextRetrievalOnDraftDataset`: 20개 snapshot/60개 DRAFT 질문의
+    SQL/FTS/DRAFT Wiki 동일 조건 평가
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalPerformanceIntegrationTests.java:42`
+    `keepsTenThousandSnapshotFullTextSearchBelowOneSecondP95`: 10,000개 로컬 snapshot의
+    구조화 조건/FTS/trigram p95 opt-in 평가
+  - `knowledge/wiki/shoes-taxonomy-v1.json:1` `shoes-taxonomy`: 상품군/한영 표현 DRAFT claim
+  - `scripts/check-retrieval-evaluation.sh:1`: 평가 질문 유형/ID/snapshot relevance 검사
+  - `scripts/check-wiki.sh:1`: source 해시/claim 출처/중복 ID/Published 사람 검토 검사
+- 측정 결과:
+  - SQL baseline: Recall@20 0.7333, nDCG@3 0.6671, false zero 0.1600, 정답 없음 정확도 1.0000
+  - FTS/trigram: Recall@20 0.7533, nDCG@3 0.6871, false zero 0.1400, 정답 없음 정확도 1.0000
+  - FTS + DRAFT Wiki 모의 확장: Recall@20 0.7667, nDCG@3 0.6848, false zero 0.1400,
+    정답 없음 정확도 1.0000
+  - 10,000개 FTS/trigram: 5회 warm-up/30회 측정, p50 325.129ms, p95 336.220ms,
+    max 364.050ms
+- 발생 문제:
+  - DRAFT Wiki 확장은 Recall@20을 높였지만 nDCG@3은 FTS 단독보다 낮아졌다.
+  - JSON Schema CLI 실행을 위해 시도한 `uvx`는 격리 환경 밖 cache 권한과 offline 제약으로
+    실행하지 못했다.
+  - 로컬 Ollama에는 BGE-M3가 설치되어 있지 않아 실제 모델 기반 60개 평가를 실행할 수
+    없었다.
+  - 루트 `make check`의 첫 전체 실행에서는 빈 `EMBEDDING_PROVIDER` 환경변수가 Spring의
+    `disabled` 기본값을 덮어써 `EmbeddingProvider` bean이 생성되지 않았다.
+- 원인:
+  - `구두`의 여러 하위 상품군을 동시에 확장하면 관련 후보 회수는 늘지만 reciprocal rank
+    fusion에서 최상위 relevance 순서가 일부 바뀐다.
+  - 현재 평가 질문과 relevance도 사람 검토 전 DRAFT이며 모델 image는 작업 전에 준비되지
+    않았다.
+  - Makefile이 값이 없는 embedding 변수를 그대로 하위 Gradle process에 export했다.
+- 해결:
+  - Wiki page를 DRAFT로 유지하고 Product Backend/MCP 운영 검색에는 연결하지 않았다.
+    source SHA-256과 출처 연결, 사람 검토 없는 Published 상태를 lint로 차단했다.
+  - 평가 JSON은 저장소의 기존 Python 가상환경 `jsonschema`와 별도의 jq 불변식 검사로
+    검증했다. 새로운 package나 cache는 만들지 않았다.
+  - Makefile에 disabled provider와 로컬 BGE-M3 설정 기본값을 두어 `.env`가 없어도 Spring
+    fallback bean 계약을 유지했다.
+- 남은 위험:
+  - Recall@20 0.90, nDCG@3 0.80과 false zero 0.05 미만 목표를 아직 충족하지 못했다.
+  - 실제 BGE-M3 비교, 합계 가중치와 결정론적 재정렬, 비동기 embedding 작업 분리 및 60개 relevance 사람
+    검토가 남았다. 10,000개 수치는 합성 로컬 PostgreSQL 검색만 포함하므로 실제 운영
+    hardware와 수집/네트워크 시간에는 일반화할 수 없다.
+- 검증:
+  - 루트에서 `make retrieval-eval-check wiki-check`: 통과
+  - `services/product-backend`에서 `./gradlew test --tests com.purchasesearch.product_backend.RetrievalEvaluationIntegrationTests --info`: 통과
+  - 루트에서 `make retrieval-perf-test`: 10,000개 p95 336.220ms로 1초 기준 통과
+  - 루트에서 `make check`: Go/Python Collector, Spring Boot, MCP, Next.js test/lint/build 및
+    문서/평가/Wiki/Compose 검사 통과
+  - 결과: DRAFT Wiki는 Recall 개선/nDCG@3 하락으로 운영 비활성화
 
 ### 2026-07-16 Go Collector 기본 골격 테스트와 한국어 주석 정비
 
@@ -1506,7 +1701,6 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 ## 다음 갱신 대상
 
 - RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
-- `collection_jobs`와 `collection_tasks` 작업 상태 저장
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
 - 실제 browser 기반 구매 질문 E2E와 접근성 검증

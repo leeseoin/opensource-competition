@@ -1,7 +1,7 @@
 # Collection Queue Contract v1
 
 작성일: 2026-07-26
-최종 수정일: 2026-07-30
+최종 수정일: 2026-08-04
 
 ## 목적
 
@@ -25,7 +25,7 @@ Product Backend Result Consumer
 
 - operation: `search`
 - 판매처: ABC마트와 29CM
-- 페이지: 계약은 `page`를 포함하지만 현재 Worker는 `page=1`만 처리
+- 페이지: 1부터 200까지 지원하며 한 Queue 메시지는 한 페이지만 처리
 - 기본 시도 횟수: 최초 실행을 포함해 최대 2회
 - 임의 URL: 작업에 받지 않으며 Go 판매처 Adapter가 공개 수집 URL 생성
 
@@ -51,7 +51,19 @@ Product Backend는 판매처, operation, 검색 payload를 정렬한 JSON으로 
 collection:v1:{sha256}
 ```
 
-현재 메시지에는 키를 기록하지만 실제 중복 등록 차단은 Redis adapter 구현 후 활성화한다.
+페이지 값도 검색 payload에 포함되므로 페이지별 멱등성 키는 서로 다르다. 현재 메시지에는
+키를 기록하지만 실제 중복 등록 차단은 Redis adapter 구현 후 활성화한다.
+
+## 여러 페이지 작업 등록
+
+Product Backend의 `POST /internal/v1/collection-tasks/pages`는 같은 검색 조건을
+페이지별 작업으로 나눈다. 각 작업은 서로 다른 `taskId`를 사용하고 전체 작업은 같은
+`jobId`를 공유한다. `startPage + pageCount - 1`은 200을 넘을 수 없고 페이지당
+상품 수는 최대 50개이므로 한 번의 요청은 최대 10,000개 범위를 표현할 수 있다.
+
+RabbitMQ 발행 도중 실패하면 앞에서 확인된 작업은 이미 Queue에 남을 수 있다. Product
+Backend는 `collection_jobs`와 `collection_tasks`에 발행 실패 및 완료 결과를 남기며,
+Redis 중복 차단은 후속 구현 범위다.
 
 ## 검증
 

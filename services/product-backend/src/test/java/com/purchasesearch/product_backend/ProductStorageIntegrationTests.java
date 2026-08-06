@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.flywaydb.core.Flyway;
@@ -16,7 +17,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,6 +83,9 @@ class ProductStorageIntegrationTests {
 
 	@Autowired
 	private Flyway flyway;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	/**
 	 * 실제 CollectorResult JSON을 내부 HTTP API에 전송하면 검증과 transaction 저장 후
@@ -337,7 +343,8 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.status").value("DRAFT"))
 				.andExpect(jsonPath("$.runtime").value("codex"))
 				.andExpect(jsonPath("$.pluginId").value("purchase-research-agent"))
-				.andExpect(jsonPath("$.conditions.productType").value("구두"))
+				.andExpect(jsonPath("$.conditions.productType.value").value("구두"))
+				.andExpect(jsonPath("$.conditions.productType.priority").value("required"))
 				.andExpect(jsonPath("$.result").doesNotExist());
 
 		assertThat(researchSessionRepository.count()).isEqualTo(1);
@@ -410,7 +417,14 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.status").value("CONFIRMED"))
 				.andExpect(jsonPath("$.result.candidates.length()").value(1))
 				.andExpect(jsonPath("$.result.candidates[0].merchant").value("abcmart"))
-				.andExpect(jsonPath("$.result.candidates[0].source.sourceUrl").exists());
+				.andExpect(jsonPath("$.result.candidates[0].source.sourceUrl").exists())
+				.andExpect(jsonPath("$.result.assessments[0].sizeStatus").value("MATCH"))
+				.andExpect(jsonPath("$.result.assessments[0].colorStatus").value("UNKNOWN"))
+				.andExpect(jsonPath("$.result.assessments[0].keywordScore").value(1.0))
+				.andExpect(jsonPath("$.result.assessments[0].semanticScore").doesNotExist())
+				.andExpect(jsonPath("$.result.assessments[0].wikiConceptScore").doesNotExist())
+				.andExpect(jsonPath("$.result.assessments[0].evidenceCompletenessScore").value(1.0))
+				.andExpect(jsonPath("$.result.assessments[0].matchReasons[0]").value("사이즈 270 재고 확인"));
 	}
 
 	/**
@@ -444,6 +458,212 @@ class ProductStorageIntegrationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.result.totalCount").value(0))
 				.andExpect(jsonPath("$.result.candidates").isEmpty());
+	}
+
+	/**
+	 * 판매처가 색상 값을 제공하지 않은 상품은 선호 색상 때문에 제거하지 않지만 같은 색상을
+	 * 필수로 확인하면 후보에서 제외하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void appliesRequiredAndPreferredColorStrengthToResearchCandidates() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		String preferredColor = purchaseCondition("[]").replace(
+				"\"colors\": []",
+				"\"colors\": [{\"value\": \"갈색\", \"priority\": \"preferred\"}]");
+		String preferredSessionId = createConfirmedResearchSession("갈색이면 좋은 구두", preferredColor);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", preferredSessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.assessments[0].colorStatus").value("UNKNOWN"))
+				.andExpect(jsonPath("$.result.assessments[0].relaxedConditions")
+						.value(org.hamcrest.Matchers.hasItem("색상 갈색 판매처 정보 없음")));
+
+		String requiredColor = preferredColor.replace("\"priority\": \"preferred\"", "\"priority\": \"required\"");
+		String requiredSessionId = createConfirmedResearchSession("갈색이어야 하는 구두", requiredColor);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", requiredSessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(0));
+	}
+
+	/**
+	 * 선호 가격 상한은 후보를 제거하지 않고 같은 상한을 필수로 확인한 경우에만 제외하는지
+	 * 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void appliesRequiredAndPreferredPriceStrengthToResearchCandidates() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		String preferredPrice = purchaseCondition("[]")
+				.replace("\"max\": 100000", "\"max\": 60000")
+				.replace("\"currency\": \"KRW\", \"priority\": \"required\"",
+						"\"currency\": \"KRW\", \"priority\": \"preferred\"");
+		String preferredSessionId = createConfirmedResearchSession("6만 원대면 좋은 구두", preferredPrice);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", preferredSessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(1));
+
+		String requiredPrice = preferredPrice.replace(
+				"\"currency\": \"KRW\", \"priority\": \"preferred\"",
+				"\"currency\": \"KRW\", \"priority\": \"required\"");
+		String requiredSessionId = createConfirmedResearchSession("6만 원 이하여야 하는 구두", requiredPrice);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", requiredSessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(0));
+	}
+
+	/**
+	 * 현재 SQL AND baseline이 상품명에 없는 수집 검색어와 정확한 옵션 조건을 사용해 후보를
+	 * 찾는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장에 실패한 경우
+	 */
+	@Test
+	void measuresExactMatchForSqlAndCandidateBaseline() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+
+		var result = merchantProductRepository.searchCandidates(
+				"abcmart",
+				"구두",
+				null,
+				100000L,
+				"KRW",
+				",270,",
+				null,
+				false,
+				null,
+				null,
+				null,
+				PageRequest.of(0, 20));
+
+		assertThat(result.getTotalElements()).isEqualTo(1);
+		assertThat(result.getContent())
+				.singleElement()
+				.satisfies(product -> assertThat(product.getExternalId()).isEqualTo("1010110882"));
+	}
+
+	/**
+	 * 현재 SQL AND baseline이 사람 판정상 구두 후보인 페니 로퍼를 상품명과 수집 검색어의
+	 * 문자열 불일치 때문에 찾지 못하는 false zero를 측정한다.
+	 *
+	 * @throws Exception fixture 저장에 실패한 경우
+	 */
+	@Test
+	void measuresSemanticFalseZeroForSqlAndCandidateBaseline() throws Exception {
+		CollectorResult semanticCandidate = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("\"query\": \"구두\"", "\"query\": \"로퍼\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(semanticCandidate);
+
+		var result = merchantProductRepository.searchCandidates(
+				"abcmart",
+				"구두",
+				null,
+				100000L,
+				"KRW",
+				",270,",
+				null,
+				false,
+				null,
+				null,
+				null,
+				PageRequest.of(0, 20));
+
+		assertThat(result.getTotalElements()).isZero();
+	}
+
+	/**
+	 * SQL 정확 일치 baseline이 놓치는 한국어 검색어 오타를 pg_trgm 후보 검색이 수집 검색
+	 * 문맥에서 복구하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void recoversKoreanQueryTypoWithPostgresTrigramSearch() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+
+		var baseline = merchantProductRepository.searchCandidates(
+				"abcmart",
+				"구두우",
+				null,
+				100000L,
+				"KRW",
+				",270,",
+				null,
+				false,
+				null,
+				null,
+				null,
+				PageRequest.of(0, 20));
+		assertThat(baseline.getTotalElements()).isZero();
+
+		String typoCondition = purchaseCondition("[]").replace(
+				"\"value\": \"구두\"",
+				"\"value\": \"구두우\"");
+		String sessionId = createConfirmedResearchSession("구두우를 찾아줘", typoCondition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].externalId").value("1010110882"));
+	}
+
+	/**
+	 * 전문 검색으로 찾지 못하는 상품을 같은 1024차원 fixture embedding의 cosine 유사도로
+	 * 회수하면서 가격/재고/사이즈 필터는 그대로 적용하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장에 실패한 경우
+	 */
+	@Test
+	void retrievesStructurallyEligibleCandidateWithPgvector() throws Exception {
+		CollectorResult semanticCandidate = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("\"query\": \"구두\"", "\"query\": \"로퍼\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(semanticCandidate);
+		long merchantProductId = merchantProductRepository.findAll().getFirst().getId();
+		String vector = unitVectorLiteral(0);
+		jdbcTemplate.update("""
+				INSERT INTO product_embeddings
+				    (merchant_product_id, provider, model, model_version, content_hash, embedding)
+				VALUES (?, 'fixture', 'semantic', 'test', ?, CAST(? AS vector))
+				""", merchantProductId, "0".repeat(64), vector);
+
+		var result = merchantProductRepository.searchCandidates(
+				"abcmart",
+				"정장 구두",
+				null,
+				100000L,
+				"KRW",
+				",270,",
+				null,
+				true,
+				"fixture",
+				"semantic@test",
+				vector,
+				PageRequest.of(0, 20));
+
+		assertThat(result.getTotalElements()).isEqualTo(1);
+		assertThat(result.getContent().getFirst().getExternalId()).isEqualTo("1010110882");
+		var signals = merchantProductRepository.findCandidateRetrievalSignals(
+				List.of(merchantProductId),
+				"정장 구두",
+				"fixture",
+				"semantic@test",
+				vector);
+		assertThat(signals).singleElement()
+				.satisfies(signal -> {
+					assertThat(signal.getCandidateId()).isEqualTo(merchantProductId);
+					assertThat(signal.getKeywordScore()).isBetween(0.0, 1.0);
+					assertThat(signal.getSemanticScore()).isEqualTo(1.0);
+				});
 	}
 
 	/**
@@ -502,8 +722,8 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
-	 * OpenAPI JSON에 수동 적재와 상품 조회 경로가 포함되고 Swagger UI 진입 주소가
-	 * 정상적으로 제공되는지 검증한다.
+	 * OpenAPI JSON에 수동 적재, 상품 조회, 작업 상태와 짧은 페이지 수집 예시가 포함되고
+	 * Swagger UI 진입 주소가 정상적으로 제공되는지 검증한다.
 	 *
 	 * @throws Exception OpenAPI 또는 Swagger UI 요청에 실패한 경우
 	 */
@@ -518,7 +738,17 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.paths['/internal/v1/products'].get")
 						.exists())
 				.andExpect(jsonPath("$.paths['/internal/v1/product-candidates/search'].post")
-						.exists());
+						.exists())
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-jobs/{jobId}'].get")
+						.exists())
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-tasks/pages'].post"
+						+ ".requestBody.content['application/json'].examples"
+						+ "['ABC마트 1페이지 소량 수집'].value.merchant")
+						.value("abcmart"))
+				.andExpect(jsonPath("$.paths['/internal/v1/collection-tasks/pages'].post"
+						+ ".requestBody.content['application/json'].examples"
+						+ "['ABC마트 1페이지 소량 수집'].value.limit")
+						.value(3));
 
 		mockMvc.perform(get("/swagger-ui.html"))
 				.andExpect(status().is3xxRedirection());
@@ -569,6 +799,48 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 테스트용 구매 조건을 DRAFT 조사 세션으로 저장하고 사용자 확인 상태로 전환한다.
+	 *
+	 * @param question 테스트 사용자 질문
+	 * @param condition PurchaseCondition JSON
+	 * @return 확인된 조사 세션 식별자
+	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우
+	 */
+	private String createConfirmedResearchSession(String question, String condition) throws Exception {
+		String response = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{
+							  "question": "%s",
+							  "runtime": "codex",
+							  "pluginId": "purchase-research-agent",
+							  "conditions": %s
+							}
+							""".formatted(question, condition)))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(response).get("sessionId").asText();
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + condition + "}"))
+				.andExpect(status().isOk());
+		return sessionId;
+	}
+
+	/**
+	 * 지정 위치만 1이고 나머지는 0인 1024차원 pgvector fixture를 생성한다.
+	 *
+	 * @param unitIndex 값 1을 둘 차원 위치
+	 * @return pgvector 대괄호 literal
+	 */
+	private String unitVectorLiteral(int unitIndex) {
+		String[] values = new String[1024];
+		java.util.Arrays.fill(values, "0");
+		values[unitIndex] = "1";
+		return "[" + String.join(",", values) + "]";
+	}
+
+	/**
 	 * 테스트에서 사용자 확인 전후에 사용할 구매 조건 JSON을 만든다.
 	 *
 	 * @param missingConditions 추가 확인이 필요한 조건 JSON 배열
@@ -577,12 +849,12 @@ class ProductStorageIntegrationTests {
 	private String purchaseCondition(String missingConditions) {
 		return """
 				{
-				  "productType": "구두",
-				  "usage": ["출근"],
-				  "price": {"min": null, "max": 100000, "currency": "KRW"},
+				  "productType": {"value": "구두", "priority": "required"},
+				  "usage": [{"value": "출근", "priority": "preferred"}],
+				  "price": {"min": null, "max": 100000, "currency": "KRW", "priority": "required"},
 				  "colors": [],
-				  "sizes": ["270"],
-				  "requirements": ["편안함"],
+				  "sizes": [{"value": "270", "priority": "required"}],
+				  "requirements": [{"value": "편안함", "priority": "preferred"}],
 				  "merchant": "abcmart",
 				  "missingConditions": %s,
 				  "assumptions": [],

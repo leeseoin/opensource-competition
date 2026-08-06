@@ -50,3 +50,11 @@ springdoc:
     operations-sorter: method
     tags-sorter: alpha
     document-title: Purchase Research Product Backend API
+
+purchase:
+  embedding:
+    provider: ${EMBEDDING_PROVIDER:disabled}
+    base-url: ${EMBEDDING_BASE_URL:http://127.0.0.1:11434}
+    model: ${EMBEDDING_MODEL:bge-m3:567m}
+    model-version: ${EMBEDDING_MODEL_VERSION:ollama-bge-m3-567m-q4_0}
+    timeout-ms: ${EMBEDDING_TIMEOUT_MS:3000}

@@ -9,12 +9,12 @@ import {
 } from "./codex-runtime.ts";
 
 const validCondition = {
-  productType: "구두",
-  usage: ["출근"],
-  price: { min: null, max: 100000, currency: "KRW" },
-  colors: ["검정"],
-  sizes: ["270"],
-  requirements: ["편안함"],
+  productType: { value: "구두", priority: "required" },
+  usage: [{ value: "출근", priority: "preferred" }],
+  price: { min: null, max: 100000, currency: "KRW", priority: "required" },
+  colors: [{ value: "검정", priority: "preferred" }],
+  sizes: [{ value: "270", priority: "required" }],
+  requirements: [{ value: "편안함", priority: "preferred" }],
   merchant: null,
   missingConditions: [],
   assumptions: [],
@@ -32,7 +32,7 @@ test("Codex를 읽기 전용 구조화 모드로 실행한다", async () => {
     return JSON.stringify(validCondition);
   });
 
-  assert.equal(result.productType, "구두");
+  assert.equal(result.productType.value, "구두");
   assert.ok(receivedArgs.includes("read-only"));
   assert.ok(receivedArgs.includes("--output-schema"));
   assert.match(receivedPrompt, /Purchase Research/);
@@ -69,11 +69,11 @@ test("Codex 일반 실행 실패에서 stderr를 노출하지 않는다", () => 
 test("상품 종류에서 구조화된 색상 중복을 제거한다", async () => {
   const result = await structurePurchaseQuestion("검정 구두를 찾아줘", async () => JSON.stringify({
     ...validCondition,
-    productType: "검정 구두",
+    productType: { value: "검정 구두", priority: "required" },
   }));
 
-  assert.equal(result.productType, "구두");
-  assert.deepEqual(result.colors, ["검정"]);
+  assert.equal(result.productType.value, "구두");
+  assert.deepEqual(result.colors, [{ value: "검정", priority: "preferred" }]);
 });
 
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */

@@ -80,7 +80,7 @@
 .missingAlert { margin-top: 18px; padding: 12px; background: #fff0b8; font-size: 13px; font-weight: 700; line-height: 1.5; }
 .conditionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
 .conditionGrid label { display: grid; gap: 7px; font-size: 11px; font-weight: 800; }
-.conditionGrid input { min-width: 0; padding: 11px; border: 1px solid var(--ink); background: var(--paper); font: inherit; }
+.conditionGrid input, .conditionGrid select { min-width: 0; padding: 11px; border: 1px solid var(--ink); background: var(--paper); font: inherit; }
 .assumptions { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #d9d5cb; font-size: 12px; }
 .confirmActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .confirmActions button { padding: 12px 18px; cursor: pointer; font-weight: 900; }

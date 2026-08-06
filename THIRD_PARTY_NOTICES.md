@@ -71,6 +71,8 @@
 | Spring Dependency Management Plugin | 1.1.7 | Gradle 의존성 버전 관리 | [spring-gradle-plugins/dependency-management-plugin](https://github.com/spring-gradle-plugins/dependency-management-plugin) | Apache-2.0 |
 | Flyway | 12.4.0 | PostgreSQL schema migration | [flyway/flyway](https://github.com/flyway/flyway) | Apache-2.0 |
 | PostgreSQL JDBC Driver | 42.7.11 | PostgreSQL 연결 | [pgjdbc/pgjdbc](https://github.com/pgjdbc/pgjdbc) | BSD-2-Clause |
+| PostgreSQL pg_trgm | PostgreSQL 16 bundled | 상품 검색 trigram 유사도와 GIN index | [PostgreSQL pg_trgm](https://www.postgresql.org/docs/16/pgtrgm.html) | PostgreSQL License |
+| pgvector | 0.8.2 | PostgreSQL 1024차원 cosine vector 검색과 HNSW index | [pgvector/pgvector](https://github.com/pgvector/pgvector/tree/v0.8.2) | PostgreSQL License |
 | Lombok | 1.18.46 | Java 반복 코드 생성 | [projectlombok/lombok](https://github.com/projectlombok/lombok) | MIT |
 | springdoc-openapi | 3.0.3 | OpenAPI 문서 자동 생성과 Swagger UI 연결 | [springdoc/springdoc-openapi](https://github.com/springdoc/springdoc-openapi) | Apache-2.0 |
 | Swagger UI | 5.32.2 | browser에서 내부 API 조회와 수동 호출 | [swagger-api/swagger-ui](https://github.com/swagger-api/swagger-ui) | Apache-2.0 |
@@ -111,7 +113,7 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 
 | 구성요소 | 버전 | 용도 | 출처 | 라이선스 |
 |---|---:|---|---|---|
-| PostgreSQL Docker Official Image | 16-alpine | 상품 데이터 저장 | [docker-library/postgres](https://github.com/docker-library/postgres) | image packaging MIT / PostgreSQL PostgreSQL License |
+| pgvector PostgreSQL Docker Image | 0.8.2-pg16 | 상품 데이터와 vector 검색 저장 | [pgvector/pgvector](https://github.com/pgvector/pgvector/tree/v0.8.2) | pgvector PostgreSQL License / base PostgreSQL PostgreSQL License / image 구성요소별 라이선스 상이 |
 | Redis Docker Official Image | 7.2-alpine | 속도 제한, 중복 방지, 진행 상태 | [docker-library/redis](https://github.com/docker-library/redis) | Redis 7.2 BSD-3-Clause / image 내 배포 구성요소별 라이선스 상이 |
 | RabbitMQ Docker Official Image | 4.2-management-alpine | 수집 작업과 결과 Queue | [docker-library/rabbitmq](https://github.com/docker-library/rabbitmq) | RabbitMQ MPL-2.0 / image 내 배포 구성요소별 라이선스 상이 |
 | actions/checkout | v4 | 문서 동기화 CI의 저장소 checkout | [actions/checkout](https://github.com/actions/checkout) | MIT |
@@ -122,6 +124,10 @@ Docker image에는 Alpine Linux와 여러 system package가 포함되므로 위 
 
 - `plugins/purchase-research-agent`는 이 저장소에서 직접 작성 중인 Codex Plugin이다.
 - `services/mcp-server`는 공식 MCP TypeScript SDK와 Zod를 사용해 stdio 도구를 제공한다.
+- 선택적 로컬 embedding adapter는 `BAAI/bge-m3`를 Ollama `bge-m3:567m` tag로 호출한다.
+  BGE-M3는 1024차원/다국어 공개 weight model이며 [BAAI model card](https://huggingface.co/BAAI/bge-m3)에
+  MIT로 표시돼 있다. weight는 저장소와 Docker image에 포함하지 않으며 제출 전 Ollama manifest
+  digest와 배포 artifact의 license metadata를 다시 확인한다.
 - Ollama, llama.cpp 및 GPU model server는 계획 단계이며 현재 실행 의존성이나 내장 model이 아니다.
 - 외부 AI model을 runtime에 추가하면 이름, 정확한 version, 제공자, 출처, weight 공개 여부, license 및 실행 방식을 이 문서와 `AI_USAGE.md`에 함께 기록한다.
 

@@ -2,7 +2,7 @@ name: purchase-research-agent
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.2-pg16
     # 루트 .env 값이 있으면 사용하고, 없으면 :- 뒤의 로컬 개발 기본값을 사용한다.
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-purchase_research}
