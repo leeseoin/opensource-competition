@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CodexRuntimeError, structurePurchaseQuestion } from "./codex-runtime.ts";
+import {
+  classifyCodexProcessFailure,
+  CodexRuntimeError,
+  resolveCodexCommand,
+  structurePurchaseQuestion,
+} from "./codex-runtime.ts";
 
 const validCondition = {
   productType: "구두",
@@ -32,6 +37,32 @@ test("Codex를 읽기 전용 구조화 모드로 실행한다", async () => {
   assert.ok(receivedArgs.includes("--output-schema"));
   assert.match(receivedPrompt, /Purchase Research/);
   assert.match(receivedPrompt, /검정 구두를 찾아줘/);
+});
+
+/** 비어 있는 Codex 실행 경로는 PATH에서 찾는 기본 명령으로 복구하는지 검증한다. */
+test("빈 Codex 실행 경로에 기본 명령을 사용한다", () => {
+  assert.equal(resolveCodexCommand(""), "codex");
+  assert.equal(resolveCodexCommand("  "), "codex");
+  assert.equal(resolveCodexCommand("/opt/homebrew/bin/codex"), "/opt/homebrew/bin/codex");
+});
+
+/** 폐기된 OAuth token 오류를 프롬프트 비노출 인증 안내로 변환하는지 검증한다. */
+test("Codex 인증 만료 오류에서 stderr를 노출하지 않는다", () => {
+  const stderr = "비공개 Plugin 규칙 token_invalidated refresh_token_invalidated";
+  const error = classifyCodexProcessFailure(stderr);
+
+  assert.equal(error.code, "AI_AUTH_REQUIRED");
+  assert.match(error.message, /codex logout/);
+  assert.doesNotMatch(error.message, /비공개 Plugin 규칙/);
+  assert.doesNotMatch(error.message, /token_invalidated/);
+});
+
+/** 일반 Codex process 실패도 원문 stderr 없이 서버 확인 안내만 반환하는지 검증한다. */
+test("Codex 일반 실행 실패에서 stderr를 노출하지 않는다", () => {
+  const error = classifyCodexProcessFailure("민감할 수 있는 process stderr");
+
+  assert.equal(error.code, "AI_UNAVAILABLE");
+  assert.doesNotMatch(error.message, /민감할 수 있는/);
 });
 
 /** Codex가 productType에 색상을 중복해도 DB 검색어에서는 상품 종류만 남기는지 검증한다. */

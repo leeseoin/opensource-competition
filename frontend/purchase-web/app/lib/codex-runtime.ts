@@ -17,14 +17,38 @@ export type CodexCommandRunner = (
 
 /** CodexRuntimeError는 AI 실행 실패 유형을 API 상태로 변환할 수 있게 보존한다. */
 export class CodexRuntimeError extends Error {
-  readonly code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID";
+  readonly code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED";
 
   /** AI 실행 오류 코드와 사용자에게 노출 가능한 설명을 생성한다. */
-  constructor(code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID", message: string) {
+  constructor(code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED", message: string) {
     super(message);
     this.code = code;
     this.name = "CodexRuntimeError";
   }
+}
+
+/** resolveCodexCommand는 빈 환경변수가 실행 파일 기본값을 무력화하지 않게 한다. */
+export function resolveCodexCommand(configured = process.env.CODEX_CLI_PATH): string {
+  return configured?.trim() || "codex";
+}
+
+/** classifyCodexProcessFailure는 민감한 stderr를 노출하지 않고 인증 실패와 일반 실패를 구분한다. */
+export function classifyCodexProcessFailure(stderr: string): CodexRuntimeError {
+  const normalized = stderr.toLowerCase();
+  const authenticationFailed = [
+    "token_invalidated",
+    "token_revoked",
+    "refresh_token_invalidated",
+    "refresh token was revoked",
+    "please log out and sign in again",
+  ].some((indicator) => normalized.includes(indicator));
+  if (authenticationFailed) {
+    return new CodexRuntimeError(
+      "AI_AUTH_REQUIRED",
+      "Codex 로그인이 만료되었습니다. 서버에서 codex logout 후 codex login을 실행해 주세요.",
+    );
+  }
+  return new CodexRuntimeError("AI_UNAVAILABLE", "Codex CLI 실행에 실패했습니다. 서버 로그를 확인해 주세요.");
 }
 
 /** 저장소 표식 파일을 찾을 때까지 상위 디렉토리를 탐색한다. */
@@ -68,7 +92,7 @@ export function runCodexCommand(
         environment[key] = process.env[key];
       }
     }
-    const child = spawn(process.env.CODEX_CLI_PATH ?? "codex", args, {
+    const child = spawn(resolveCodexCommand(), args, {
       cwd: options.cwd,
       env: environment,
       shell: false,
@@ -112,7 +136,7 @@ export function runCodexCommand(
       if (code === 0) {
         finish();
       } else {
-        finish(new CodexRuntimeError("AI_UNAVAILABLE", `Codex 실행이 실패했습니다. ${stderr.trim()}`.trim()));
+        finish(classifyCodexProcessFailure(stderr));
       }
     });
     child.stdin.end(input);

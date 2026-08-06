@@ -106,6 +106,24 @@ test("AI 실행 실패를 503으로 변환한다", async () => {
   assert.equal((await response.json()).code, "AI_UNAVAILABLE");
 });
 
+/** Codex 인증 만료를 stderr 없이 사용자가 조치할 수 있는 503 응답으로 변환하는지 검증한다. */
+test("Codex 인증 만료를 안전한 503 응답으로 변환한다", async () => {
+  const response = await handleConditionsRequest(new Request("http://localhost/api/research/conditions", {
+    method: "POST",
+    body: JSON.stringify({ question: "구두", runtime: "codex" }),
+  }), {
+    structure: async () => {
+      throw new CodexRuntimeError("AI_AUTH_REQUIRED", "Codex 로그인이 만료되었습니다.");
+    },
+    mcp: mcpStub(),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.code, "AI_AUTH_REQUIRED");
+  assert.equal(body.message, "Codex 로그인이 만료되었습니다.");
+});
+
 /** MCP 연결 실패를 browser에 503으로 반환하는지 검증한다. */
 test("MCP 연결 실패를 503으로 변환한다", async () => {
   const response = await handleConditionsRequest(new Request("http://localhost/api/research/conditions", {

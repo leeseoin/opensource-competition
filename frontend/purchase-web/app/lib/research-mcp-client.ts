@@ -34,6 +34,13 @@ function resolveMcpEntry(): { entry: string; cwd: string } {
   };
 }
 
+/** resolveProductBackendBaseUrl은 빈 환경변수에도 로컬 Product Backend 기본 주소를 사용한다. */
+export function resolveProductBackendBaseUrl(
+  configured = process.env.PRODUCT_BACKEND_BASE_URL,
+): string {
+  return configured?.trim() || "http://127.0.0.1:8080";
+}
+
 /** MCP structuredContent를 조사 세션 응답으로 확인하고 변환한다. */
 function parseSessionResult(result: Awaited<ReturnType<Client["callTool"]>>): ResearchSessionResponse {
   if (result.isError || !result.structuredContent || typeof result.structuredContent !== "object") {
@@ -73,7 +80,7 @@ export class StdioResearchMcpClient implements ResearchMcpOperations {
       env: {
         PATH: process.env.PATH ?? "",
         LANG: process.env.LANG ?? "ko_KR.UTF-8",
-        PRODUCT_BACKEND_BASE_URL: process.env.PRODUCT_BACKEND_BASE_URL ?? "http://127.0.0.1:8080",
+        PRODUCT_BACKEND_BASE_URL: resolveProductBackendBaseUrl(),
       },
     });
     const client = new Client({ name: "purchase-web-agent-gateway", version: "0.1.0" });

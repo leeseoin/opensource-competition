@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-02
+최종 갱신일: 2026-08-06
 
 ## 이 문서를 공개하는 이유
 
@@ -36,6 +36,8 @@
   Product Backend REST API에 연결한다. PostgreSQL과 판매처에는 직접 접근하지 않는다.
 - Next.js Agent Gateway는 server에서 Codex CLI를 읽기 전용/비대화형으로 실행해
   `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
+- Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
+  Plugin prompt, OAuth 오류 원문과 child process stderr는 browser 응답에 노출하지 않는다.
 - 사용자가 조건을 확인한 뒤 공식 MCP client가 MCP Server의 확인 및 검색 도구를 호출한다.
   Codex 인증정보와 Product Backend 내부 주소는 browser에 전달하지 않는다.
 - Claude Code 연동, Ollama, llama.cpp 및 GPU model server는 계획 단계다.
@@ -69,3 +71,4 @@
 | 2026-08-03 | Codex를 사용해 전달받은 Python 통합 Schema를 운영 CollectorResult와 분리하고 Python/Go 최대 10,000개 수집 및 성능 비교 설계를 작성 | 사용자가 Python/Go 비교 목표와 브랜치 경계를 결정하고 Schema/20건 예제/dev-jw 구현/현재 Go DTO를 대조해 필드 변환과 검증 기준을 확인 |
 | 2026-08-03 | Codex를 사용해 dev-jw Python 크롤러의 판매처 Adapter를 선별 이식하고 pagination/중복 제거/checkpoint/요청 예산/안전 중단/공통 계약 검증 코어를 구현 | 저장된 ABC마트/29CM fixture, 전달받은 20건 예제, checkpoint 재개와 429 중단을 7개 자동 테스트로 검증 |
 | 2026-08-05 | Codex를 사용해 Python ABC마트/29CM의 JSON/HTML 검증 집계를 Go Collector와 동일한 CollectorResult 구조로 정렬하고 전송 전 JSON Schema 검사를 추가 | 사용자가 실제 두 판매처 3개 수집과 PostgreSQL 저장을 확인했으며 Python 13개 테스트와 Spring Boot Testcontainers 전체 테스트로 계약 호환성을 검증 |
+| 2026-08-06 | Codex를 사용해 Agent Gateway의 빈 실행 설정 fallback과 Codex OAuth 인증 만료 오류 비노출 처리를 구현 | 실제 폐기된 token 401 응답을 재현하고 Next.js unit test/lint/production build로 안전한 사용자 메시지와 stderr 비노출을 검증 |
