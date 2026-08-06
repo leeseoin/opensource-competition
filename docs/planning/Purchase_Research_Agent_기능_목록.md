@@ -91,7 +91,7 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `MCP-001` | Product Backend 상품 검색 MCP 도구 | 부분 구현 | P0 | MCP stdio server, 상품 검색과 근거 조회 도구, REST API client | Codex/Claude Code가 MCP를 통해 DB 상품과 출처를 조회하고 계약 테스트가 통과함 | 시스템 구조 | 실제 Codex tool call E2E와 상품 상세/재검증 도구 |
-| `MCP-002` | 구매 조사 Agent 실행 경계 | 부분 구현 | P1 | Codex Plugin workflow, 질문 구조화, 사용자 조건 확인, 도구 호출과 답변 근거 연결 | Plugin이 판매처나 DB를 직접 호출하지 않고 MCP 도구로 근거 있는 답변을 구성함 | 시스템 구조 | stream/취소/동시성 상한과 Plugin 로컬 설치 검증 |
+| `MCP-002` | 구매 조사 Agent 실행 경계 | 부분 구현 | P1 | Codex Plugin workflow, 질문 구조화, 사용자 조건 확인, 도구 호출과 답변 근거 연결 | Plugin이 판매처나 DB를 직접 호출하지 않고 MCP 도구로 근거 있는 답변을 구성함 | 시스템 구조 | Codex 재로그인 복구 E2E/stream/취소/동시성 상한과 Plugin 로컬 설치 검증 |
 
 ### Next.js Web
 

@@ -225,6 +225,7 @@
 - [x] Codex Plugin 규칙과 공통 MCP 조사 세션 workflow 연결
 - [ ] Claude Code에서 같은 MCP Server 연결 검증
 - [x] Agent 인증 정보와 실행 권한을 browser에 노출하지 않는 server 전용 구성
+- [x] Codex 인증 만료와 일반 실행 실패에서 child process stderr 및 Plugin prompt 비노출
 - [ ] MCP 도구 호출과 최종 답변의 근거 누락 contract test
 
 완료 기준: 같은 MCP Server와 PostgreSQL을 사용하면서 Next.js 요청을 Codex CLI 또는 Claude Code CLI 중 하나에 전달하고, 상품 검색 결과를 근거와 함께 반환한다.

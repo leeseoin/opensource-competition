@@ -1425,6 +1425,41 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 실제 Python 29CM 수집/HTML 검증/Spring 저장: 3건 수집, 3건 MATCHED, 3건 저장
   - 실제 Next/Codex/MCP/Spring/PostgreSQL E2E: DRAFT 결과 없음, 확인 후 페니 로퍼 69,000원 1건
 
+### 2026-08-06 MCP-002/WEB-002 Codex 인증 오류 비노출
+
+- 진행상황: **부분 구현**. 실제 `/chat` 요청에서 폐기된 Codex OAuth token 401을 재현했다.
+  Agent Gateway는 인증 만료를 `AI_AUTH_REQUIRED`로 분류하고 browser에는 재로그인 방법만
+  반환한다. Plugin prompt와 child process stderr는 응답에서 제거했다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:30` `resolveCodexCommand`: 빈 Codex 실행
+    경로를 기본 명령으로 복구
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:35` `classifyCodexProcessFailure`: token 폐기
+    오류 분류와 안전한 사용자 메시지 생성
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:82` `runCodexCommand`: stderr 비노출 실행 경계
+  - `frontend/purchase-web/app/lib/research-mcp-client.ts:37`
+    `resolveProductBackendBaseUrl`: 빈 MCP 하위 주소의 로컬 기본값 복구
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:42` `빈 Codex 실행 경로에 기본 명령을
+    사용한다`: 실행 설정 회귀 검증
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:49` `Codex 인증 만료 오류에서 stderr를
+    노출하지 않는다`: 인증 오류와 Plugin prompt 비노출 검증
+  - `frontend/purchase-web/app/lib/research-mcp-client.test.ts:6` `빈 Product Backend 주소에 로컬
+    기본값을 사용한다`: MCP 실행 설정 회귀 검증
+- 발생 문제: Codex CLI의 access token과 refresh token이 폐기되자 HTTP 401 stderr와 Plugin
+  규칙 일부가 화면 오류에 표시됐다. 설정을 `.env`에 넣지 않았을 때 Make가 빈 문자열을
+  내보내 기본값도 적용되지 않았다.
+- 원인: 비정상 종료 stderr를 사용자 오류 메시지에 직접 결합했고 null만 fallback으로 처리해
+  빈 문자열을 유효한 설정으로 간주했다.
+- 해결: 인증 실패 지표만 내부 분류하고 원문 stderr는 폐기했다. 설정은 trim 후 비어 있으면
+  안전한 기본값을 사용한다. 실행 AI와 Agent Gateway 변경 범위는 `AI_USAGE.md`에 공개했다.
+- 남은 위험: 사용자의 Codex 재로그인 후 실제 browser 복구 확인이 필요하다. stream/취소,
+  구매 전 재검증과 자동 browser E2E도 기존 후속 범위로 남아 있다.
+- 검증:
+  - `cd frontend/purchase-web && npm test`: 통과, 23개
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
 ### 2026-08-06 OPS-004 Python/Go 최대 10,000개 최신 성능 재검증
 
 - 진행상황: 양쪽 언어에서 ABC마트와 29CM 공개 검색을 같은 10개 검색어, 페이지 크기 50,
