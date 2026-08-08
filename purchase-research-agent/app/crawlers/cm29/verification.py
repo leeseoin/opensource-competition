@@ -25,61 +25,72 @@ _FIELDS = (
 )
 
 
+_DEFAULT_VERIFY_CONCURRENCY = 10
+
+
 async def verify_products(
     client: httpx.AsyncClient,
     products: list[dict[str, Any]],
     *,
     json_source_url: str,
     ts_file: str,
+    concurrency: int = _DEFAULT_VERIFY_CONCURRENCY,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """수집 대상 전체의 상세 HTML을 요청하고 JSON-LD 비교 결과를 붙인다.
+
+    상품별 요청은 concurrency로 동시 실행 수를 제한해 병렬로 처리한다
+    (건당 순차 요청 대신 상한 안에서 동시에 검증한다).
 
     Args:
         client: 검색 요청과 연결을 공유하는 HTTP client다.
         products: 검색 JSON에서 선택한 모든 상품이다.
         json_source_url: 검색 JSON 응답 URL이다.
         ts_file: 원본 HTML 파일명에 사용할 실행 시각이다.
+        concurrency: 동시에 검증할 최대 상품 수다.
 
     Returns:
         상품별 검증 결과가 추가된 상품 목록과 검증 경고다.
     """
 
-    warnings: list[str] = []
+    warnings_by_index: list[list[str]] = [[] for _ in products]
     _HTML_DIR.mkdir(parents=True, exist_ok=True)
-    for index, product in enumerate(products):
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _verify_one(index: int, product: dict[str, Any]) -> None:
         product_id = str(product.get("source_product_id") or "")
         html_source_url = str(product.get("link") or "")
-        try:
-            response = await client.get(html_source_url)
-            response.raise_for_status()
-            html_source_url = str(response.url)
-            (_HTML_DIR / f"29cm_{product_id}_{ts_file}.html").write_text(
-                response.text,
-                encoding="utf-8",
-            )
-            html_product = parse_product_json_ld(response.text, html_source_url)
-            product["verification"] = compare_product(
-                product,
-                html_product,
-                json_source_url=json_source_url,
-                html_source_url=html_source_url,
-            )
-            if product["verification"]["status"] != "MATCHED":
-                fields = ",".join(
-                    difference["field"]
-                    for difference in product["verification"]["differences"]
+        async with semaphore:
+            try:
+                response = await client.get(html_source_url)
+                response.raise_for_status()
+                html_source_url = str(response.url)
+                (_HTML_DIR / f"29cm_{product_id}_{ts_file}.html").write_text(
+                    response.text,
+                    encoding="utf-8",
                 )
-                warnings.append(f"29CM JSON/HTML 불일치 {product_id}: {fields}")
-        except (httpx.HTTPError, ValueError, OSError) as exc:
-            product["verification"] = failed_verification(
-                json_source_url=json_source_url,
-                html_source_url=html_source_url,
-                reason=str(exc),
-            )
-            warnings.append(f"29CM 상세 HTML 검증 실패 {product_id}: {exc}")
+                html_product = parse_product_json_ld(response.text, html_source_url)
+                product["verification"] = compare_product(
+                    product,
+                    html_product,
+                    json_source_url=json_source_url,
+                    html_source_url=html_source_url,
+                )
+                if product["verification"]["status"] != "MATCHED":
+                    fields = ",".join(
+                        difference["field"]
+                        for difference in product["verification"]["differences"]
+                    )
+                    warnings_by_index[index].append(f"29CM JSON/HTML 불일치 {product_id}: {fields}")
+            except (httpx.HTTPError, ValueError, OSError) as exc:
+                product["verification"] = failed_verification(
+                    json_source_url=json_source_url,
+                    html_source_url=html_source_url,
+                    reason=str(exc),
+                )
+                warnings_by_index[index].append(f"29CM 상세 HTML 검증 실패 {product_id}: {exc}")
 
-        if index < len(products) - 1:
-            await asyncio.sleep(1)
+    await asyncio.gather(*(_verify_one(i, p) for i, p in enumerate(products)))
+    warnings = [warning for bucket in warnings_by_index for warning in bucket]
     return products, warnings
 
 

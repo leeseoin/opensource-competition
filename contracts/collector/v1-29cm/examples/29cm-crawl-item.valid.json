@@ -1,0 +1,13 @@
+{
+  "source_product_id": "1234567",
+  "title": "상품명 예시",
+  "brand": "브랜드명",
+  "price": "89,000원",
+  "price_original": "120,000원",
+  "discount_percent": 26,
+  "image_url": "https://img.29cm.co.kr/items/example.jpg",
+  "color": "",
+  "style_code": "",
+  "link": "https://www.29cm.co.kr/product/detail?itemId=1234567",
+  "site": "29cm"
+}

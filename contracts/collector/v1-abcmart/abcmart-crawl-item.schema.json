@@ -71,6 +71,12 @@
       "pattern": "^https://abcmart\\.a-rt\\.com/product\\?prdtNo=\\d+$|^https://www\\.abcmart\\.co\\.kr/.*$",
       "description": "DB product.link VARCHAR(500) NOT NULL. product.site + source_product_id가 UNIQUE KEY이므로 source_product_id가 link에서 추출된 값과 일치해야 한다."
     },
+    "rating": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 5,
+      "description": "attach_details() 시 reviews[].score 평균으로 계산. 리뷰 없으면 null."
+    },
     "review_count": {
       "type": "integer",
       "minimum": 0,
@@ -83,6 +89,25 @@
     },
     "options": {
       "$ref": "#/$defs/options"
+    },
+    "images": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "description": "crawl4ai 상세 페이지 렌더링 후 메인 슬라이더 이미지(shrink=580:580) URL 목록."
+    },
+    "category": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "JS 내 category JSON에서 추출한 최소 카테고리명 (예: '웨지')."
+    },
+    "category_path": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "JS 내 category JSON 전체 경로 (예: '신발 > 구두 > 웨지')."
+    },
+    "in_stock": {
+      "type": ["boolean", "null"],
+      "description": "sold-out 클래스 없는 사이즈 버튼이 하나라도 있으면 true."
     },
     "verification": {
       "$ref": "#/$defs/verification"
@@ -113,12 +138,35 @@
           "minimum": 0,
           "maximum": 5
         },
+        "detail_scores": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "항목별 세부 점수. 착화감/가격/디자인/내구성/경량성 등 상품에 따라 존재하는 항목이 다름."
+        },
         "date": {
           "type": "string",
           "description": "DetailFetcher._parse_review()가 'date' 키로 반환하지만 ReviewPayload.reviewDate와 이름이 다르다 — 직접 매핑하려면 변환 단계에서 키를 바꿀 필요."
         },
         "size": {
           "type": "string"
+        },
+        "color": {
+          "type": "string",
+          "description": "prdtColorCodeName — 리뷰 작성 시 선택한 색상."
+        },
+        "helpful_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "helpfulCnt — 도움이 됐어요 수."
+        },
+        "is_best": {
+          "type": "boolean",
+          "description": "bestYn == 'Y'."
+        },
+        "images": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 },
+          "description": "productReviewImages에서 추출한 리뷰 이미지 URL 목록."
         }
       }
     },
