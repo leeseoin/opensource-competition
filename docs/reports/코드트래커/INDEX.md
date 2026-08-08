@@ -4,6 +4,9 @@
 
 ## 최신 기록
 
+- 2026-08-08 / [`ANALYSIS-004` 범용 상품군 선택 UI](2026-08-08-ANALYSIS-004-범용_상품군_선택_UI.md) / `e8dc28d` / 최대 5개 상품군으로 중복을 묶고 컬러별 원본 판매 행과 재고 선택 UI 구현
+- 2026-08-08 / [`ANALYSIS-003` 검토 Wiki 운영 검색](2026-08-08-ANALYSIS-003-검토_Wiki_운영_검색.md) / `e8dc28d` / PUBLISHED 운동화 관계를 운영 후보 검색과 실패 fallback에 연결
+- 2026-08-08 / [`ANALYSIS-002` 검색 A/B 평가 기반](2026-08-08-ANALYSIS-002-검색_A_B_평가_기반.md) / `cf1f0d9` / 20개 snapshot과 60개 DRAFT 질문의 자동 지표 및 사람 검토 자료 생성
 - 2026-08-06 / [`ANALYSIS-003` 검토형 구매 도메인 Wiki](2026-08-06-ANALYSIS-003-검토형_구매_도메인_Wiki.md) / Python `0cf1761` / Go `dfebe4a` / source 기반 DRAFT Wiki를 같은 검색 평가에 비교하고 nDCG@3 하락으로 운영 비활성화
 - 2026-08-06 / [`ANALYSIS-002` Hybrid 상품 후보 검색](2026-08-06-ANALYSIS-002-Hybrid_상품_후보_검색.md) / Python `0cf1761` / Go `dfebe4a` / 필수/선호 조건, FTS/trigram, 선택적 pgvector fallback과 60개/10,000개 평가 구현
 - 2026-08-06 / [`WEB-002` 구매 조건 확인 채팅 화면](2026-08-06-WEB-002-구매_조건_확인_채팅_화면.md) / `72fcfa4` / Codex 선택부터 조건 확인 후 실제 후보 표시까지 `/chat` 상태 흐름 구현

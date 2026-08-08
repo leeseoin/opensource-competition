@@ -301,6 +301,7 @@
 - [x] 현재 SQL `AND` 검색의 고정 snapshot baseline smoke 측정
 - [x] 평가 질문/필수 조건/relevance/정답 없음 판정 schema 작성
 - [x] 정확 검색/의미 검색/조건 완화/정답 없음/재검증 질문 60개 DRAFT 작성
+- [x] 도입 전 strict AND와 현재 required/FTS 질문별 A/B 자동 지표/Top 3/사람 검토표 생성
 - [ ] 60개 질문의 필수/선호 조건과 relevance 사람 검토
 - [x] `PurchaseCondition`의 `required`/`preferred` 계약 작성
 - [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정 규칙 작성
@@ -313,6 +314,8 @@
 - [x] 후보별 검색 점수/옵션 상태/최신성/근거 완전성 응답 구현
 - [ ] 필수 조건 위반 없이 조건 완화와 완화 이유를 반환하는 재정렬 구현 **(진행 중: 필수 조건 filter와 선호 조건 완화 설명 완료, 결정론적 재정렬 남음)**
 - [ ] SQL/전문 검색/벡터 검색 단계별 offline 평가와 10,000개 p95 측정 **(진행 중: 60개 DRAFT SQL/FTS 비교와 Go 브랜치 10,000개 FTS p95 337.514ms 완료, 실제 BGE-M3 품질 비교 남음)**
+- [ ] 최소 1,000개 질문 평가 suite 구축 **(진행 전: 현재 20개 상품 snapshot과 60개 DRAFT 질문, 상품군별 고정 snapshot과 사람 검토 gold relevance 확대 필요)**
+- [ ] 1,000개 질문의 필수 조건 위반율/Recall@20/nDCG@5/false zero/상품군 중복률 자동 집계
 - [x] 정상/필수 조건 위반/옵션 unknown/embedding 실패/빈 결과 통합/단위 테스트
 
 ### 7.2 검토형 구매 도메인 Wiki
@@ -321,11 +324,11 @@
 - [x] source/page/relation/claim/version/review status schema 작성
 - [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태 전이와 사람 승인 규칙 작성
 - [x] source 없는 claim의 Published 전환 lint 차단 구현
-- [ ] 신발 용도/상품군/색상/판매처 category seed Wiki 작성 **(진행 중: 근거가 있는 상품군/한영 표현 DRAFT 작성, 용도/색상/사람 검토 남음)**
+- [ ] 신발 용도/상품군/색상/판매처 category seed Wiki 작성 **(진행 중: 운동화 상품군 PUBLISHED, 구두 상품군 DRAFT, 용도/색상/구두 사람 검토 남음)**
 - [x] Wiki relation의 `derived`/confidence/source ID 검증 구현
-- [ ] 검토된 Wiki를 Product Backend가 PostgreSQL index에 적재하는 경로 구현
-- [ ] Wiki 기반 의미 확장 REST API와 MCP 도구 구현
-- [ ] Wiki 없음/오래됨/충돌/조회 실패 시 Hybrid 검색 fallback 구현
+- [x] 검토된 Wiki를 Product Backend가 PostgreSQL index에 적재하는 경로 구현
+- [ ] Wiki 기반 의미 확장 REST API와 MCP 도구 구현 **(진행 중: 상품 후보 검색 내부 의미 확장 연결 완료, 독립 REST API/MCP 도구 남음)**
+- [x] Wiki 없음/오래됨/충돌/조회 실패 시 Hybrid 검색 fallback 구현
 - [ ] orphan/깨진 link/출처 누락/충돌/superseded 상태 lint 구현 **(진행 중: source 해시/claim source/중복 ID/Published 사람 검토 검사 완료)**
 - [ ] 전문 검색 + 벡터 검색과 Wiki 결합 검색의 동일 평가 data 비교 **(진행 중: FTS와 DRAFT Wiki 모의 비교 완료, 실제 BGE-M3 결합 남음)**
 - [x] Wiki가 검색 품질을 개선하지 않거나 출처 정확성을 낮출 때 운영 비활성화 검증
@@ -339,6 +342,25 @@
 - [ ] 필수 조건 filter
 - [ ] 설명 가능한 가중치 점수
 - [ ] 주장과 evidence 연결
+
+### 7.4 범용 상품군 후보와 구매 옵션
+
+- [x] `ANALYSIS-004` 상품군/판매처 상품/구매 옵션 3단계 설계와 완료 기준
+- [x] 후보 pool을 최대 50건 회수한 뒤 상품군을 묶고 상위 5개를 반환하는 순서
+- [x] 수집 검색어 신호를 낮추고 상품명/브랜드/카테고리 관련성을 우선하는 재정렬
+- [x] 기존 후보와 호환되는 additive `groups/listings/attributes` 응답
+- [x] 같은 판매처의 브랜드/상품명/카테고리가 같은 행을 보수적으로 묶는 파생 규칙
+- [x] `/chat`과 `/compare`에서 판매처 상품 선택 시 이미지/가격/재고를 함께 전환
+- [x] 상품군 통합 테스트와 Web 선택/fallback 단위 테스트
+- [x] 상위 상품군 선정 후 필수 조건에서 제외된 전체 컬러/판매 행 확장 조회
+- [x] 컬러별 요청 사이즈 구매 가능/품절/확인 필요 상태 표시
+- [x] `/chat` 최대 5개 쇼핑 카드/이미지 swatch/판매처 이동 UI
+- [x] `/compare` 최대 5개 상품군과 이미지 swatch 비교 UI
+- [ ] 판매처 상위 상품 ID/모델 코드 기반 확정 묶음
+- [ ] `size/color` 외 용량/소재/규격/저장 용량 범용 옵션 Contract
+- [ ] 29CM/ABC마트 상세 옵션 Adapter와 옵션별 provenance
+- [ ] 의류/가방/가구/전자제품 저장 fixture와 상품군 오병합 회귀 테스트
+- [ ] 상품군 오병합률/후보 카드 중복률/옵션 출처 누락률 평가
 
 완료 기준: 고정된 상품 snapshot과 평가 질문으로 후보 검색 단계를 재현하고, 후보 3개를
 필수 조건, 검색/비교 점수 구성, 근거, 완화 조건과 주의사항과 함께 반환한다. Wiki는
