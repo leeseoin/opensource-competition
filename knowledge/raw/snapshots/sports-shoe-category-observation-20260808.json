@@ -1,0 +1,29 @@
+{
+  "snapshotId": "sports-shoe-category-observation-20260808",
+  "observedAt": "2026-08-08T21:16:00+09:00",
+  "source": "local PostgreSQL imported from public merchant pages",
+  "purpose": "운동화 상위 표현과 판매처 스포츠 신발 카테고리 관계의 사람 검토용 근거",
+  "products": [
+    {
+      "merchant": "abcmart",
+      "externalId": "7000043815",
+      "name": "남성 코노스 스피드 트레일 ATR C75BM0303010",
+      "categoryPath": ["신발", "스포츠", "러닝화"],
+      "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=7000043815"
+    },
+    {
+      "merchant": "abcmart",
+      "externalId": "7000030330",
+      "name": "밸롭 티바트 프로텍트",
+      "categoryPath": ["신발", "스포츠", "워킹화"],
+      "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=7000030330"
+    },
+    {
+      "merchant": "abcmart",
+      "externalId": "1010109192",
+      "name": "휠라 EVERGRAND TR v2",
+      "categoryPath": ["신발", "스포츠", "트레일 러닝화"],
+      "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010109192"
+    }
+  ]
+}

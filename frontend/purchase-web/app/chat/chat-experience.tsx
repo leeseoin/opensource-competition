@@ -4,7 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
-import { formatProductPrice } from "../lib/product-candidates";
+import {
+  candidateAvailability,
+  candidateGroups,
+  candidateListingLabel,
+  formatProductPrice,
+  selectedCandidateListing,
+  type CandidateGroup,
+} from "../lib/product-candidates";
 import {
   confirmResearchDraft,
   createResearchDraft,
@@ -37,6 +44,90 @@ function formatList(value: PrioritizedText[]): string {
   return value.map((item) => item.value).join(", ");
 }
 
+interface ShoppingProductCardProps {
+  group: CandidateGroup;
+  rank: number;
+  selectedListingId?: number;
+  onSelect(listingId: number): void;
+}
+
+/** ShoppingProductCard는 상품군 하나를 이미지/가격/컬러/재고 중심의 쇼핑 카드로 표시한다. */
+function ShoppingProductCard({
+  group,
+  rank,
+  selectedListingId,
+  onSelect,
+}: ShoppingProductCardProps) {
+  const listing = selectedCandidateListing(group, selectedListingId);
+  const candidate = listing.product;
+  const assessment = listing.assessment;
+  const availability = candidateAvailability(listing);
+  const colors = listing.attributes.color ?? [];
+  const sizes = listing.attributes.size ?? [];
+
+  return (
+    <article className={styles.shopCard}>
+      <header className={styles.shopCardHeader}>
+        <span>추천 {String(rank).padStart(2, "0")}</span>
+        <span>{candidate.merchant.toUpperCase()}</span>
+      </header>
+      <div className={styles.shopImage}>
+        <Image
+          src={candidate.imageUrls[0] ?? "/images/landing-v2/hero-abcmart.jpeg"}
+          alt={`${candidate.brand ?? candidate.merchant} ${candidate.name}`}
+          fill
+          priority={rank <= 2}
+          sizes="(max-width: 700px) 92vw, (max-width: 1100px) 44vw, 30vw"
+        />
+        <span className={`${styles.stockBadge} ${styles[availability.tone]}`}>{availability.label}</span>
+      </div>
+      <div className={styles.shopCardBody}>
+        <p className={styles.shopMeta}>{candidate.brand ?? candidate.merchant} / {candidate.categoryPath.at(-1) ?? "상품"}</p>
+        <h3>{candidate.name}</h3>
+        <strong className={styles.shopPrice}>{formatProductPrice(candidate.price)}</strong>
+        <p className={styles.variantCount}>컬러/판매 행 {group.listings.length}개</p>
+        <div className={styles.swatchRow} aria-label={`${group.name} 컬러 선택`}>
+          {group.listings.map((choice) => {
+            const choiceAvailability = candidateAvailability(choice);
+            return (
+              <button
+                key={choice.product.id}
+                type="button"
+                className={`${styles.swatch} ${choice.product.id === candidate.id ? styles.activeSwatch : ""} ${choiceAvailability.tone === "unavailable" ? styles.unavailableSwatch : ""}`}
+                onClick={() => onSelect(choice.product.id)}
+                title={`${candidateListingLabel(choice)} / ${choiceAvailability.label}`}
+                aria-label={`${candidateListingLabel(choice)} / ${choiceAvailability.label}`}
+              >
+                {choice.product.imageUrls[0] ? (
+                  <Image src={choice.product.imageUrls[0]} alt="" fill sizes="56px" />
+                ) : (
+                  <span>{choice.attributes.color?.[0] ?? "?"}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className={styles.selectedVariantInfo}>
+          <span>{colors.join("/") || "컬러 확인 필요"}</span>
+          <small>상품번호 {candidate.externalId}</small>
+          <small>{sizes.length > 0 ? `구매 가능 사이즈 ${sizes.slice(0, 6).join("/")}${sizes.length > 6 ? " 외" : ""}` : "상세 옵션 확인 필요"}</small>
+        </div>
+        <a className={styles.shopLink} href={candidate.productUrl} target="_blank" rel="noreferrer">
+          이 컬러 판매처에서 보기
+        </a>
+        {assessment && (
+          <details className={styles.reasonDetails}>
+            <summary>추천 근거와 주의사항</summary>
+            {assessment.matchReasons.map((reason) => <small key={reason}>일치 / {reason}</small>)}
+            {assessment.relaxedConditions.map((reason) => <small key={reason}>선호 완화 / {reason}</small>)}
+            {assessment.unknownConditions.map((reason) => <small key={reason}>확인 필요 / {reason}</small>)}
+          </details>
+        )}
+      </div>
+    </article>
+  );
+}
+
 /** ChatExperience는 Codex 조건 구조화부터 사용자 확인과 MCP 상품 검색까지 제공한다. */
 export default function ChatExperience() {
   const [question, setQuestion] = useState(defaultQuestion);
@@ -45,6 +136,7 @@ export default function ChatExperience() {
   const [conditions, setConditions] = useState<PurchaseCondition | null>(null);
   const [flowState, setFlowState] = useState<FlowState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedListings, setSelectedListings] = useState<Record<string, number>>({});
 
   /** 자연어 질문을 Codex에 전달하고 검색하지 않은 DRAFT 조건만 표시한다. */
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -57,6 +149,7 @@ export default function ChatExperience() {
     setErrorMessage("");
     setSession(null);
     setConditions(null);
+    setSelectedListings({});
     try {
       const draft = await createResearchDraft(nextQuestion);
       setSession(draft);
@@ -145,10 +238,13 @@ export default function ChatExperience() {
   }
 
   const result = session?.result ?? null;
-  const candidates = result?.candidates ?? [];
-  const assessments = new Map((result?.assessments ?? []).map((assessment) => [assessment.candidateId, assessment]));
-  const featured = candidates[0];
-  const merchantCount = new Set(candidates.map((candidate) => candidate.merchant)).size;
+  const groups = candidateGroups(result);
+  const selectedCandidates = groups.map((group) => selectedCandidateListing(
+    group,
+    selectedListings[group.groupId],
+  ).product);
+  const featured = selectedCandidates[0];
+  const merchantCount = new Set(selectedCandidates.map((candidate) => candidate.merchant)).size;
   const compareHref = {
     pathname: "/compare",
     query: { question: session?.question ?? question, query: result?.query ?? conditions?.productType.value ?? "" },
@@ -172,31 +268,35 @@ export default function ChatExperience() {
         <span className={flowState === "success" ? styles.activeStep : ""}>04 DB 후보</span>
       </section>
 
-      <section className={styles.workspace}>
+      <section className={`${styles.workspace} ${flowState === "success" ? styles.shoppingWorkspace : ""}`}>
         <article className={styles.brief}>
-          <div className={styles.runtimeRow}>
-            <p className={styles.orangeLabel}>AGENT RUNTIME / SELECT</p>
-            <label>
-              <span>실행 환경</span>
-              <select value={runtime} onChange={() => setRuntime("codex")}>
-                <option value="codex">Codex CLI + Purchase Research Plugin</option>
-              </select>
-            </label>
-          </div>
+          {flowState !== "success" && (
+            <>
+              <div className={styles.runtimeRow}>
+                <p className={styles.orangeLabel}>AGENT RUNTIME / SELECT</p>
+                <label>
+                  <span>실행 환경</span>
+                  <select value={runtime} onChange={() => setRuntime("codex")}>
+                    <option value="codex">Codex CLI + Purchase Research Plugin</option>
+                  </select>
+                </label>
+              </div>
 
-          <form className={styles.questionForm} onSubmit={handleQuestionSubmit}>
-            <label htmlFor="shopping-question">무엇을 찾고 있나요?</label>
-            <textarea
-              id="shopping-question"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              rows={4}
-              maxLength={1000}
-            />
-            <button type="submit" disabled={flowState === "structuring" || flowState === "searching"}>
-              {flowState === "structuring" ? "CODEX가 조건을 정리하는 중" : "AI에게 조건 정리 요청"}
-            </button>
-          </form>
+              <form className={styles.questionForm} onSubmit={handleQuestionSubmit}>
+                <label htmlFor="shopping-question">무엇을 찾고 있나요?</label>
+                <textarea
+                  id="shopping-question"
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  rows={4}
+                  maxLength={1000}
+                />
+                <button type="submit" disabled={flowState === "structuring" || flowState === "searching"}>
+                  {flowState === "structuring" ? "CODEX가 조건을 정리하는 중" : "AI에게 조건 정리 요청"}
+                </button>
+              </form>
+            </>
+          )}
 
           <div className={styles.researchNote}>
             <p className={styles.sectionLabel}>RESEARCH NOTE</p>
@@ -240,29 +340,30 @@ export default function ChatExperience() {
           )}
 
           {flowState === "success" && (
-            <ol className={styles.reasonList}>
-              {candidates.map((candidate, index) => (
-                <li key={`${candidate.merchant}-${candidate.externalId}`}>
-                  <em>{String(index + 1).padStart(2, "0")}</em>
-                  <div>
-                    <strong>{candidate.merchant.toUpperCase()} 최신 수집 후보</strong>
-                    <span>{candidate.name} / {formatProductPrice(candidate.price)}</span>
-                    {assessments.get(candidate.id) && (
-                      <small>
-                        검색 신호: keyword {assessments.get(candidate.id)?.keywordScore.toFixed(2)}
-                        {assessments.get(candidate.id)?.semanticScore != null && ` / vector ${assessments.get(candidate.id)?.semanticScore?.toFixed(2)}`}
-                        {` / 최신성 ${assessments.get(candidate.id)?.freshnessScore.toFixed(2)}`}
-                        {` / 근거 ${assessments.get(candidate.id)?.evidenceCompletenessScore.toFixed(2)}`}
-                      </small>
-                    )}
-                    {assessments.get(candidate.id)?.matchReasons.map((reason) => <small key={reason}>일치: {reason}</small>)}
-                    {assessments.get(candidate.id)?.relaxedConditions.map((reason) => <small key={reason}>선호 완화: {reason}</small>)}
-                    {assessments.get(candidate.id)?.unknownConditions.map((reason) => <small key={reason}>확인 필요: {reason}</small>)}
-                  </div>
-                </li>
-              ))}
-              {candidates.length === 0 && <li className={styles.emptyResult}>확정 조건과 일치하는 DB 상품이 없습니다.</li>}
-            </ol>
+            <section className={styles.shopResults} aria-label="추천 상품군">
+              <div className={styles.shopResultsHeader}>
+                <div><span>CURATED FROM LIVE MERCHANT DATA</span><h2>조건에 맞춘 추천 상품군</h2></div>
+                <div className={styles.shopResultsActions}>
+                  <p>조건을 통과한 상품군은 최대 5개까지 보여줍니다.<br />카드 안의 썸네일을 눌러 다른 컬러와 재고 상태를 확인하세요.</p>
+                  <button type="button" onClick={() => setFlowState("idle")}>새 상품 검색</button>
+                </div>
+              </div>
+              <div className={styles.shopGrid}>
+                {groups.map((group, index) => (
+                  <ShoppingProductCard
+                    key={group.groupId}
+                    group={group}
+                    rank={index + 1}
+                    selectedListingId={selectedListings[group.groupId]}
+                    onSelect={(listingId) => setSelectedListings((current) => ({
+                      ...current,
+                      [group.groupId]: listingId,
+                    }))}
+                  />
+                ))}
+              </div>
+              {groups.length === 0 && <p className={styles.emptyResult}>확정 조건과 일치하는 DB 상품이 없습니다.</p>}
+            </section>
           )}
 
           <div className={styles.evidence} id="evidence">
@@ -285,7 +386,7 @@ export default function ChatExperience() {
                   <p>{featured.stockStatus === "available" ? "재고 있음" : "재고 확인 필요"}<br />{new Date(featured.source.collectedAt).toLocaleString("ko-KR")} 수집</p>
                 </div>
               </div>
-              {candidates.slice(1).map((candidate, index) => (
+              {selectedCandidates.slice(1).map((candidate, index) => (
                 <div className={styles.alternative} key={`${candidate.merchant}-${candidate.externalId}`}><span>{String(index + 2).padStart(2, "0")} {candidate.merchant.toUpperCase()} / {candidate.name}</span><b>{formatProductPrice(candidate.price)}</b></div>
               ))}
               <Link className={styles.compareLink} href={compareHref}>실제 DB 상품 자세히 비교하기 →</Link>

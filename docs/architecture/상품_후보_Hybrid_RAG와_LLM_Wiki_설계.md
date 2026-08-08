@@ -188,9 +188,19 @@ schema validation/timeout/fallback이 준비된 경우에만 상위 후보의 �
 
 2026-08-06 구현은 exact/FTS/trigram의 최대 keyword 점수, 같은 model의 cosine
 semantic 점수, 수집 경과 시간 구간의 최신성 점수와 최신 가격/재고/provenance 필드의
-근거 완전성 점수를 반환한다. 검토 Wiki가 운영 미연결이면 `wikiConceptScore`는 null이며,
-DRAFT relevance로 임의 가중치를 고정하지 않기 위해 합계 점수와 가중 재정렬은 아직
-반환하지 않는다.
+근거 완전성 점수를 반환한다.
+
+2026-08-08 구현은 사람 검토 정보가 있는 `PUBLISHED` page만 Product Backend 시작 시
+PostgreSQL `wiki_pages/wiki_claims` index에 적재한다. 사용자 상품 종류와 직접 연결된
+`narrower/synonym/merchant_category` 관계를 원문 검색 뒤 추가 FTS/vector 후보 회수에
+사용하고, 후보에는 `wikiConceptScore`와 사용한 관계를 반환한다. DRAFT page, Wiki 파일
+누락, 적재 오류와 조회 오류에서는 기존 원문 FTS/vector 검색으로 fallback한다.
+
+`sports-shoes-taxonomy` version 1은 2026-08-08 사용자 검토 후 PUBLISHED로 전환했다.
+`운동화 → 러닝화/워킹화`를 검색하면 확장어별 후보 pool을 순환 병합하고 상위 5개
+상품군을 고를 때 각 Wiki 하위 개념의 대표를 먼저 한 개씩 보존한다. 실제 15만 원 이하/
+검정/265 질문에서 러닝화 4개와 워킹화 1개를 반환했으며 모든 대표 후보의 가격/색상/
+사이즈 필수 또는 선호 상태가 일치했다.
 
 ## 6. 검토형 LLM Wiki
 
@@ -283,8 +293,8 @@ Published claim에는 최소한 다음 항목을 둔다.
 ### 7.2 단계별 비교
 
 ```text
-A. 현재 SQL AND 검색
-B. 전문 검색 + 동의어
+A. 도입 전 required/preferred strict SQL AND 검색
+B. required filter + 전문 검색 + 동의어
 C. 전문 검색 + 벡터 검색
 D. 전문 검색 + 벡터 검색 + 검토형 Wiki
 E. D + 선택적 LLM reranker
@@ -332,6 +342,26 @@ Wiki Lite도 immutable source와 DRAFT page로 작성하고 source 해시/claim 
 평가 data 자체도 사람 relevance 검토 전인 DRAFT이므로 수치는 구현 단계 비교용이다.
 Wiki 모의 평가는 직접 `narrower`/`synonym` 관계와 reciprocal rank fusion을 사용했으며
 Product Backend의 운영 검색 경로에는 포함되지 않는다.
+
+### 2026-08-07 도입 전/후 A/B 평가
+
+2026-08-06의 SQL baseline은 같은 required filter에서 전문 검색만 끈 단계 비교였다.
+도입 전 구조 자체와 비교하기 위해 required와 preferred를 모두 필터로 강제하는
+`LEGACY_STRICT`를 별도 재현하고 현재 required filter + FTS와 다시 비교했다.
+
+| 지표 | 도입 전 strict AND | 현재 required + FTS | 변화 |
+|---|---:|---:|---:|
+| Recall@20 | 0.6467 | 0.7533 | +0.1067 |
+| nDCG@3 | 0.6290 | 0.6871 | +0.0581 |
+| false zero | 0.2800 | 0.1400 | -0.1400 |
+| 정답 없음 정확도 | 1.0000 | 1.0000 | 0.0000 |
+| 유용 후보 포함률@3 | 0.7200 | 0.8200 | +0.1000 |
+| 필수 조건 위반율@3 | 0.0000 | 0.0000 | 0.0000 |
+
+Top 3는 19개 질문에서 달라졌고 strict AND의 0건 7개를 현재 검색이 복구했다.
+상세 정의, 사람 검토 방법과 한계는
+[상품 후보 검색 도입 전후 A/B 평가 계획](상품_후보_검색_도입_전후_A_B_평가_계획.md)을 따른다.
+질문/relevance가 DRAFT이므로 사람 검토 전에는 최종 품질 주장으로 사용하지 않는다.
 
 10,000개 합성 최신 snapshot을 적재한 로컬 PostgreSQL 16/pgvector image에서 구조화
 가격/사이즈/색상 조건과 FTS/trigram 오타 검색을 5회 warm-up 후 30회 측정했다. p50은
