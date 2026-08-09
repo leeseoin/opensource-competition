@@ -4,6 +4,7 @@
 
 ## 최신 기록
 
+- 2026-08-09 / [`QUEUE-001` Python Collection Queue Worker](2026-08-09-QUEUE-001-Python_Collection_Queue_Worker.md) / `32d6446` / Python runtime을 Queue v1에 연결하고 confirm 뒤 ACK, retry, DLQ를 실제 broker로 검증
 - 2026-08-08 / [`ANALYSIS-004` 범용 상품군 선택 UI](2026-08-08-ANALYSIS-004-범용_상품군_선택_UI.md) / `e8dc28d` / 최대 5개 상품군으로 중복을 묶고 컬러별 원본 판매 행과 재고 선택 UI 구현
 - 2026-08-08 / [`ANALYSIS-003` 검토 Wiki 운영 검색](2026-08-08-ANALYSIS-003-검토_Wiki_운영_검색.md) / `e8dc28d` / PUBLISHED 운동화 관계를 운영 후보 검색과 실패 fallback에 연결
 - 2026-08-08 / [`ANALYSIS-002` 검색 A/B 평가 기반](2026-08-08-ANALYSIS-002-검색_A_B_평가_기반.md) / `cf1f0d9` / 20개 snapshot과 60개 DRAFT 질문의 자동 지표 및 사람 검토 자료 생성

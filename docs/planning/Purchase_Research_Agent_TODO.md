@@ -164,7 +164,7 @@
 ### 4.4 Collector Worker
 
 - [x] RabbitMQ 작업을 소비하는 Go Worker entrypoint 추가
-- [ ] `QUEUE-001` Python Worker가 현재 CollectionTask/CollectionResult v1을 소비/발행하고 ACK/retry/DLQ를 동일하게 처리 **(구현 완료/추적 문서 갱신 중)**
+- [x] `QUEUE-001` Python Worker가 현재 CollectionTask/CollectionResult v1을 소비/발행하고 ACK/retry/DLQ를 동일하게 처리
 - [ ] `TaskQueue` port와 RabbitMQ adapter 분리 **(부분 구현: Processor와 RabbitMQ lifecycle 분리)**
 - [ ] 판매처별 최대 Worker 수 설정
 - [ ] Redis 기반 판매처별 전체 요청 간격 제한

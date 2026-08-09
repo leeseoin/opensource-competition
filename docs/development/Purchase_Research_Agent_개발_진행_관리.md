@@ -1885,8 +1885,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   `THIRD_PARTY_NOTICES.md`에 동기화했다.
 - 남은 위험: FastAPI TestClient가 현재 lock의 HTTPX 조합에서 `httpx2` 전환 안내
   deprecation warning을 출력한다. 운영 API와 13개 단위 테스트에는 영향이 없지만 향후
-  FastAPI test client 교체 시 별도 회귀 검증이 필요하다. Python Worker의 Spring Boot
-  Queue 계약/retry/DLQ/ACK 이식은 `QUEUE-001` 작업으로 남아 있다.
+  FastAPI test client 교체 시 별도 회귀 검증이 필요하다. 이 시점에 남아 있던 Python
+  Worker의 Queue 계약/retry/DLQ/ACK 이식은 아래 `QUEUE-001` 후속 기록에서 완료했다.
 - 검증:
   - `uv lock --check`: 통과/105개 package 해석
   - `make python-crawler-setup`: 통과/Python 3.12.11 frozen 환경과 Chromium 준비
@@ -1894,6 +1894,45 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `uv run --frozen` FastAPI `/health`: HTTP 200
   - `uv run --frozen` aio-pika import: 9.6.2 통과
   - `uv run --frozen` 로컬 RabbitMQ 빈 작업 연결: 통과
+  - `make test`: Go/Python 비교기/Python runtime/Spring Boot/MCP/Next.js test와 lint 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-09 QUEUE-001 Python Collection Queue Worker
+
+- 진행상황: **완료**. commit `32d6446`에서 Python runtime이 Spring Boot의 Queue v1을
+  직접 소비하고 성공/부분 성공 결과, retry 작업과 실패 결과를 같은 topology에 발행한다.
+  완료 기준인 정상/실패/재시도/ACK/DLQ 경로를 fixture와 격리된 실제 RabbitMQ에서
+  확인했다.
+- 구현 위치:
+  - `purchase-research-agent/app/messaging/contracts.py:27` `CollectionTask`: 공유 작업 Schema,
+    timezone과 재시도 횟수 의미 검증
+  - `purchase-research-agent/app/messaging/processor.py:38` `CollectionTaskProcessor`: page 전달,
+    하드필터, timeout과 결과 봉투 생성
+  - `purchase-research-agent/app/messaging/rabbitmq.py:88` `RabbitCollectionWorker`: prefetch 1,
+    publisher confirm 뒤 ACK, retry와 DLQ 처리
+  - `purchase-research-agent/app/messaging/rabbitmq.py:177` `declare_topology`: Spring/Go와 같은
+    durable Queue 및 exchange 선언
+  - `purchase-research-agent/tests/test_collection_queue.py:164`
+    `CollectionTaskContractTests/CollectionTaskProcessorTests/RabbitDecisionTests`: 정상/실패,
+    page/필터, retry/ACK/requeue 검증
+  - `purchase-research-agent/scripts/check_collection_worker_rabbitmq.py:112`
+    `check_success/check_retry/check_invalid_dlq`: 실제 broker 통합 검증
+- 발생 문제: script 경로 실행 시 `app` import가 실패했고, 최상위 결과와 상품 provenance의
+  collectorVersion이 달랐다. 검색 원본의 category/재고/판매 가능 사이즈가 저장 결과에
+  남지 않아 filter 근거를 재확인할 수 없는 문제도 발견했다.
+- 원인: 실행 파일 경로가 import root를 바꿨고 version 문자열이 두 위치에 중복됐다.
+  ABC마트 SIZE_LIST의 수량과 29CM isSoldOut/category를 기존 Python 변환에서 사용하지 않았다.
+- 해결: module 실행 방식과 단일 collector version을 적용했다. 한 페이지 최대 50개를
+  읽은 뒤 필터링하고 판매처 원본에서 확인된 category/재고와 양수 재고 사이즈를 공통
+  결과에 보존했다. 발행 실패는 ACK하지 않고 원본을 requeue한다.
+- 남은 위험: 실제 판매처와 Spring Boot/PostgreSQL까지 연결한 opt-in Queue E2E,
+  비정상 종료 뒤 미확인 작업 재전달, attributes 의미 정의가 남아 있다. 이 항목들은
+  `QUEUE-002/003`, `MERCHANT-001` 후속 범위이며 QUEUE-001 완료 기준에는 포함하지 않는다.
+- 검증:
+  - `make python-crawler-test`: 27개 통과
+  - `uv run --frozen python -m compileall -q app scripts tests`: 통과
+  - 격리 vhost `make python-crawler-rabbitmq-test`: success/retry/DLQ 통과
   - `make test`: Go/Python 비교기/Python runtime/Spring Boot/MCP/Next.js test와 lint 통과
   - `make docs-check`: 통과
   - `git diff --check`: 통과
@@ -1919,7 +1958,6 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ## 다음 갱신 대상
 
-- Python Worker의 Spring Boot CollectionTask/CollectionResult Queue 계약 이식
 - RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
