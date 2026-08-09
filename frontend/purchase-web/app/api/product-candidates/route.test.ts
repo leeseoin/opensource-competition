@@ -15,7 +15,7 @@ test("상품 후보 정상 응답을 전달한다", async () => {
   const response = await handleProductCandidateRequest(new Request("http://localhost/api/product-candidates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question: "검정 구두를 찾아줘", query: "구두", limit: 3 }),
+    body: JSON.stringify({ question: "검정 구두를 찾아줘", query: "구두", limit: 5 }),
   }), fetcher);
 
   assert.equal(response.status, 200);
@@ -39,8 +39,8 @@ test("빈 검색어 요청을 거절한다", async () => {
   assert.equal(called, false);
 });
 
-/** 후보를 3개보다 많이 요청하면 Product Backend 호출 전에 거절하는지 검증한다. */
-test("후보 4개 요청을 거절한다", async () => {
+/** 후보를 5개보다 많이 요청하면 Product Backend 호출 전에 거절하는지 검증한다. */
+test("후보 6개 요청을 거절한다", async () => {
   let called = false;
   const fetcher: typeof fetch = async () => {
     called = true;
@@ -49,7 +49,7 @@ test("후보 4개 요청을 거절한다", async () => {
   const response = await handleProductCandidateRequest(new Request("http://localhost/api/product-candidates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question: "검정 구두", query: "구두", limit: 4 }),
+    body: JSON.stringify({ question: "검정 구두", query: "구두", limit: 6 }),
   }), fetcher);
 
   assert.equal(response.status, 400);

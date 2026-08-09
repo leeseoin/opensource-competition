@@ -6,6 +6,9 @@
 ## 현재 상태
 
 - `eval/retrieval-v1.json`: 고정된 구두 20개 snapshot을 사용하는 60개 검색 질문 초안
+- `eval/reports/retrieval-ab-v1-summary.json`: 도입 전 strict AND와 현재 FTS의 DRAFT 자동 지표
+- `eval/reviews/retrieval-ab-v1-first10-human-review.md`: 설명과 상품 정보를 함께 보는 첫 10개 사람 검토표
+- `eval/reviews/retrieval-ab-v1-human-review.csv`: 전체 60개 결과를 나중에 집계하기 위한 원자료
 - `schema/retrieval-evaluation.schema.json`: 평가 질문과 relevance 판정 계약
 - `raw/source-unified-shoes-20260803.json`: Wiki claim이 참조하는 immutable snapshot metadata
 - `wiki/shoes-taxonomy-v1.json`: 구두 상품군/한영 표현의 DRAFT page
@@ -21,6 +24,7 @@ embedding model 또는 reranker의 운영 활성화 근거로 사용할 수 없�
 
 ```bash
 make retrieval-eval-check
+make retrieval-ab-report
 make wiki-check
 ```
 

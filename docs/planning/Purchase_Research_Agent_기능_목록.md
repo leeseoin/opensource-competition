@@ -1,10 +1,10 @@
 # Purchase Research Agent 기능 목록
 
 작성일: 2026-07-31
-최종 점검일: 2026-08-06
-최종 점검 범위: `MCP-001`, `MCP-002`, `WEB-002`, `OPS-004` 실제 코드와 E2E 재검증
-최종 기능 동기화일: 2026-08-06
-상태: 선택 기능 감사 완료
+최종 점검일: 2026-08-08
+최종 점검 범위: `ANALYSIS-002/003/004` 평가 기반, 검토 Wiki 운영 검색과 상품군 선택 UI
+최종 기능 동기화일: 2026-08-08
+상태: 기능 목록 동기화
 
 ## 목적
 
@@ -22,6 +22,11 @@
 - [현재 수집 데이터와 DB 저장 흐름](../architecture/현재_수집_데이터와_DB_저장_흐름.md)
 - [Python/Go 크롤러 확장성과 성능 비교 설계](../architecture/Python_Go_크롤러_확장성과_성능_비교_설계.md)
 - [상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계](../architecture/상품_후보_Hybrid_RAG와_LLM_Wiki_설계.md)
+- [범용 상품군과 구매 옵션 후보 설계](../architecture/범용_상품군과_구매_옵션_후보_설계.md)
+
+## 학습 자료
+
+- [Hybrid RAG 기초 학습 가이드](../development/Purchase_Research_Agent_Hybrid_RAG_학습_가이드.md)
 
 ## 관리 규칙
 
@@ -108,8 +113,9 @@
 | 기능 ID | 기능명 | 상태 | 우선순위 | 범위 | 완료 기준 | 설계 근거 | 다음 작업 |
 |---|---|---|---|---|---|---|---|
 | `ANALYSIS-001` | 리뷰 신호 추출과 상품 비교 | 계획 | P1 | 리뷰 신호, confidence, 점수, 근거와 주의사항 | 후보 비교 값이 공개 출처 또는 derived 표기와 confidence를 포함함 | 시스템 구조 / 공통 수집 데이터 명세 | 리뷰 저장 계약과 비교 규칙 |
-| `ANALYSIS-002` | Hybrid 상품 후보 검색 | 부분 구현 | P0 | 필수/선호 조건, 전문 검색, 벡터 검색, 순위 결합, 설명 가능한 재정렬과 fallback | 고정 상품 snapshot과 평가 질문으로 SQL baseline/전문 검색/벡터 검색을 재현 가능하게 비교하고 필수 조건 위반 0%, 판매처 사실 출처 연결 100%, 완화 조건 표시 100%를 충족함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 / 시스템 구조 | 2026-08-06 점검 / DRAFT relevance 사람 검토, 실제 vector 평가와 합계 가중 재정렬 |
-| `ANALYSIS-003` | 검토형 구매 도메인 Wiki | 부분 구현 | P1 | immutable source, DRAFT/PUBLISHED/SUPERSEDED page, 관계, derived/confidence, 사람 승인과 의미 확장 | Published claim이 source/version/review status를 추적하고 출처 없는 claim 0건을 유지하며 Wiki 실패 시 Hybrid 검색 fallback이 동작함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 2026-08-06 점검 / 사람 검토, 상태 전이/index/API와 순위 품질 개선 전 운영 비활성화 |
+| `ANALYSIS-002` | Hybrid 상품 후보 검색 | 부분 구현 | P0 | 필수/선호 조건, 전문 검색, 벡터 검색, 순위 결합, 설명 가능한 재정렬과 fallback | 고정 상품 snapshot과 평가 질문으로 SQL baseline/전문 검색/벡터 검색을 재현 가능하게 비교하고 필수 조건 위반 0%, 판매처 사실 출처 연결 100%, 완화 조건 표시 100%를 충족함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 / 시스템 구조 | 2026-08-08 점검 / 60개 DRAFT relevance 검토, 1,000개 질문 suite와 실제 vector 평가 |
+| `ANALYSIS-003` | 검토형 구매 도메인 Wiki | 부분 구현 | P1 | immutable source, DRAFT/PUBLISHED/SUPERSEDED page, 관계, derived/confidence, 사람 승인과 의미 확장 | Published claim이 source/version/review status를 추적하고 출처 없는 claim 0건을 유지하며 Wiki 실패 시 Hybrid 검색 fallback이 동작함 | 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 2026-08-08 점검 / 운동화 PUBLISHED 실제 E2E 완료, 구두/용도/색상 사람 검토와 독립 API/MCP 및 순위 품질 평가 |
+| `ANALYSIS-004` | 범용 상품군 후보 묶음과 옵션 선택 | 부분 구현 | P0 | 판매처 상품 후보를 근거 있는 상품군으로 묶고 색상/사이즈/용량/소재 등 실제 구매 옵션을 한 카드에서 선택 | 신발/의류/가방/가구/전자제품 fixture에서 오병합 없이 상품군을 반환하고 선택한 판매처 상품에 따라 이미지/가격/재고/URL이 함께 바뀌며 묶음 근거와 옵션 출처를 자동 검증함 | 범용 상품군과 구매 옵션 후보 설계 / 상품 후보 Hybrid RAG와 검토형 LLM Wiki 설계 | 2026-08-08 점검 / 신발 외 fixture, 상세 옵션 저장과 오병합 및 중복률 평가 |
 | `VERIFY-001` | 구매 전 상품 재검증 | 계획 | P1 | 현재 가격/재고/옵션 재수집과 추천 snapshot 비교 | 변경 항목, 확인 불가 항목과 최신 출처를 분리해 반환함 | 시스템 구조 / 공통 수집 데이터 명세 | 재검증 요청/응답 계약 |
 
 ### 운영과 실행 환경

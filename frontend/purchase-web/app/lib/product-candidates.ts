@@ -54,6 +54,30 @@ export interface CandidateAssessment {
   unknownConditions: string[];
 }
 
+/** CandidateListing은 상품군 카드에서 선택 가능한 원본 판매처 상품과 속성을 표현한다. */
+export interface CandidateListing {
+  product: ProductCandidate;
+  attributes: Record<string, string[]>;
+  assessment: CandidateAssessment | null;
+}
+
+/** CandidateGroup은 같은 상품군의 판매처 상품을 카드 하나로 묶은 응답이다. */
+export interface CandidateGroup {
+  groupId: string;
+  name: string;
+  brand: string | null;
+  categoryPath: string[];
+  groupingBasis: "DERIVED";
+  groupingConfidence: number;
+  listings: CandidateListing[];
+}
+
+/** CandidateAvailability는 선택 판매처 상품의 현재 구매 가능성을 화면용 상태로 표현한다. */
+export interface CandidateAvailability {
+  label: string;
+  tone: "available" | "unknown" | "unavailable";
+}
+
 /** ProductCandidateResponse는 질문에 연결된 DB 상품 후보 API 응답이다. */
 export interface ProductCandidateResponse {
   question: string;
@@ -62,6 +86,63 @@ export interface ProductCandidateResponse {
   hasNext: boolean;
   candidates: ProductCandidate[];
   assessments: CandidateAssessment[];
+  groups?: CandidateGroup[];
+}
+
+/** 선택 상태와 일치하는 판매처 상품을 찾고 없으면 상품군의 첫 상품을 반환한다. */
+export function selectedCandidateListing(
+  group: CandidateGroup,
+  selectedListingId: number | undefined,
+): CandidateListing {
+  return group.listings.find((listing) => listing.product.id === selectedListingId)
+    ?? group.listings[0];
+}
+
+/** 판매처 상품 선택 버튼에 색상 또는 외부 상품번호를 구분 가능한 이름으로 표시한다. */
+export function candidateListingLabel(listing: CandidateListing): string {
+  const colors = listing.attributes.color ?? [];
+  const label = colors.length > 0 ? colors.join("/") : "옵션 확인";
+  return `${label} / ${listing.product.externalId}`;
+}
+
+/** 최신 재고와 조건 판정을 사용해 컬러별 구매 가능 상태를 과장 없이 계산한다. */
+export function candidateAvailability(listing: CandidateListing): CandidateAvailability {
+  if (listing.product.stockStatus !== "available") {
+    return { label: "현재 품절", tone: "unavailable" };
+  }
+  if (listing.assessment?.sizeStatus === "MISMATCH") {
+    return { label: "요청 사이즈 없음", tone: "unavailable" };
+  }
+  if (listing.assessment?.unknownConditions.some((condition) => condition.startsWith("필수 가격"))) {
+    return { label: "예산 조건 불일치", tone: "unavailable" };
+  }
+  if (listing.assessment?.sizeStatus === "UNKNOWN") {
+    return { label: "사이즈 확인 필요", tone: "unknown" };
+  }
+  if (listing.assessment?.sizeStatus === "MATCH") {
+    return { label: "요청 사이즈 구매 가능", tone: "available" };
+  }
+  return { label: "재고 있음", tone: "available" };
+}
+
+/** additive 상품군 필드가 없는 이전 응답도 판매처 상품 하나짜리 상품군으로 변환한다. */
+export function candidateGroups(response: ProductCandidateResponse | null): CandidateGroup[] {
+  if (!response) {
+    return [];
+  }
+  if (response.groups && response.groups.length > 0) {
+    return response.groups;
+  }
+  const assessmentById = new Map(response.assessments.map((assessment) => [assessment.candidateId, assessment]));
+  return response.candidates.map((product) => ({
+    groupId: `listing:${product.merchant}:${product.externalId}`,
+    name: product.name,
+    brand: product.brand,
+    categoryPath: product.categoryPath,
+    groupingBasis: "DERIVED",
+    groupingConfidence: 1,
+    listings: [{ product, attributes: {}, assessment: assessmentById.get(product.id) ?? null }],
+  }));
 }
 
 const knownProductQueries = [
@@ -106,7 +187,7 @@ export async function fetchProductCandidates(
   const response = await fetch("/api/product-candidates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, query, limit: 3 }),
+    body: JSON.stringify({ question, query, limit: 5 }),
   });
   const body = await response.json() as ProductCandidateResponse & { message?: string };
 

@@ -16,6 +16,14 @@
 .card h2 { margin:20px 0 8px; font-size:23px; }
 .card b { display:block; font-family:var(--font-geist-sans),sans-serif; font-size:28px; }
 .card > p { margin:10px 0 22px; font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:700; }
+.variantSelector { display:flex; flex-wrap:wrap; gap:7px; margin:0 0 18px; }
+.variantSelector button { position:relative; width:58px; height:58px; overflow:hidden; padding:0; border:1px solid #aaa59d; background:white; cursor:pointer; }
+.variantSelector button img { object-fit:cover; }
+.variantSelector button span { display:grid; height:100%; place-items:center; font-size:9px; font-weight:800; }
+.variantSelector button:hover, .variantSelector .selectedVariant { border:3px solid var(--blue); }
+.variantSelector .unavailableVariant::after { position:absolute; inset:0; background:linear-gradient(to top right,transparent 47%,#777 49%,#777 52%,transparent 54%); content:""; }
+.card .optionNotice { margin:0 0 18px; color:#6d675f; }
+.merchantLink { display:block; margin:0 0 12px; color:inherit; font-size:11px; font-weight:800; text-underline-offset:3px; }
 .proof { display:block; padding:14px; border:1px solid var(--ink); font-family:var(--font-geist-sans),sans-serif; font-size:11px; }
 .lime { background:var(--lime); }.blue { background:var(--blue); color:white; }.orange { background:var(--orange); }
 .receipt > p { font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; }

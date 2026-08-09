@@ -1,0 +1,31 @@
+{
+  "pageId": "sports-shoes-taxonomy",
+  "version": 1,
+  "status": "PUBLISHED",
+  "title": "운동화 상품군과 판매처 스포츠 신발 분류",
+  "reviewedBy": "iseoin",
+  "reviewedAt": "2026-08-08T21:20:00+09:00",
+  "supersedes": null,
+  "claims": [
+    {
+      "claimId": "sports-shoes-running",
+      "subject": "운동화",
+      "relation": "narrower",
+      "object": "러닝화",
+      "derived": true,
+      "confidence": 0.9,
+      "sourceIds": ["sports-shoe-category-observation-20260808"],
+      "evidencePointers": ["7000043815.categoryPath=신발 > 스포츠 > 러닝화"]
+    },
+    {
+      "claimId": "sports-shoes-walking",
+      "subject": "운동화",
+      "relation": "narrower",
+      "object": "워킹화",
+      "derived": true,
+      "confidence": 0.85,
+      "sourceIds": ["sports-shoe-category-observation-20260808"],
+      "evidencePointers": ["7000030330.categoryPath=신발 > 스포츠 > 워킹화"]
+    }
+  ]
+}
