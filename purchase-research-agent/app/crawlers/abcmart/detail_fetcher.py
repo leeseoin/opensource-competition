@@ -5,14 +5,16 @@ import statistics
 import httpx
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, MemoryAdaptiveDispatcher
 
+from app.crawlers.access_safety import ensure_success, safe_exception_message
+
 _BASE = "https://abcmart.a-rt.com"
 _REVIEW_URL = f"{_BASE}/product/review/get-review-list"
 _OPTION_URL  = f"{_BASE}/product/review/get-prd-option"
 _HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "PurchaseResearchAgent/0.1 (+public product research; low rate)",
     "Referer": "https://abcmart.a-rt.com/",
 }
-_BROWSER_CFG = BrowserConfig(ignore_https_errors=True, headless=True)
+_BROWSER_CFG = BrowserConfig(ignore_https_errors=False, headless=True)
 # networkidle 대신 load: JS 실행 완료 후 즉시 반환 → 더 빠르고 결과 동일
 # max_retries=1: 동시 연결 폭주로 인한 일시적 타임아웃을 한 번 더 시도해 흡수
 _DETAIL_RUN_CFG = CrawlerRunConfig(wait_until="load", page_timeout=20000, max_retries=1)
@@ -102,7 +104,16 @@ _REVIEW_PAGE_SIZE = 50
 
 
 async def _fetch_review(client: httpx.AsyncClient, pno: str, review_limit: int = 0) -> dict:
-    """리뷰를 전체 페이지네이션으로 가져온다. review_limit이 0이면 전체, 아니면 그 개수에서 멈춘다."""
+    """리뷰를 제한된 페이지 범위에서 가져와 식별정보 없는 원본으로 변환한다.
+
+    Args:
+        client: TLS 검증과 redirect 차단이 설정된 HTTP client다.
+        pno: ABC마트 공개 상품 번호다.
+        review_limit: 반환할 리뷰 상한이며 0이면 판매처 결과 끝까지 진행한다.
+
+    Returns:
+        리뷰 전체 개수, 수집 리뷰와 선택적인 안전 오류 설명이다.
+    """
     reviews: list[dict] = []
     total_count = 0
     page = 1
@@ -112,6 +123,7 @@ async def _fetch_review(client: httpx.AsyncClient, pno: str, review_limit: int =
                 _REVIEW_URL,
                 data={"prdtNo": pno, "pageNum": page, "rowsPerPage": _REVIEW_PAGE_SIZE},
             )
+            ensure_success(r, "abcmart")
             data = r.json()
             total_count = data.get("totalCount", 0)
             content = data.get("content", [])
@@ -125,22 +137,37 @@ async def _fetch_review(client: httpx.AsyncClient, pno: str, review_limit: int =
 
             page += 1
             await asyncio.sleep(0.3)
-    except Exception as e:
-        return {"review_count": total_count, "reviews": reviews, "_err": str(e)}
+    except Exception as exc:
+        return {
+            "review_count": total_count,
+            "reviews": reviews,
+            "_err": safe_exception_message(exc, "abcmart", "리뷰"),
+        }
 
     return {"review_count": total_count, "reviews": reviews}
 
 
 async def _fetch_option(client: httpx.AsyncClient, pno: str) -> dict:
+    """ABC마트 옵션 API에서 색상과 판매처 표시 사이즈를 수집한다.
+
+    Args:
+        client: TLS 검증과 redirect 차단이 설정된 HTTP client다.
+        pno: ABC마트 공개 상품 번호다.
+
+    Returns:
+        색상/사이즈 목록 또는 URL과 응답 body를 제외한 오류다.
+    """
+
     try:
         r = await client.post(_OPTION_URL, data={"prdtNo": pno})
+        ensure_success(r, "abcmart")
         data = r.json()
         return {
             "colors": [c.get("codeDtlName", "") for c in data.get("resultColorList", [])],
             "sizes":  [s.get("optnName", "") for s in data.get("resultList", [])],
         }
-    except Exception:
-        return {}
+    except Exception as exc:
+        return {"_err": safe_exception_message(exc, "abcmart", "옵션")}
 
 
 async def _noop() -> dict:
@@ -151,6 +178,7 @@ _EMPTY_DETAIL = {"images": [], "category": "", "category_path": "", "in_stock": 
 
 
 class DetailFetcher:
+    """ABC마트 공개 상세/리뷰/옵션을 제한된 동시성으로 결합한다."""
 
     async def attach(
         self,
@@ -161,12 +189,19 @@ class DetailFetcher:
         browser_concurrency: int = _DEFAULT_BROWSER_CONCURRENCY,
         api_concurrency: int = _DEFAULT_API_CONCURRENCY,
     ) -> tuple[list[dict], list[str]]:
-        """상위 limit개 상품에 images/category/in_stock/리뷰/옵션/rating을 추가한다.
-        crawl4ai는 arun_many로 병렬 실행, 리뷰/옵션 API는 asyncio.gather로 병렬 호출.
-        reviews_per_item이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다.
-        browser_concurrency/api_concurrency는 동시 연결 수 상한이다 — 상한 없이 쏘면
-        combo가 여러 개 겹치거나 프로세스를 여러 개 띄웠을 때 로컬 리소스/네트워크
-        연결이 폭주해 타임아웃이 급증한다(2026-08-06 실측 확인)."""
+        """상위 상품에 상세, 리뷰, 옵션과 rating을 제한된 동시성으로 추가한다.
+
+        Args:
+            products: ABC마트 검색 원본 상품이다.
+            limit: 상세를 추가할 상위 상품 수다.
+            reviews_per_item: 상품별 리뷰 상한이며 0이면 결과 끝까지 진행한다.
+            delay: 호환성을 위해 유지한 추가 대기 초다.
+            browser_concurrency: 동시에 열 browser 탭 상한이다.
+            api_concurrency: 동시에 실행할 리뷰/옵션 API 상한이다.
+
+        Returns:
+            상세가 추가된 상품과 안전하게 축약된 부분 실패 경고다.
+        """
         errors: list[str] = []
         targets = products[:limit]
         pnos = [_prdtno(p.get("link", "")) for p in targets]
@@ -190,7 +225,7 @@ class DetailFetcher:
                     _fetch_option(client, pno) if pno else _noop(),
                 )
 
-        async with httpx.AsyncClient(headers=_HEADERS, verify=False, timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=False) as client:
             tasks = [_fetch_bounded(client, pno) for pno in pnos]
             api_results = await asyncio.gather(*tasks)
 
@@ -208,7 +243,11 @@ class DetailFetcher:
                 errors.append(f"리뷰 오류 prdtNo={pno}: {rv_data['_err']}")
             product["review_count"] = rv_data.get("review_count", 0)
             product["reviews"] = rv_data.get("reviews", [])
-            product["options"] = opt_data if opt_data else {}
+            if "_err" in opt_data:
+                errors.append(f"옵션 오류 prdtNo={pno}: {opt_data['_err']}")
+            product["options"] = {
+                key: value for key, value in opt_data.items() if key != "_err"
+            }
 
             # rating: 리뷰 score 평균
             scores = [rv["score"] for rv in product["reviews"] if rv.get("score") is not None]

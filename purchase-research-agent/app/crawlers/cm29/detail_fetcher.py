@@ -4,17 +4,19 @@ import re
 
 import httpx
 
+from app.crawlers.access_safety import ensure_success, safe_exception_message
+
 _DETAIL_URL = "https://product.29cm.co.kr/catalog/{item_id}"
 _REVIEW_URL = "https://review-api.29cm.co.kr/api/v4/reviews"
 _IMG_BASE = "https://img.29cm.co.kr"
 
 _HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "PurchaseResearchAgent/0.1 (+public product research; low rate)",
     "Referer": "https://www.29cm.co.kr/",
     "Accept": "text/html",
 }
 _REVIEW_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "PurchaseResearchAgent/0.1 (+public product research; low rate)",
     "Accept": "application/json",
     "Referer": "https://product.29cm.co.kr/",
     "Origin": "https://product.29cm.co.kr",
@@ -100,6 +102,7 @@ _DEFAULT_CONCURRENCY = 10
 
 
 class Cm29DetailFetcher:
+    """29CM 공개 상세와 리뷰를 제한된 동시성으로 상품에 추가한다."""
 
     async def attach(
         self,
@@ -108,22 +111,37 @@ class Cm29DetailFetcher:
         review_limit: int = 0,
         concurrency: int = _DEFAULT_CONCURRENCY,
     ) -> tuple[list[dict], list[str]]:
-        """상위 limit개 상품에 상세 페이지 데이터(평점·카테고리·옵션)와 리뷰를 추가한다.
-        review_limit이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다.
-        상품 간 요청은 concurrency로 동시 실행 수를 제한해 병렬 처리한다
-        (요청 폭주로 인한 차단을 피하기 위한 상한이며, 상품 하나당 리뷰 페이지네이션은
-        기존과 동일하게 순차로 가져온다)."""
+        """상위 상품에 상세, 옵션과 리뷰를 제한된 동시성으로 추가한다.
+
+        Args:
+            products: 29CM 검색 원본 상품이다.
+            limit: 상세를 추가할 상위 상품 수다.
+            review_limit: 상품별 리뷰 상한이며 0이면 결과 끝까지 진행한다.
+            concurrency: 동시에 처리할 상품 상한이다.
+
+        Returns:
+            상세가 추가된 상품과 URL/응답 body를 제외한 부분 실패 경고다.
+        """
         targets = products[:limit]
         errors_by_index: list[list[str]] = [[] for _ in targets]
         semaphore = asyncio.Semaphore(concurrency)
 
-        detail_client = httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=True)
-        review_client = httpx.AsyncClient(headers=_REVIEW_HEADERS, timeout=10, follow_redirects=True)
+        detail_client = httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=False)
+        review_client = httpx.AsyncClient(headers=_REVIEW_HEADERS, timeout=10, follow_redirects=False)
 
         async def _fetch_detail(item_id: str, product: dict) -> str | None:
-            """상세 페이지(JSON-LD, 옵션)를 가져와 product에 반영한다. 실패 시 에러 메시지를 반환한다."""
+            """상세 JSON-LD와 옵션을 상품에 반영하고 안전한 오류를 반환한다.
+
+            Args:
+                item_id: 29CM 공개 상품 식별자다.
+                product: 상세 필드를 추가할 원본 상품이다.
+
+            Returns:
+                성공하면 ``None``, 실패하면 URL과 body가 없는 오류 설명이다.
+            """
             try:
                 r = await detail_client.get(_DETAIL_URL.format(item_id=item_id))
+                ensure_success(r, "29cm")
                 html = r.text
 
                 ld_product, ld_breadcrumb = _parse_ld(html)
@@ -168,11 +186,19 @@ class Cm29DetailFetcher:
                         colors.append(c)
                 product["color"] = ", ".join(colors)
                 return None
-            except Exception as e:
-                return f"detail 오류 itemId={item_id}: {e}"
+            except Exception as exc:
+                return f"detail 오류 itemId={item_id}: {safe_exception_message(exc, '29cm', '상세')}"
 
         async def _fetch_review(item_id: str, product: dict) -> str | None:
-            """리뷰를 페이지네이션으로 전체 수집해 product에 반영한다. 실패 시 에러 메시지를 반환한다."""
+            """리뷰를 상한까지 수집해 상품에 반영하고 안전한 오류를 반환한다.
+
+            Args:
+                item_id: 29CM 공개 상품 식별자다.
+                product: 리뷰를 추가할 원본 상품이다.
+
+            Returns:
+                성공하면 ``None``, 실패하면 URL과 body가 없는 오류 설명이다.
+            """
             try:
                 reviews: list[dict] = []
                 rv_count = None
@@ -182,6 +208,7 @@ class Cm29DetailFetcher:
                         _REVIEW_URL,
                         params={"itemId": item_id, "page": rv_page, "size": _REVIEW_PAGE_SIZE},
                     )
+                    ensure_success(rr, "29cm")
                     rv_data = rr.json().get("data", {})
                     if rv_count is None and rv_data.get("count") is not None:
                         rv_count = rv_data["count"]
@@ -204,9 +231,9 @@ class Cm29DetailFetcher:
                 if rv_count is not None:
                     product["review_count"] = rv_count
                 return None
-            except Exception as e:
+            except Exception as exc:
                 product.setdefault("reviews", [])
-                return f"review 오류 itemId={item_id}: {e}"
+                return f"review 오류 itemId={item_id}: {safe_exception_message(exc, '29cm', '리뷰')}"
 
         async def _fetch_one(index: int, product: dict) -> None:
             item_id = product.get("source_product_id", "")

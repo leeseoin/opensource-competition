@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 
 from ..base import SiteCrawler, jittered_sleep
+from ..access_safety import ensure_success, safe_exception_message
 from .detail_fetcher import Cm29DetailFetcher
 from .verification import verify_products
 
@@ -62,7 +63,7 @@ class Cm29Crawler(SiteCrawler):
         processed_pages = 0
         ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=False) as client:
             while len(all_products) < max_items:
                 body = {
                     "keyword": keyword,
@@ -75,12 +76,12 @@ class Cm29Crawler(SiteCrawler):
 
                 try:
                     r = await client.post(_LISTING_URL, json=body)
-                    r.raise_for_status()
+                    ensure_success(r, "29cm")
                     payload = r.json()
                     data = payload.get("data", {})
                     self._save_json(payload, keyword, page, ts_file)
-                except Exception as e:
-                    errors.append(f"page {page} 요청 실패: {e}")
+                except Exception as exc:
+                    errors.append(f"page {page} 요청 실패: {safe_exception_message(exc, '29cm', '검색')}")
                     break
 
                 items = data.get("list", [])

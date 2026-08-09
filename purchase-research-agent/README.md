@@ -64,6 +64,15 @@ publisher confirm, 5초 retry Queue와 DLQ 이름은 Go/Spring 계약과 동일�
 허용합니다. 현재 `ko-KR`/`KRW`만 지원하고 의미를 보존할 수 없는 `attributes` 필터는
 무시하지 않고 non-retryable 실패로 반환합니다.
 
+판매처 HTTP/TLS 오류를 우회하지 않습니다. TLS 인증서를 기본 검증하고 3xx redirect를
+자동 추적하지 않으며 401/403은 non-retryable 접근 차단으로 종료합니다. 429와 5xx만
+일시 오류로 분류합니다. Queue 경고에는 요청 URL/query, 응답 body와 traceback을 넣지
+않습니다. 다음 정적 검사는 위험한 설정이 다시 추가되는 것을 차단합니다.
+
+```bash
+make python-crawler-safety-check
+```
+
 실제 판매처 요청이 없는 RabbitMQ 통합 검증은 운영 vhost가 아닌 별도 테스트 vhost URL을
 지정해 실행합니다.
 

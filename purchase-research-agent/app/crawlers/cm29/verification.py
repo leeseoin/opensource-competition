@@ -13,6 +13,8 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from bs4 import BeautifulSoup
 
+from app.crawlers.access_safety import ensure_success, safe_exception_message
+
 _HTML_DIR = Path("output/raw_html/29cm")
 _FIELDS = (
     "title",
@@ -57,12 +59,19 @@ async def verify_products(
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _verify_one(index: int, product: dict[str, Any]) -> None:
+        """상품 하나의 상세 응답을 비교하고 실패 시 안전한 검증 상태를 기록한다.
+
+        Args:
+            index: 상품별 경고 순서를 보존할 입력 위치다.
+            product: 검증 상태를 추가할 29CM 원본 상품이다.
+        """
+
         product_id = str(product.get("source_product_id") or "")
         html_source_url = str(product.get("link") or "")
         async with semaphore:
             try:
                 response = await client.get(html_source_url)
-                response.raise_for_status()
+                ensure_success(response, "29cm")
                 html_source_url = str(response.url)
                 (_HTML_DIR / f"29cm_{product_id}_{ts_file}.html").write_text(
                     response.text,
@@ -81,13 +90,14 @@ async def verify_products(
                         for difference in product["verification"]["differences"]
                     )
                     warnings_by_index[index].append(f"29CM JSON/HTML 불일치 {product_id}: {fields}")
-            except (httpx.HTTPError, ValueError, OSError) as exc:
+            except Exception as exc:
+                reason = safe_exception_message(exc, "29cm", "상세 검증")
                 product["verification"] = failed_verification(
                     json_source_url=json_source_url,
                     html_source_url=html_source_url,
-                    reason=str(exc),
+                    reason=reason,
                 )
-                warnings_by_index[index].append(f"29CM 상세 HTML 검증 실패 {product_id}: {exc}")
+                warnings_by_index[index].append(f"29CM 상세 HTML 검증 실패 {product_id}: {reason}")
 
     await asyncio.gather(*(_verify_one(i, p) for i, p in enumerate(products)))
     warnings = [warning for bucket in warnings_by_index for warning in bucket]

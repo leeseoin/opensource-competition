@@ -66,6 +66,7 @@
 - [x] HTTP server lifecycle과 graceful shutdown 테스트
 - [x] 기존 Go type/function의 한국어 주석 규칙 정비
 - [ ] 도메인 allowlist와 URL 검증
+- [x] `MERCHANT-001` Python Collector의 TLS 인증서 검증, redirect 자동 추적 차단과 401/403/429/5xx 분류
 - [ ] 공통 HTTP client, timeout, retry, rate limiter **(부분 구현: ABC마트 timeout·응답 제한·요청 간격 적용)**
 - [ ] collector error/status 계약 **(부분 구현: blocked·unsupported·temporarily_unavailable 상태 사용)**
 - [x] 실제 판매처 HTML/JSON fixture test 기반
@@ -92,7 +93,7 @@
 - [ ] 옵션·재고·사이즈표 Adapter
 - [ ] 공개 리뷰와 사진 여부 Adapter
 - [ ] 29CM·ABC마트 리뷰 상품 작업 큐와 제한된 고루틴 Worker Pool
-- [ ] partial/blocked/unsupported 처리 **(부분 구현: 미등록 판매처 unsupported, 원격 오류 temporarily_unavailable)**
+- [ ] partial/blocked/unsupported 처리 **(부분 구현: Python은 접근 차단/일시 오류를 안전한 Queue 실패로 분류, 공통 상태 직접 매핑 남음)**
 - [x] ABC마트 검색 opt-in live smoke test
 - [x] 무신사 검색 opt-in live smoke test
 

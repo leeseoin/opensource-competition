@@ -120,6 +120,7 @@ Wiki는 가격, 재고와 옵션을 저장하지 않는다. 가격/재고/옵션
 - 검색, 상세, 옵션, 재고, 공개 리뷰 parsing
 - RabbitMQ 작업 소비와 `CollectorResult` 발행
 - 판매처별 요청 간격, timeout, 재시도 상한, 차단 감지
+- TLS 인증서 검증, redirect 자동 추적 금지와 401/403 접근 통제 비우회
 - `sourceUrl`, `collectedAt`, `collectorVersion` 포함
 
 현재 Python 전환 runtime은 `purchase-research-agent`이고 Go 구현은 계약 비교와 복구를

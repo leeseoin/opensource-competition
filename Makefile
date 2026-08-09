@@ -37,7 +37,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
 	python-collector-sync python-collector-test \
-	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test \
+	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test python-crawler-safety-check \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
 	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
@@ -61,6 +61,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make python-crawler-worker Python RabbitMQ 검색 Worker 실행' \
 		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
 		'  make python-crawler-rabbitmq-test 격리 RabbitMQ vhost에서 Python Worker 검증' \
+		'  make python-crawler-safety-check Python TLS/redirect 금지 설정 검사' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
@@ -140,6 +141,9 @@ python-crawler-rabbitmq-test: python-crawler-sync ## TEST_RABBITMQ_URL의 격리
 	@test -n "$(TEST_RABBITMQ_URL)" || (printf '%s\n' 'TEST_RABBITMQ_URL이 필요합니다.'; exit 1)
 	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(TEST_RABBITMQ_URL)" uv run --frozen python -m scripts.check_collection_worker_rabbitmq
 
+python-crawler-safety-check: ## Python Collector의 TLS 검증 비활성화와 자동 redirect를 차단한다.
+	./scripts/check-python-crawler-safety.sh
+
 product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
 	cd $(PRODUCT_BACKEND_DIR) && ./gradlew bootRun
 
@@ -189,7 +193,7 @@ branch-common-check: ## 두 Collector 브랜치의 공통 runtime 파일 동일�
 docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
 	./scripts/check-document-sync.sh
 
-test: collector-test python-collector-test python-crawler-test product-backend-test mcp-server-test web-test web-lint ## Go, Python, Spring Boot, MCP, Next.js를 검증한다.
+test: collector-test python-collector-test python-crawler-test python-crawler-safety-check product-backend-test mcp-server-test web-test web-lint ## Go, Python, Spring Boot, MCP, Next.js를 검증한다.
 
 check: docs-check retrieval-eval-check wiki-check ## 문서 동기화, 검색 평가/Wiki data, Compose 설정과 전체 코드를 검증한다.
 	docker compose config --quiet

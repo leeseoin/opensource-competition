@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from app.crawlers.access_safety import ensure_success
+
 _SEARCH_ENDPOINT = "https://abcmart.a-rt.com/display/search-word/result-total/list"
 _PRODUCT_BASE = "https://abcmart.a-rt.com/product?prdtNo="
 _JSON_DIR = Path("output/raw_json/abcmart")
@@ -48,7 +50,8 @@ class AbcJsonFetcher:
             상품 목록과 전체 개수 및 다음 페이지 정보다.
 
         Raises:
-            RuntimeError: HTTP 실패 또는 필수 JSON 구조가 없는 경우다.
+            MerchantAccessError: redirect, 차단, rate limit 또는 HTTP 실패인 경우다.
+            RuntimeError: 필수 JSON 구조가 없거나 JSON을 해석할 수 없는 경우다.
         """
 
         params = {
@@ -68,8 +71,7 @@ class AbcJsonFetcher:
             "memberTypeCode": "10002",
         }
         response = await client.get(_SEARCH_ENDPOINT, params=params)
-        if response.status_code != 200:
-            raise RuntimeError(f"ABC마트 JSON HTTP {response.status_code}")
+        ensure_success(response, "abcmart")
         try:
             payload = response.json()
         except ValueError as exc:

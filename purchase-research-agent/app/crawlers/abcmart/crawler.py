@@ -1,5 +1,4 @@
 import re
-import traceback
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -8,6 +7,7 @@ import httpx
 from bs4 import BeautifulSoup
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
+from ..access_safety import safe_exception_message
 from ..base import SiteCrawler, jittered_sleep
 from .detail_fetcher import DetailFetcher
 from .json_fetcher import AbcJsonFetcher
@@ -105,7 +105,7 @@ class AbcMartCrawler(SiteCrawler):
         errors: list[str] = []
         all_products: list[dict] = []
         seen_prdt_nos: set[str] = set()
-        browser_cfg = BrowserConfig(ignore_https_errors=True)
+        browser_cfg = BrowserConfig(ignore_https_errors=False)
         json_fetcher = AbcJsonFetcher()
         page = start_page
         processed_pages = 0
@@ -127,7 +127,7 @@ class AbcMartCrawler(SiteCrawler):
                 # 동시 워커 부하 중 순간적인 연결 예외가 재시도 없이 pagination을
                 # 통째로 끊어 목표치의 88%를 날린 사례 확인).
                 page_succeeded = False
-                last_tb = ""
+                last_error = ""
                 for attempt in range(2):
                     try:
                         json_page = await json_fetcher.fetch_page(
@@ -167,14 +167,14 @@ class AbcMartCrawler(SiteCrawler):
                         page_succeeded = True
                         break
 
-                    except Exception:
-                        last_tb = traceback.format_exc()
+                    except Exception as exc:
+                        last_error = safe_exception_message(exc, "abcmart", "검색")
                         if attempt == 0:
                             print(f"[ABCMART:full] page={page} 예외, 재시도 1회")
                             await jittered_sleep(2.0, spread=1.0)
 
                 if not page_succeeded:
-                    errors.append(f"page {page} 예외(재시도 후에도 실패):\n{last_tb}")
+                    errors.append(f"page {page} 예외(재시도 후에도 실패): {last_error}")
                     break
 
                 processed_pages += 1
@@ -218,11 +218,21 @@ class AbcMartCrawler(SiteCrawler):
     async def crawl_category_by_no(
         self, ctgrNo: str, gender: str, max_items: int, label: str = ""
     ) -> tuple[list[dict], list[str]]:
-        """ctgrNo + genderGbnCode 직접 지정 크롤링"""
+        """ABC마트 category 번호와 성별 코드로 공개 목록을 수집한다.
+
+        Args:
+            ctgrNo: ABC마트 category 번호다.
+            gender: 성별 channel 코드다.
+            max_items: 반환할 상품 상한이다.
+            label: 로그와 원본 파일에 사용할 안전한 표시 이름이다.
+
+        Returns:
+            원본 상품과 URL/traceback을 제외한 경고 목록이다.
+        """
         errors: list[str] = []
         all_products: list[dict] = []
         seen_prdt_nos: set[str] = set()
-        browser_cfg = BrowserConfig(ignore_https_errors=True)
+        browser_cfg = BrowserConfig(ignore_https_errors=False)
         page = 1
         tag = label or f"ctgrNo={ctgrNo}/gender={gender}"
         ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -248,9 +258,8 @@ class AbcMartCrawler(SiteCrawler):
                     if not new:
                         break
 
-                except Exception:
-                    tb = traceback.format_exc()
-                    errors.append(f"[{tag}] page {page} 예외:\n{tb}")
+                except Exception as exc:
+                    errors.append(f"[{tag}] page {page} 예외: {safe_exception_message(exc, 'abcmart', '카테고리')}")
                     break
 
                 page += 1
@@ -272,11 +281,22 @@ class AbcMartCrawler(SiteCrawler):
     async def crawl_by_brand_no(
         self, brand_no: str, channel_no: str, gender: str, max_items: int, label: str = ""
     ) -> tuple[list[dict], list[str]]:
-        """brandNo + tChnnlNo + genderGbnCode 직접 지정 크롤링"""
+        """ABC마트 brand/channel/성별 코드로 공개 목록을 수집한다.
+
+        Args:
+            brand_no: ABC마트 brand 번호다.
+            channel_no: 판매 channel 번호다.
+            gender: 성별 channel 코드다.
+            max_items: 반환할 상품 상한이다.
+            label: 로그와 원본 파일에 사용할 안전한 표시 이름이다.
+
+        Returns:
+            원본 상품과 URL/traceback을 제외한 경고 목록이다.
+        """
         errors: list[str] = []
         all_products: list[dict] = []
         seen_prdt_nos: set[str] = set()
-        browser_cfg = BrowserConfig(ignore_https_errors=True)
+        browser_cfg = BrowserConfig(ignore_https_errors=False)
         page = 1
         tag = label or f"brandNo={brand_no}/channel={channel_no}/gender={gender}"
         ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -302,9 +322,8 @@ class AbcMartCrawler(SiteCrawler):
                     if not new:
                         break
 
-                except Exception:
-                    tb = traceback.format_exc()
-                    errors.append(f"[{tag}] page {page} 예외:\n{tb}")
+                except Exception as exc:
+                    errors.append(f"[{tag}] page {page} 예외: {safe_exception_message(exc, 'abcmart', '브랜드')}")
                     break
 
                 page += 1
