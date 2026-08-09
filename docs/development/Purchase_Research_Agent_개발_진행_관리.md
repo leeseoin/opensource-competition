@@ -1857,6 +1857,47 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 루트 `make check`: Go/Spring Boot/MCP/Next.js test/lint/build와 문서/평가/Wiki/Compose
     전체 검사 통과
 
+### 2026-08-09 OPS-001 Python 크롤러 실행환경 고정
+
+- 진행상황: **완료**. 정우님 Python 크롤러를 기존 Python 3.14 `.venv`/pip 최소 version
+  설치 방식에서 Python 3.12.11/`uv.lock` frozen 실행으로 전환했다. `OPS-001`의 기존
+  완료 상태는 유지하며 Python runtime 재현 근거를 추가했다.
+- 구현 위치:
+  - `purchase-research-agent/.python-version:1` `Python runtime pin`: uv가 사용할 Python
+    3.12.11 기준
+  - `purchase-research-agent/pyproject.toml:1` `[project]`: Python 3.12 범위와 직접 의존성
+    선언
+  - `purchase-research-agent/uv.lock:1` `uv lock`: 105개 package 해석 결과와 배포 파일
+    hash 고정
+  - `Makefile:119` `python-crawler-sync`: `uv sync --frozen --python 3.12` 환경 준비
+  - `Makefile:122` `python-crawler-setup`: frozen 환경과 Chromium 설치
+  - `Makefile:125` `python-crawler-run`: frozen 환경의 FastAPI 실행
+  - `Makefile:128` `python-crawler-test`: frozen 환경의 13개 단위 테스트 실행
+  - `purchase-research-agent/README.md:18` `실행 방법`: 루트와 직접 실행 명령
+- 발생 문제: 기존 `.venv`는 문서의 Python 3.12가 아닌 Python 3.14.4로 만들어져 있었고,
+  `requirements.txt`에 선언된 `aio-pika`도 설치되지 않아 RabbitMQ script가 import 단계에서
+  중단됐다.
+- 원인: 최소 version만 선언한 `requirements.txt`와 개발자별 수동 pip 설치 상태가 실제
+  환경을 결정했으며 lock과 interpreter pin이 없었다.
+- 해결: `pyproject.toml`을 직접 의존성 원본으로 만들고 Python 3.12.11에서 `uv.lock`을
+  생성했다. 루트 setup/run/test를 `uv sync --frozen`/`uv run --frozen`으로 통일하고 기존
+  `requirements.txt`를 제거했다. 변경된 직접 의존성 version과 aio-pika를
+  `THIRD_PARTY_NOTICES.md`에 동기화했다.
+- 남은 위험: FastAPI TestClient가 현재 lock의 HTTPX 조합에서 `httpx2` 전환 안내
+  deprecation warning을 출력한다. 운영 API와 13개 단위 테스트에는 영향이 없지만 향후
+  FastAPI test client 교체 시 별도 회귀 검증이 필요하다. Python Worker의 Spring Boot
+  Queue 계약/retry/DLQ/ACK 이식은 `QUEUE-001` 작업으로 남아 있다.
+- 검증:
+  - `uv lock --check`: 통과/105개 package 해석
+  - `make python-crawler-setup`: 통과/Python 3.12.11 frozen 환경과 Chromium 준비
+  - `make python-crawler-test`: 13개 통과
+  - `uv run --frozen` FastAPI `/health`: HTTP 200
+  - `uv run --frozen` aio-pika import: 9.6.2 통과
+  - `uv run --frozen` 로컬 RabbitMQ 빈 작업 연결: 통과
+  - `make test`: Go/Python 비교기/Python runtime/Spring Boot/MCP/Next.js test와 lint 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -1878,6 +1919,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ## 다음 갱신 대상
 
+- Python Worker의 Spring Boot CollectionTask/CollectionResult Queue 계약 이식
 - RabbitMQ를 통한 ABC마트/29CM 결과 PostgreSQL 적재 E2E
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답

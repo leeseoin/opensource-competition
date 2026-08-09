@@ -40,24 +40,26 @@
 크롤러는 같은 저장소 협업 브랜치의 코드이며, 선별 이식 범위와 변경 이유는
 `services/python-collector/README.md`에 기록한다.
 
-### dev-jw Python 크롤러 원본 기준 구현
+### Python 크롤러 runtime
 
-아래 구성요소는 `origin/dev-jw@e2d863c`에서 선별 이식한
-`purchase-research-agent/requirements.txt`의 최소 version 조건이다. lock 파일이 없어
-실제 설치 version은 설치 시점에 달라질 수 있으므로 성능 비교 전에 별도 lock 파일로
-고정해야 한다.
+아래 구성요소는 `origin/dev-jw@e2d863c`에서 선별 이식한 Python 크롤러를
+`purchase-research-agent/pyproject.toml`과 `purchase-research-agent/uv.lock`으로
+고정한 직접 의존성이다. 실행 Python은 3.12 계열로 제한하며 현재 lock은 Python
+3.12.11로 생성했다. 정확한 전이 의존성과 배포 파일 hash는 `uv.lock`에서 확인한다.
 
-| 구성요소 | 최소 version | 용도 | 출처 | 라이선스 |
+| 구성요소 | lock version | 용도 | 출처 | 라이선스 |
 |---|---:|---|---|---|
-| FastAPI | 0.111.0 | Python 크롤러 HTTP API | [fastapi/fastapi](https://github.com/fastapi/fastapi) | MIT |
-| Uvicorn | 0.29.0 | ASGI server | [encode/uvicorn](https://github.com/encode/uvicorn) | BSD-3-Clause |
-| HTTPX | 0.27.0 | 29CM 및 ABC마트 상세 JSON 요청 | [encode/httpx](https://github.com/encode/httpx) | BSD-3-Clause |
-| Pydantic | 2.7.0 | API 요청/응답 model 검증 | [pydantic/pydantic](https://github.com/pydantic/pydantic) | MIT |
-| python-dotenv | 1.0.0 | 환경 변수 파일 로드 | [theskumar/python-dotenv](https://github.com/theskumar/python-dotenv) | BSD-3-Clause |
-| Beautiful Soup | 4.12.0 | ABC마트 HTML 파싱 | [wention/BeautifulSoup4](https://github.com/wention/BeautifulSoup4) | MIT |
-| Crawl4AI | 0.4.0 | ABC마트 browser 기반 페이지 수집 | [unclecode/crawl4ai](https://github.com/unclecode/crawl4ai) | Apache-2.0 |
-| Playwright Python | 1.44.0 | Crawl4AI browser 실행 기반 | [microsoft/playwright-python](https://github.com/microsoft/playwright-python) | Apache-2.0 |
-| jsonschema | 4.20.0 | ABC마트 원본 Contract 검증 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | MIT |
+| Python | 3.12.11 | Python 크롤러 runtime | [python/cpython](https://github.com/python/cpython) | PSF-2.0 |
+| aio-pika | 9.6.2 | RabbitMQ 비동기 연결과 메시지 처리 | [mosquito/aio-pika](https://github.com/mosquito/aio-pika) | Apache-2.0 |
+| FastAPI | 0.141.1 | Python 크롤러 HTTP API | [fastapi/fastapi](https://github.com/fastapi/fastapi) | MIT |
+| Uvicorn | 0.52.1 | ASGI server | [encode/uvicorn](https://github.com/encode/uvicorn) | BSD-3-Clause |
+| HTTPX | 0.28.1 | 29CM 및 ABC마트 상세 JSON 요청 | [encode/httpx](https://github.com/encode/httpx) | BSD-3-Clause |
+| Pydantic | 2.13.4 | API 요청/응답 model 검증 | [pydantic/pydantic](https://github.com/pydantic/pydantic) | MIT |
+| python-dotenv | 1.2.2 | 환경 변수 파일 로드 | [theskumar/python-dotenv](https://github.com/theskumar/python-dotenv) | BSD-3-Clause |
+| Beautiful Soup | 4.15.0 | ABC마트 HTML 파싱 | [wention/BeautifulSoup4](https://github.com/wention/BeautifulSoup4) | MIT |
+| Crawl4AI | 0.9.2 | ABC마트 browser 기반 페이지 수집 | [unclecode/crawl4ai](https://github.com/unclecode/crawl4ai) | Apache-2.0 |
+| Playwright Python | 1.62.0 | Crawl4AI browser 실행 기반 | [microsoft/playwright-python](https://github.com/microsoft/playwright-python) | Apache-2.0 |
+| jsonschema | 4.26.0 | 수집 결과 Contract 검증 | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) | MIT |
 
 정우님 원본 코드의 선별 이식 범위와 기존 Python 비교 구현과의 차이는
 `docs/reports/2026-08-04_dev-jw_Python_크롤러_가져오기와_차이_분석.md`에 기록한다.

@@ -369,6 +369,7 @@
 
 ### Python/Go 크롤러 확장성과 성능 비교
 
+- [x] `OPS-001` 정우님 Python runtime을 Python 3.12와 `uv.lock`으로 고정하고 루트 실행/테스트 명령을 재현
 - [x] `origin/dev-jw` Python ABC마트/29CM 크롤러와 Contract 선별 이식
 - [x] 정우님 Python 결과를 현재 Spring Boot `CollectorResult`로 변환하고 최대 500개를 50개 batch로 나누는 수동 PostgreSQL 적재 API 연결
 - [x] Python ABC마트 JSON 기본 수집/HTML 전수 대조/상품별 DB 검증 결과 저장

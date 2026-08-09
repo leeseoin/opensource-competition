@@ -33,11 +33,12 @@ make python-crawler-run
 make python-crawler-run PYTHON_CRAWLER_PORT=8013
 ```
 
-아래 명령은 `purchase-research-agent` 디렉토리에서 직접 실행할 때 사용합니다.
+의존성은 Python 3.12와 `uv.lock`으로 고정합니다. 아래 명령은
+`purchase-research-agent` 디렉토리에서 직접 실행할 때 사용합니다.
 
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8012
+uv sync --frozen --python 3.12
+uv run --frozen uvicorn app.main:app --host 0.0.0.0 --port 8012
 ```
 
 ## API 엔드포인트

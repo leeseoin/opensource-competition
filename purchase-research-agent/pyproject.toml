@@ -1,0 +1,20 @@
+[project]
+name = "purchase-research-agent-crawler"
+version = "0.1.0"
+description = "Purchase Research Agent의 ABC마트와 29CM Python 크롤러"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "aio-pika>=9.4.0,<10",
+  "beautifulsoup4>=4.12.0,<5",
+  "crawl4ai>=0.4.0,<1",
+  "fastapi>=0.111.0,<1",
+  "httpx>=0.27.0,<1",
+  "jsonschema>=4.20.0,<5",
+  "playwright>=1.44.0,<2",
+  "pydantic>=2.7.0,<3",
+  "python-dotenv>=1.0.0,<2",
+  "uvicorn[standard]>=0.29.0,<1",
+]
+
+[tool.uv]
+package = false
