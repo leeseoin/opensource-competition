@@ -2,7 +2,7 @@
 
 작성일: 2026-07-31
 최종 점검일: 2026-08-09
-최종 점검 범위: `QUEUE-001` Python Worker와 `OPS-001` Python runtime
+최종 점검 범위: `MERCHANT-001` Python 접근 안전성, `QUEUE-001` Python Worker와 `OPS-001` Python runtime
 최종 기능 동기화일: 2026-08-09
 상태: 기능 목록 동기화
 
@@ -75,7 +75,7 @@
 | `COLLECTOR-003` | 29CM 공개 상품 검색 | 완료 | P0 | 공개 검색 응답의 상품 기본정보와 pagination 변환 | fixture 테스트와 낮은 빈도의 opt-in smoke test가 통과하고 출처가 포함됨 | Collector 변환 설명 / 공통 수집 데이터 명세 | 상세/리뷰 기능과 분리해 유지 |
 | `COLLECTOR-004` | 상품 상세와 옵션 수집 | 계획 | P1 | 상세 설명, 가격, 배송, 옵션, 사이즈표와 재고 | ABC마트/29CM 상세 결과가 공통 계약으로 변환되고 fixture 테스트가 통과함 | 공통 수집 데이터 명세 / 데이터 수집과 DB 적재 설계 | 공개 상세 구조와 요청 예산 확인 |
 | `COLLECTOR-005` | 공개 리뷰 수집 | 계획 | P1 | 리뷰 pagination, 평점, 본문, 구매 옵션과 사진 존재 여부 | 작성자 식별정보와 이미지를 저장하지 않고 제한된 요청으로 fixture 테스트가 통과함 | 공통 수집 데이터 명세 / 데이터 수집과 DB 적재 설계 | 리뷰 공개 범위와 pagination 구조 확인 |
-| `MERCHANT-001` | 판매처 추가와 접근 안전성 | 부분 구현 | P1 | Registry, host allowlist, robots 확인, URL/DNS/redirect 검증과 판매처별 제한 | 새 Adapter가 공통 등록 절차로 추가되고 private network와 접근 제한 우회가 차단됨 | 시스템 구조 / Collector 변환 설명 | 공통 allowlist와 redirect 안전성 구현 |
+| `MERCHANT-001` | 판매처 추가와 접근 안전성 | 부분 구현 | P1 | Registry, host allowlist, robots 확인, URL/DNS/redirect 검증과 판매처별 제한 | 새 Adapter가 공통 등록 절차로 추가되고 private network와 접근 제한 우회가 차단됨 | 시스템 구조 / Collector 변환 설명 | Python 상품 URL host/DNS 검증과 process 간 rate/concurrency 제한 |
 
 ### Queue와 Redis
 

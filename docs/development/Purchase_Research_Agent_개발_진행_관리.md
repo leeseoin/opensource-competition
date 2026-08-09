@@ -98,6 +98,9 @@
 - [ ] merchant/domain allowlist 구현
 - [ ] URL scheme, host, port 검증 구현
 - [ ] DNS·redirect 이후 private IP와 localhost 차단
+- [x] Python Collector TLS 인증서 검증과 redirect 자동 추적 차단
+- [x] Python Collector 401/403 즉시 차단과 429/5xx retryable 분류
+- [x] Python Queue 경고의 URL/query, 응답 body와 traceback 비노출
 - [ ] 공통 HTTP client와 response body 상한 구현
 - [x] ABC마트 검색 timeout 설정
 - [ ] idempotent 요청 retry 상한과 backoff 구현
@@ -1934,6 +1937,36 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `uv run --frozen python -m compileall -q app scripts tests`: 통과
   - 격리 vhost `make python-crawler-rabbitmq-test`: success/retry/DLQ 통과
   - `make test`: Go/Python 비교기/Python runtime/Spring Boot/MCP/Next.js test와 lint 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-09 MERCHANT-001 Python 접근 안전성
+
+- 진행상황: **부분 구현**. commit `6ecc6c8`에서 Python 검색/상세/리뷰/옵션 경로의 TLS
+  검증을 활성화하고 redirect 자동 추적을 제거했다. 401/403은 접근 통제로 중단하고
+  429/5xx만 재시도 가능으로 분류한다.
+- 구현 위치:
+  - `purchase-research-agent/app/crawlers/access_safety.py:11` `MerchantAccessError`: 안전한
+    오류 코드와 재시도 의미
+  - `purchase-research-agent/app/crawlers/access_safety.py:24` `ensure_success`: redirect와
+    HTTP 상태 분류
+  - `purchase-research-agent/app/crawlers/access_safety.py:69` `safe_exception_message`: URL,
+    query, body와 traceback 비노출
+  - `purchase-research-agent/tests/test_access_safety.py:17` `AccessSafetyTests`: TLS 설정,
+    접근 통제와 오류 비노출 검증
+  - `scripts/check-python-crawler-safety.sh:1` `Python safety check`: 위험 설정 정적 차단
+- 발생 문제: Python 이식 코드에 TLS 검증 비활성화, 자동 redirect, browser User-Agent와
+  raw exception/traceback 기록이 남아 있었다.
+- 원인: 검색 기능 검증을 우선한 원본 실행 설정이 운영 접근 경계와 분리되지 않았다.
+- 해결: 공통 상태 검증과 안전 오류 변환을 모든 Python HTTP 경로에 적용하고 식별 가능한
+  User-Agent를 사용했다. 정적 검사를 루트 `make test`에 포함했다.
+- 남은 위험: 판매처 응답의 상품 URL은 아직 scheme/host/port와 DNS private IP를 직접
+  검증하지 않는다. 여러 process가 공유하는 rate/concurrency 제한도 남아 있어
+  `MERCHANT-001` 상태는 부분 구현으로 유지한다.
+- 검증:
+  - `make python-crawler-test`: 33개 통과
+  - `make python-crawler-safety-check`: 통과
+  - `make test`: 전체 통과
   - `make docs-check`: 통과
   - `git diff --check`: 통과
 

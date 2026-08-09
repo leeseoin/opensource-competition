@@ -4,6 +4,7 @@
 
 ## 최신 기록
 
+- 2026-08-09 / [`MERCHANT-001` Python 접근 안전성](2026-08-09-MERCHANT-001-Python_접근_안전성.md) / `6ecc6c8` / TLS 검증과 redirect 차단 및 401/403/429/5xx 안전 분류를 Python 수집 경로에 적용
 - 2026-08-09 / [`QUEUE-001` Python Collection Queue Worker](2026-08-09-QUEUE-001-Python_Collection_Queue_Worker.md) / `32d6446` / Python runtime을 Queue v1에 연결하고 confirm 뒤 ACK, retry, DLQ를 실제 broker로 검증
 - 2026-08-08 / [`ANALYSIS-004` 범용 상품군 선택 UI](2026-08-08-ANALYSIS-004-범용_상품군_선택_UI.md) / `e8dc28d` / 최대 5개 상품군으로 중복을 묶고 컬러별 원본 판매 행과 재고 선택 UI 구현
 - 2026-08-08 / [`ANALYSIS-003` 검토 Wiki 운영 검색](2026-08-08-ANALYSIS-003-검토_Wiki_운영_검색.md) / `e8dc28d` / PUBLISHED 운동화 관계를 운영 후보 검색과 실패 fallback에 연결
