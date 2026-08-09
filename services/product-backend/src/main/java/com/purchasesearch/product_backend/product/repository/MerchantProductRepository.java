@@ -57,6 +57,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR LOWER(CAST(product.category_path AS TEXT)) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR EXISTS (
 							SELECT 1
 							FROM offer_snapshots snapshot
@@ -91,6 +92,31 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 			@Param("merchant") String merchant,
 			@Param("query") String query,
 			Pageable pageable);
+
+	/**
+	 * 상위 후보와 같은 판매처/브랜드/상품명/카테고리의 전체 판매 행을 조회한다.
+	 *
+	 * @param merchant 판매처 식별자
+	 * @param name 정규화 전 대표 상품명
+	 * @param brand 정규화 전 대표 브랜드 또는 빈 문자열
+	 * @param categoryPath `/`로 연결한 카테고리 경로
+	 * @return 재고나 사용자 조건으로 제거하지 않은 최신 판매처 상품 목록
+	 */
+	@Query(nativeQuery = true, value = """
+			SELECT merchant_product.*
+			FROM merchant_products merchant_product
+			JOIN products product ON product.id = merchant_product.product_id
+			WHERE merchant_product.merchant = :merchant
+			  AND LOWER(TRIM(product.name)) = LOWER(TRIM(:name))
+			  AND LOWER(COALESCE(TRIM(product.brand), '')) = LOWER(TRIM(:brand))
+			  AND product.category_path = TO_JSONB(STRING_TO_ARRAY(:categoryPath, '/'))
+			ORDER BY merchant_product.last_collected_at DESC, merchant_product.id DESC
+			""")
+	List<MerchantProduct> findFamilyListings(
+			@Param("merchant") String merchant,
+			@Param("name") String name,
+			@Param("brand") String brand,
+			@Param("categoryPath") String categoryPath);
 
 	/**
 	 * 최신 offer와 옵션에 사용자 확인 가격, 사이즈, 색상 및 재고 조건을 적용한다.
@@ -143,6 +169,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 								TO_TSVECTOR('simple', product.search_text)
 									@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query))
 								OR WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3
 								OR EXISTS (
 									SELECT 1
 									FROM collection_search_contexts fuzzy_context
@@ -180,11 +207,13 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					ORDER BY
 					  CASE
 						WHEN :query IS NULL THEN 0
-						WHEN product.search_text LIKE LOWER(CONCAT('%', :query, '%')) THEN 3
+						WHEN product.search_text LIKE LOWER(CONCAT('%', :query, '%'))
+							OR LOWER(CAST(product.category_path AS TEXT)) LIKE LOWER(CONCAT('%', :query, '%')) THEN 4
 						WHEN :enableFullText = TRUE AND TO_TSVECTOR('simple', product.search_text)
-							@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query)) THEN 2
+							@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query)) THEN 3
 						WHEN :enableFullText = TRUE
-							AND WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3 THEN 1
+							AND (WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3) THEN 2
 						WHEN :queryVector IS NOT NULL AND semantic_embedding.embedding IS NOT NULL
 							AND semantic_embedding.embedding <=> CAST(:queryVector AS vector) <= 0.55 THEN 1
 						ELSE 0
@@ -212,6 +241,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR LOWER(CAST(product.category_path AS TEXT)) LIKE LOWER(CONCAT('%', :query, '%'))
 						OR EXISTS (
 							SELECT 1 FROM collection_search_contexts search_context
 							WHERE search_context.request_id = latest_snapshot.request_id
@@ -223,6 +253,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 								TO_TSVECTOR('simple', product.search_text)
 									@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query))
 								OR WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3
 								OR EXISTS (
 									SELECT 1 FROM collection_search_contexts fuzzy_context
 									WHERE fuzzy_context.request_id = latest_snapshot.request_id
@@ -283,14 +314,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 			         CASE
 			           WHEN LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
 			             OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
-			             OR EXISTS (
-			               SELECT 1
-			               FROM offer_snapshots snapshot
-			               JOIN collection_search_contexts search_context
-			                 ON search_context.request_id = snapshot.request_id
-			               WHERE snapshot.merchant_product_id = merchant_product.id
-			                 AND LOWER(search_context.search_query) LIKE LOWER(CONCAT('%', :query, '%'))
-			             )
+			             OR LOWER(CAST(product.category_path AS TEXT)) LIKE LOWER(CONCAT('%', :query, '%'))
 			           THEN 1.0 ELSE 0.0
 			         END,
 			         CASE
@@ -302,7 +326,8 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 			           ELSE 0.0
 			         END,
 			         WORD_SIMILARITY(LOWER(:query), product.search_text),
-			         COALESCE((
+			         WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))),
+			         0.25 * COALESCE((
 			           SELECT MAX(WORD_SIMILARITY(LOWER(:query), LOWER(search_context.search_query)))
 			           FROM offer_snapshots snapshot
 			           JOIN collection_search_contexts search_context

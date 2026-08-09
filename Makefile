@@ -40,7 +40,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 	python-crawler-env python-crawler-setup python-crawler-run python-crawler-test \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
-	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-perf-test wiki-check branch-common-check docs-check test check
+	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
 
 help: ## 사용할 수 있는 명령을 보여준다.
 	@printf '%s\n' \
@@ -63,6 +63,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
 		'  make web-dev         Next.js 개발 서버 실행' \
 		'  make retrieval-eval-check 60개 검색 평가 data 검사' \
+		'  make retrieval-ab-report 기존 AND와 현재 FTS 질문별 A/B 검토표 생성' \
 		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
 		'  make test            Go, Spring Boot, Next.js lint 일괄 검증' \
 		'  make check           Compose 설정과 전체 코드 검증' \
@@ -160,6 +161,9 @@ web-build: mcp-server-build ## MCP Server와 Next.js production bundle을 빌드
 
 retrieval-eval-check: ## 60개 검색 평가 질문, 유형과 snapshot 참조를 검증한다.
 	./scripts/check-retrieval-evaluation.sh
+
+retrieval-ab-report: ## 기존 AND와 현재 FTS의 질문별 Top 3 A/B 검토표를 생성한다.
+	cd $(PRODUCT_BACKEND_DIR) && RETRIEVAL_AB_REPORT_ENABLED=true ./gradlew test --tests com.purchasesearch.product_backend.RetrievalEvaluationIntegrationTests --info
 
 retrieval-perf-test: ## 10,000개 PostgreSQL FTS/trigram 검색 p95를 opt-in 측정한다.
 	cd $(PRODUCT_BACKEND_DIR) && RETRIEVAL_PERFORMANCE_ENABLED=true ./gradlew test --tests com.purchasesearch.product_backend.RetrievalPerformanceIntegrationTests --info

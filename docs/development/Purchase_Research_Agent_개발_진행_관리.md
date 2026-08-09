@@ -223,6 +223,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 #### `ANALYSIS-002` Hybrid 상품 후보 검색
 
 - [x] 현재 SQL `AND` 검색 baseline과 고정 평가 snapshot
+- [x] 도입 전 strict AND와 현재 required/FTS 질문별 A/B 보고서/사람 검토표
 - [x] `required`/`preferred` 구매 조건 계약
 - [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정
 - [x] PostgreSQL 전문 검색/trigram 검색 문서와 index
@@ -239,12 +240,26 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] page/relation/claim/version schema
 - [ ] `DRAFT`/`PUBLISHED`/`SUPERSEDED` 상태와 사람 승인 **(진행 중: schema/lint 완료, 전이와 사람 승인 남음)**
 - [x] `derived`/confidence/source ID 검증
-- [ ] 신발 용도/상품군/색상/판매처 category seed **(진행 중: 상품군/한영 표현 DRAFT 완료)**
-- [ ] Product Backend의 검토 Wiki index 적재
-- [ ] 의미 확장 REST API와 MCP 도구
+- [ ] 신발 용도/상품군/색상/판매처 category seed **(진행 중: 운동화 PUBLISHED, 구두 DRAFT와 공개 상품 category 근거 완료, 용도/색상/구두 사람 검토 남음)**
+- [x] Product Backend의 검토 Wiki index 적재
+- [ ] 의미 확장 REST API와 MCP 도구 **(진행 중: 상품 후보 검색 내부 의미 확장 완료, 독립 API/MCP 도구 남음)**
 - [x] source 없는 Published claim 차단과 Wiki lint
-- [ ] Wiki 없음/오래됨/충돌/조회 실패 fallback
+- [x] Wiki 없음/오래됨/충돌/조회 실패 fallback
 - [x] 동일 평가 data 기반 Wiki 적용 전후 품질 비교
+
+#### `ANALYSIS-004` 범용 상품군 후보 묶음과 옵션 선택
+
+- [x] 실제 신발 중복 사례와 의류/가방/가구/전자제품 소량 수집 기반 설계
+- [x] 후보 pool 회수/관련성 재정렬/상품군 묶음/상위 5개 순서
+- [x] 상품군 additive API와 기존 후보 호환 필드
+- [x] 현재 옵션의 색상/사이즈를 범용 속성 map으로 반환
+- [x] `/chat`과 `/compare` 판매처 상품 선택 UI
+- [x] 상품군 보존/선택/fallback 회귀 테스트
+- [x] 상위 상품군의 전체 컬러/판매 행 확장과 행별 조건 재판정
+- [x] 쇼핑 카드/이미지 swatch/구매 가능 상태/판매처 이동 UI
+- [ ] 판매처 확정 variant group/model code 수집
+- [ ] 용량/소재/규격 등 범용 옵션 저장 Contract와 상세 Adapter **(진행 중: 설계와 실제 누락 확인 완료)**
+- [ ] 여러 상품군 fixture 기반 오병합/중복 카드/옵션 출처 품질 평가
 
 #### `ANALYSIS-001` 리뷰 분석과 상품 비교
 
@@ -1682,6 +1697,165 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - Python ABC마트: 고유 9,429/받음 20,744/중복 11,315/요청 421/오류 0/wall 482.928초/CPU 4.876초/메모리 49,888 KiB/검색어 소진
   - Go 29CM: 고유 10,000/받음 10,675/중복 653/요청 214/오류 0/wall 258.517초/CPU 1.129초/메모리 23,056 KiB/목표 도달
   - Python 29CM: 고유 10,000/받음 10,675/중복 664/요청 214/오류 0/wall 259.126초/CPU 2.654초/메모리 47,024 KiB/목표 도달
+
+### 2026-08-07 ANALYSIS-002 검색 구조 도입 전후 A/B 평가
+
+- 진행상황: **부분 구현**. 자동 평가와 질문별 사람 검토표 생성은 완료했고 60개 relevance
+  사람 검토는 남아 있다.
+- 구현 commit/기록: `cf1f0d9` / `docs/reports/코드트래커/2026-08-08-ANALYSIS-002-검색_A_B_평가_기반.md:1`
+- 구현 위치:
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:62`
+    `comparesLegacyStrictAndCurrentFullTextRetrievalOnDraftDataset`: 도입 전 strict AND와 현재
+    required/FTS를 같은 60개 질문에서 비교
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:232`
+    `violatesHardCondition`: 상위 3개 merchant/가격/사이즈/색상/재고 필수 조건 독립 검사
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:272`
+    `writeAbReport`: JSON 자동 지표와 사람용 Markdown 및 원자료 CSV 생성
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:361`
+    `humanReviewCsv`: 질문별 기존/현재 Top 3와 사람 판정 입력 칸 생성
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/RetrievalEvaluationIntegrationTests.java:407`
+    `humanReviewMarkdown`: 첫 10개 질문의 조건/후보 근거/판정 기준을 설명형 문서로 생성
+  - `Makefile:148` `retrieval-ab-report`: 반복 가능한 A/B 보고서 생성 명령
+  - `knowledge/eval/reports/retrieval-ab-v1-summary.json:1`: DRAFT 자동 평가 기준점
+  - `knowledge/eval/reviews/retrieval-ab-v1-first10-human-review.md:1`: 설명과 상품 근거를 포함한
+    첫 10개 사람 검토표
+  - `knowledge/eval/reviews/retrieval-ab-v1-human-review.csv:1`: 60개 질문 검토표와 FIRST_10
+  - `docs/architecture/상품_후보_검색_도입_전후_A_B_평가_계획.md:1`: 지표/검토/채택 기준
+- 측정 결과: 도입 전/후 Recall@20은 0.6467에서 0.7533, nDCG@3은 0.6290에서
+  0.6871, 유용 후보 포함률@3은 0.7200에서 0.8200으로 개선됐다. false zero는
+  0.2800에서 0.1400으로 줄었고 필수 조건 위반율@3은 양쪽 모두 0%였다. Top 3 변경은
+  19개, 0건 복구는 7개, 새로 0건이 된 질문은 0개였다.
+- 발생 문제: 기존 SQL baseline은 같은 required filter에서 FTS만 끈 비교여서 사용자가 말한
+  구조 도입 전 상태를 완전히 재현하지 않았다. 첫 독립 필수 조건 검사에서는 평가 data의
+  brand를 구조화 필터로 간주해 1.49% 위반으로 잘못 계산했다. 또한 원자료 CSV를 첫 사람
+  검토 문서로 제시해 평가 목적과 판정 방법을 이해하기 어려웠다.
+- 원인: 도입 전에는 preferred도 필수처럼 AND 처리했지만 이전 평가가 이를 구분하지 않았다.
+  또한 brand는 평가 검색어/relevance 필드지만 현재 `PurchaseCondition`의 독립 구조화 필드가
+  아니다.
+- 해결: `LEGACY_STRICT`는 required/preferred를 모두 SQL 필터로 강제하고, `CURRENT_FTS`는
+  required만 강제하도록 분리했다. 필수 조건 위반율은 실제 구조화 필드인 merchant/가격/
+  사이즈/색상/재고만 독립 검사하고 brand/상품 종류는 relevance에서 평가한다. 첫 10개는
+  질문 뜻, 필수/선호 조건, 후보별 수집 정보, 적합/애매/부적합 기준을 한 Markdown 문서에
+  제공하고 CSV는 전체 집계용 원자료로 구분했다.
+- 남은 위험: 상품 20개/질문 60개 DRAFT이며 사람 검토와 blind 평가 전이다. FIRST_10 검토 후
+  전체 60개 relevance를 확정하고 최소 200개 상품 snapshot으로 확대해야 한다.
+- 검증:
+  - 루트 `make retrieval-ab-report`: JSON/Markdown/CSV 생성과 A/B 통합 테스트 통과
+  - 루트 `make retrieval-eval-check`: 평가 data/자동 지표/사람용 문서/원자료 계약 통과
+  - 루트 `make check`: Go Collector/Spring Boot/MCP/Next.js test/lint/build와 문서/Compose 검사 통과
+
+### 2026-08-08 ANALYSIS-004 범용 상품군 후보와 선택 UI
+
+- 진행상황: **부분 구현**. 같은 상품군의 판매처 상품을 한 카드로 묶고 선택한 행의
+  이미지/가격/재고를 표시하는 정상 경로를 구현했다. 판매처 상세 옵션과 신발 외 범용
+  속성 저장은 남아 있다.
+- 구현 commit/기록: `e8dc28d` / `docs/reports/코드트래커/2026-08-08-ANALYSIS-004-범용_상품군_선택_UI.md:1`
+- 구현 위치:
+  - `docs/architecture/범용_상품군과_구매_옵션_후보_설계.md:1` `범용 상품군과 구매 옵션 후보 설계`:
+    실제 ABC마트 중복과 29CM 의류/가방/가구/전자 소량 수집을 근거로 3단계 모델 정의
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:115`
+    `findFamilyListings`: 선정된 상품군의 전체 컬러/판매 행 재조회
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:287`
+    `searchCandidates/findCandidateRetrievalSignals`: 카테고리 관련성 추가와 수집 검색어 점수 축소
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:277`
+    `findFamilyListings`: 판매 행을 상품 요약 응답으로 변환
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:163`
+    `groupCandidates`: 최대 50건 판정 후 재정렬한 후보에서 상위 5개 상품군 선정
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:227`
+    `expandGroups`: 선정 상품군의 전체 컬러/판매 행 확장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/dto/ProductCandidateResponse.java:80`
+    `CandidateGroup/CandidateListing`: additive 상품군/판매처 상품/범용 속성 응답
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:54` `ShoppingProductCard`: 이미지/가격/컬러 swatch/재고/근거를 포함한 쇼핑 카드
+  - `frontend/purchase-web/app/lib/product-candidates.ts:109` `candidateAvailability`: 컬러별 요청 사이즈/가격/재고 상태 판정
+  - `frontend/purchase-web/app/compare/compare-experience.tsx:20` `CompareExperience`: 선택한 판매처 상품의 이미지/가격/재고 전환
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:556`
+    `groupsSameProductFamilyWithoutDiscardingMerchantListings`: 두 판매처 상품의 상품군 묶음과 원본 보존 검증
+  - `frontend/purchase-web/app/lib/product-candidates.test.ts:44` `상품군 선택 테스트`: 이전 응답 fallback/색상별 행 선택/요청 사이즈 없는 컬러 상태 검증
+- 발생 문제: `구두` 수집 작업에서 발견된 워킹화가 같은 이름으로 세 번 표시됐고 실제
+  로퍼보다 먼저 나왔다. 29CM의 여러 상품군 검색은 제목에 색상/용량/소재/모델이 있어도
+  공통 옵션 배열이 모두 비어 있었다. 시각 검증용 in-app Browser는 현재 세션에 연결된
+  browser가 없어 실행할 수 없었다.
+- 원인: 후보 3건을 선호 조건 판정과 상품군 묶음 전에 제한했고 수집 검색어를 상품 자체의
+  관련성처럼 사용했다. DB/API/UI가 판매처 상품 행을 비교 카드 단위로 취급했으며 현재
+  상세 옵션 Adapter는 구현되지 않았다.
+- 해결: 후보 pool을 넓힌 뒤 상품명/브랜드/카테고리와 조건 판정으로 재정렬하고, 같은
+  판매처/브랜드/상품명/카테고리의 행만 confidence 0.8 파생 상품군으로 묶었다. 원본 외부
+  상품번호는 모두 보존하고 UI 선택지는 색상과 외부 상품번호를 함께 표시한다. 옵션이
+  없으면 값을 추측하지 않고 상세 확인 필요로 표시한다.
+- 추가 구현: 추천 상한을 상품군 5개로 확장했다. 조건을 통과한 대표 판매 행으로 상위
+  상품군을 고른 뒤 같은 판매처/브랜드/상품명/카테고리의 전체 판매 행을 다시 조회한다.
+  요청한 270이 없는 컬러도 이미지 swatch에 남기고 `요청 사이즈 없음`으로 표시한다.
+- 남은 위험: 파생 이름 묶음은 판매처 variant group이나 모델 코드보다 약한 근거다. 여러
+  상품군의 상세 옵션 수집과 fixture가 없어 용량/소재/규격 선택은 아직 동작하지 않는다.
+  상품군 오병합률과 카드 중복률도 별도 평가가 필요하다.
+- 검증:
+  - Product Backend `./gradlew compileJava`: 통과
+  - Product Backend `./gradlew test --tests com.purchasesearch.product_backend.ProductStorageIntegrationTests`: 통과
+  - Next.js `npm run lint`: 통과
+  - Next.js `npm run build`: 통과
+  - Next.js `npm test`: 상품군 신규 3개를 포함한 26개 통과
+  - 실제 PostgreSQL 1,003건 질문 E2E: 조건 일치 상품군 2개 반환/`밸롭 구름 브리즈`
+    전체 6개 컬러 판매 행 확장/270 없는 BEIGE/ORANGE/PURPLE `MISMATCH` 표시
+
+### 2026-08-08 ANALYSIS-003 검토 Wiki 운영 검색 연결
+
+- 진행상황: **부분 구현**. PUBLISHED Wiki의 PostgreSQL 적재, 상품 종류 직접 의미 확장,
+  Wiki 점수/관계 근거 응답과 실패 fallback을 구현했다. 운동화 page는 사용자 검토 후
+  PUBLISHED로 전환했고 실제 로컬 DB E2E를 완료했다. 구두/용도/색상 Wiki 확장은 남아 있다.
+- 구현 commit/기록: `e8dc28d` / `docs/reports/코드트래커/2026-08-08-ANALYSIS-003-검토_Wiki_운영_검색.md:1`
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V8__add_published_wiki_index.sql:1`
+    `wiki_pages/wiki_claims`: 검토 상태/version/provenance와 검색 관계 index
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/knowledge/service/WikiConceptIndexService.java:52`
+    `indexReviewedPage/expand`: DRAFT 적재 차단과 최신 PUBLISHED 직접 관계 확장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/knowledge/service/WikiPageImportRunner.java:56`
+    `run`: Git Wiki JSON 시작 시 적재와 파일/계약 오류 fallback
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:119`
+    `searchCandidates/interleaveCandidates/mergeRetrievalSignals`: 원문/확장어 후보 순환 병합과
+    Wiki 점수/근거 보존
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:163`
+    `groupCandidates/wikiConceptKey`: 상위 5개에서 검토 Wiki 하위 개념 대표 우선 보존
+  - `knowledge/raw/snapshots/sports-shoe-category-observation-20260808.json:1`
+    `sports-shoe-category-observation-20260808`: 공개 상품의 러닝화/워킹화 category 근거 snapshot
+  - `knowledge/wiki/sports-shoes-taxonomy-v1.json:1` `sports-shoes-taxonomy`:
+    사용자 검토를 기록한 PUBLISHED `운동화 → 러닝화/워킹화` 관계
+  - `docs/development/Purchase_Research_Agent_Hybrid_RAG_학습_가이드.md:1`:
+    실제 운동화 E2E 기반 Wiki/FTS/임베딩/pgvector/FAISS 역할 학습 자료
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:309`
+    `expandsConfirmedProductTypeWithPublishedWikiClaim`: 운동화 원문 0건을 검토 관계로 복구하고
+    265 필수 조건/Wiki 점수/관계 근거 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:341`
+    `fallsBackToExistingRetrievalWithoutPublishedWiki/rejectsDraftWikiPageFromRuntimeIndex`:
+    Wiki 없음 fallback과 DRAFT 운영 차단 검증
+- 발생 문제: 실제 DB에는 15만 원 이하/265 러닝화 후보가 143개 있지만 `운동화` 원문은
+  판매처 상품명/category/수집 검색어와 일치하지 않아 0건을 반환했다. 첫 정상 경로
+  테스트에서는 Wiki 점수는 보존됐지만 상품군 전체 판매 행 확장 과정에서 관계 설명이
+  사라졌다.
+- 원인: DRAFT Wiki 확장은 offline 평가 코드에만 있었고 Product Backend 운영 검색은
+  사용자 상품 종류 문자열 하나만 repository에 전달했다. 상품군 확장 재판정은 대표
+  assessment에서 keyword/vector 점수만 상속하고 Wiki 이유는 상속하지 않았다.
+- 해결: 사람 검토 정보가 있는 page만 적재하는 index를 추가하고, 원문 embedding은 한 번만
+  생성하면서 검토 확장어별 FTS 결과를 합쳤다. 상품군 재판정에서도 `검토 Wiki:` 근거만
+  명시적으로 상속하며 Wiki 적재/조회 실패는 기존 원문 검색으로 fallback한다. 첫 실제
+  E2E에서 러닝화 50건이 후보 pool을 먼저 채워 워킹화가 사라지는 문제는 확장어별 결과
+  순환 병합과 Wiki 하위 개념별 대표 상품군 우선 선택으로 해결했다.
+- 남은 위험: 직접 관계만 지원하며 transitive 관계, 독립 의미 확장 API/MCP 도구, 동일
+  평가 data의 PUBLISHED Wiki 품질 비교와 확장어 간 정확한 전체 개수 집계가 남아 있다.
+  `운동용` 적합성은 아직 공개 상세/리뷰 근거가 없어 선호 완화로 표시된다.
+- 검증:
+  - Product Backend `./gradlew compileJava`: 통과
+  - Product Backend Wiki 정상/fallback/DRAFT 차단 통합 테스트 3개: 통과
+  - Product Backend `./gradlew test`: 전체 통과
+  - Product Backend `./gradlew test --tests 'com.purchasesearch.product_backend.knowledge.service.WikiPageImportRunnerTests'`:
+    PUBLISHED만 적재/DRAFT 건너뜀/비활성 fallback 2개 통과
+  - 루트 `make wiki-check`: source hash/claim 출처/DRAFT 계약 통과
+  - 실제 PostgreSQL 시작 검증: Flyway V8 적용/wiki page 0건/wiki claim 0건으로 DRAFT
+    미적재 확인/기존 운동화 세션 0건 fallback 유지
+  - 실제 PostgreSQL PUBLISHED E2E: Wiki page 1건/claim 2건 적재, 기존 동일 세션 0건에서
+    총 232건 회수/상품군 5개 반환/러닝화 4개와 워킹화 1개 포함/대표 후보 5개 모두
+    15만 원 이하/BLACK/265 일치/Wiki 점수와 relation 근거 반환
+  - 루트 `make check`: Go/Spring Boot/MCP/Next.js test/lint/build와 문서/평가/Wiki/Compose
+    전체 검사 통과
 
 ## 작업 기록 템플릿
 

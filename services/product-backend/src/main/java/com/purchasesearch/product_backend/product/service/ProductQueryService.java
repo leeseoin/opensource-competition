@@ -1,6 +1,9 @@
 package com.purchasesearch.product_backend.product.service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -10,6 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.purchasesearch.product_backend.knowledge.service.WikiConceptIndexService;
+import com.purchasesearch.product_backend.knowledge.service.WikiConceptIndexService.ConceptExpansion;
+import com.purchasesearch.product_backend.knowledge.service.WikiConceptIndexService.WikiExpansionTerm;
 import com.purchasesearch.product_backend.product.dto.ProductSearchResponse;
 import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.MoneyView;
 import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.OptionView;
@@ -38,14 +44,19 @@ public class ProductQueryService {
 			Map<Long, RetrievalSignal> signals) {
 	}
 
-	/** RetrievalSignal은 가중치 적용 전 keyword/vector 점수를 표현한다. */
-	public record RetrievalSignal(double keywordScore, Double semanticScore) {
+	/** RetrievalSignal은 가중치 적용 전 keyword/vector/Wiki 점수와 검토 관계 근거를 표현한다. */
+	public record RetrievalSignal(
+			double keywordScore,
+			Double semanticScore,
+			Double wikiConceptScore,
+			List<String> wikiReasons) {
 	}
 
 	private final MerchantProductRepository merchantProductRepository;
 	private final OfferSnapshotRepository offerSnapshotRepository;
 	private final ProductOptionRepository productOptionRepository;
 	private final ProductEmbeddingService productEmbeddingService;
+	private final WikiConceptIndexService wikiConceptIndexService;
 
 	/**
 	 * 상품 조회에 필요한 repository를 연결한다.
@@ -54,16 +65,19 @@ public class ProductQueryService {
 	 * @param offerSnapshotRepository offer snapshot repository
 	 * @param productOptionRepository 상품 옵션 repository
 	 * @param productEmbeddingService 선택적 질문 embedding과 전문 검색 fallback 서비스
+	 * @param wikiConceptIndexService 검토된 상품 개념 의미 확장 서비스
 	 */
 	public ProductQueryService(
 			MerchantProductRepository merchantProductRepository,
 			OfferSnapshotRepository offerSnapshotRepository,
 			ProductOptionRepository productOptionRepository,
-			ProductEmbeddingService productEmbeddingService) {
+			ProductEmbeddingService productEmbeddingService,
+			WikiConceptIndexService wikiConceptIndexService) {
 		this.merchantProductRepository = merchantProductRepository;
 		this.offerSnapshotRepository = offerSnapshotRepository;
 		this.productOptionRepository = productOptionRepository;
 		this.productEmbeddingService = productEmbeddingService;
+		this.wikiConceptIndexService = wikiConceptIndexService;
 	}
 
 	/**
@@ -112,42 +126,162 @@ public class ProductQueryService {
 			String colorsCsv,
 			int limit) {
 		String normalizedQuery = normalize(query);
+		ConceptExpansion expansion = wikiConceptIndexService.expand(normalizedQuery);
 		QueryEmbedding embedding = normalizedQuery == null
 				? null
 				: productEmbeddingService.embedQuery(normalizedQuery).orElse(null);
-		Page<MerchantProduct> page = merchantProductRepository.searchCandidates(
-				normalize(merchant),
-				normalizedQuery,
-				minPrice,
-				maxPrice,
-				normalize(currency),
-				normalize(sizesCsv),
-				normalize(colorsCsv),
-				true,
-				embedding == null ? null : embedding.provider(),
-				embedding == null ? null : embedding.model() + "@" + embedding.modelVersion(),
-				embedding == null ? null : embedding.vectorLiteral(),
-				PageRequest.of(0, limit));
-		List<ProductSummary> products = page.getContent().stream()
+		Map<String, WikiExpansionTerm> wikiTerms = expansion.terms().stream()
+				.collect(Collectors.toUnmodifiableMap(
+						term -> term.value().toLowerCase(Locale.ROOT),
+						term -> term,
+						(first, ignored) -> first));
+		Map<Long, MerchantProduct> mergedProducts = new LinkedHashMap<>();
+		List<List<MerchantProduct>> retrievalLists = new ArrayList<>();
+		Map<Long, RetrievalSignal> signals = new LinkedHashMap<>();
+		long totalCount = 0;
+		boolean hasNext = false;
+		for (String searchTerm : expansion.searchTerms()) {
+			boolean originalTerm = searchTerm.equals(normalizedQuery);
+			String embeddingProvider = originalTerm && embedding != null ? embedding.provider() : null;
+			String embeddingModel = originalTerm && embedding != null
+					? embedding.model() + "@" + embedding.modelVersion()
+					: null;
+			String queryVector = originalTerm && embedding != null ? embedding.vectorLiteral() : null;
+			Page<MerchantProduct> page = merchantProductRepository.searchCandidates(
+					normalize(merchant),
+					searchTerm,
+					minPrice,
+					maxPrice,
+					normalize(currency),
+					normalize(sizesCsv),
+					normalize(colorsCsv),
+					true,
+					embeddingProvider,
+					embeddingModel,
+					queryVector,
+					PageRequest.of(0, limit));
+			totalCount += page.getTotalElements();
+			hasNext = hasNext || page.hasNext();
+			retrievalLists.add(page.getContent());
+			page.getContent().forEach(product -> mergedProducts.putIfAbsent(product.getId(), product));
+			mergeRetrievalSignals(
+					signals,
+					page.getContent().stream().map(MerchantProduct::getId).toList(),
+					searchTerm,
+					embeddingProvider,
+					embeddingModel,
+					queryVector,
+					wikiTerms.get(searchTerm.toLowerCase(Locale.ROOT)),
+					normalizedQuery);
+		}
+		List<ProductSummary> products = interleaveCandidates(retrievalLists, limit).stream()
 				.map(this::toSummary)
 				.toList();
-		List<Long> candidateIds = products.stream().map(ProductSummary::id).toList();
-		Map<Long, RetrievalSignal> signals = candidateIds.isEmpty()
-				? Map.of()
-				: merchantProductRepository.findCandidateRetrievalSignals(
-						candidateIds,
-						normalizedQuery,
-						embedding == null ? null : embedding.provider(),
-						embedding == null ? null : embedding.model() + "@" + embedding.modelVersion(),
-						embedding == null ? null : embedding.vectorLiteral()).stream()
-						.collect(Collectors.toUnmodifiableMap(
-								CandidateRetrievalSignalProjection::getCandidateId,
-								projection -> new RetrievalSignal(
-										projection.getKeywordScore(),
-										projection.getSemanticScore())));
+		hasNext = hasNext || mergedProducts.size() > products.size();
 		return new CandidateSearchResult(
-				new ProductSearchResponse(page.getTotalElements(), page.hasNext(), products),
-				signals);
+				new ProductSearchResponse(totalCount, hasNext, products),
+				Map.copyOf(signals));
+	}
+
+	/**
+	 * 원문과 각 Wiki 확장어의 상위 결과를 순환 병합해 첫 확장어가 후보 pool 전체를 독점하지 않게 한다.
+	 *
+	 * @param retrievalLists 원문과 확장어별 검색 순위 목록
+	 * @param limit 최종 후보 pool 상한
+	 * @return 확장어별 순위를 유지한 중복 없는 후보 목록
+	 */
+	private List<MerchantProduct> interleaveCandidates(
+			List<List<MerchantProduct>> retrievalLists,
+			int limit) {
+		Map<Long, MerchantProduct> interleaved = new LinkedHashMap<>();
+		int rank = 0;
+		boolean advanced;
+		do {
+			advanced = false;
+			for (List<MerchantProduct> candidates : retrievalLists) {
+				if (rank < candidates.size()) {
+					advanced = true;
+					MerchantProduct candidate = candidates.get(rank);
+					interleaved.putIfAbsent(candidate.getId(), candidate);
+					if (interleaved.size() == limit) {
+						return List.copyOf(interleaved.values());
+					}
+				}
+			}
+			rank++;
+		} while (advanced);
+		return List.copyOf(interleaved.values());
+	}
+
+	/** 각 원문/확장어 검색 점수의 최댓값과 검토 Wiki 근거를 후보 ID별로 병합한다. */
+	private void mergeRetrievalSignals(
+			Map<Long, RetrievalSignal> signals,
+			List<Long> candidateIds,
+			String searchTerm,
+			String embeddingProvider,
+			String embeddingModel,
+			String queryVector,
+			WikiExpansionTerm wikiTerm,
+			String originalQuery) {
+		if (candidateIds.isEmpty()) {
+			return;
+		}
+		List<String> wikiReasons = wikiTerm == null
+				? List.of()
+				: List.of("검토 Wiki: " + originalQuery + " → " + wikiTerm.value()
+						+ " (" + wikiTerm.relation() + ")");
+		for (CandidateRetrievalSignalProjection projection : merchantProductRepository.findCandidateRetrievalSignals(
+				candidateIds,
+				searchTerm,
+				embeddingProvider,
+				embeddingModel,
+				queryVector)) {
+			RetrievalSignal next = new RetrievalSignal(
+					projection.getKeywordScore(),
+					projection.getSemanticScore(),
+					wikiTerm == null ? null : wikiTerm.confidence(),
+					wikiReasons);
+			signals.merge(projection.getCandidateId(), next, this::mergeSignal);
+		}
+	}
+
+	/** 같은 후보가 여러 확장어에서 검색되면 신호 최댓값과 중복 없는 Wiki 근거를 보존한다. */
+	private RetrievalSignal mergeSignal(RetrievalSignal current, RetrievalSignal next) {
+		List<String> reasons = new ArrayList<>(current.wikiReasons());
+		next.wikiReasons().stream().filter(reason -> !reasons.contains(reason)).forEach(reasons::add);
+		return new RetrievalSignal(
+				Math.max(current.keywordScore(), next.keywordScore()),
+				maxNullable(current.semanticScore(), next.semanticScore()),
+				maxNullable(current.wikiConceptScore(), next.wikiConceptScore()),
+				List.copyOf(reasons));
+	}
+
+	/** null일 수 있는 두 검색 점수에서 제공된 최댓값을 반환한다. */
+	private Double maxNullable(Double left, Double right) {
+		if (left == null) {
+			return right;
+		}
+		if (right == null) {
+			return left;
+		}
+		return Math.max(left, right);
+	}
+
+	/**
+	 * 상위 후보와 같은 파생 상품군의 전체 판매 행을 사용자 조건과 무관하게 조회한다.
+	 *
+	 * @param representative 조건 검색을 통과한 상품군 대표 판매처 상품
+	 * @return 품절과 다른 색상을 포함한 상품군 전체 판매처 상품
+	 */
+	@Transactional(readOnly = true)
+	public List<ProductSummary> findFamilyListings(ProductSummary representative) {
+		return merchantProductRepository.findFamilyListings(
+				representative.merchant(),
+				representative.name(),
+				representative.brand() == null ? "" : representative.brand(),
+				String.join("/", representative.categoryPath())).stream()
+				.map(this::toSummary)
+				.toList();
 	}
 
 	/**

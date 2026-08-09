@@ -52,6 +52,9 @@ springdoc:
     document-title: Purchase Research Product Backend API
 
 purchase:
+  wiki:
+    enabled: ${WIKI_ENABLED:true}
+    directory: ${WIKI_DIRECTORY:../../knowledge/wiki}
   embedding:
     provider: ${EMBEDDING_PROVIDER:disabled}
     base-url: ${EMBEDDING_BASE_URL:http://127.0.0.1:11434}

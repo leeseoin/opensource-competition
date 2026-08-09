@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ import com.purchasesearch.product_backend.collection.service.CollectorResultStor
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
 import com.purchasesearch.product_backend.evidence.repository.ProductVerificationRepository;
+import com.purchasesearch.product_backend.knowledge.dto.WikiPageDocument;
+import com.purchasesearch.product_backend.knowledge.dto.WikiPageDocument.WikiClaimDocument;
+import com.purchasesearch.product_backend.knowledge.service.WikiConceptIndexService;
 import com.purchasesearch.product_backend.product.repository.MerchantProductRepository;
 import com.purchasesearch.product_backend.product.repository.OfferSnapshotRepository;
 import com.purchasesearch.product_backend.product.repository.ProductOptionRepository;
@@ -86,6 +90,9 @@ class ProductStorageIntegrationTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private WikiConceptIndexService wikiConceptIndexService;
 
 	/**
 	 * 실제 CollectorResult JSON을 내부 HTTP API에 전송하면 검증과 transaction 저장 후
@@ -257,7 +264,7 @@ class ProductStorageIntegrationTests {
 							{
 							  "question": "출근용 검정 구두를 찾아줘",
 							  "query": "구두",
-							  "limit": 3
+							  "limit": 5
 							}
 							"""))
 				.andExpect(status().isOk())
@@ -293,6 +300,85 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 검토된 Wiki의 운동화 하위 개념으로 러닝화를 확장해 원문 exact 검색이 놓친 265 후보를
+	 * 반환하고 사용한 Wiki 점수와 관계 근거를 설명하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void expandsConfirmedProductTypeWithPublishedWikiClaim() throws Exception {
+		collectorResultStoreService.store(loadRunningShoeCollectorResult());
+		collectorResultStoreService.store(loadWalkingShoeCollectorResult());
+		wikiConceptIndexService.indexReviewedPage(publishedRunningShoeWikiPage());
+		String condition = purchaseCondition("[]")
+				.replace("\"productType\": {\"value\": \"구두\"", "\"productType\": {\"value\": \"운동화\"")
+				.replace("\"usage\": [{\"value\": \"출근\"", "\"usage\": [{\"value\": \"운동용\"")
+				.replace("\"270\"", "\"265\"");
+		String sessionId = createConfirmedResearchSession("15만 원 이하 운동화 265", condition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(2))
+				.andExpect(jsonPath("$.result.candidates[*].name")
+						.value(org.hamcrest.Matchers.containsInAnyOrder("테스트 러닝 페이서", "테스트 워킹 밸런스")))
+				.andExpect(jsonPath("$.result.assessments[*].sizeStatus")
+						.value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("MATCH"))))
+				.andExpect(jsonPath("$.result.assessments[*].wikiConceptScore")
+						.value(org.hamcrest.Matchers.containsInAnyOrder(0.9, 0.85)))
+				.andExpect(jsonPath("$.result.assessments[*].matchReasons[*]")
+						.value(org.hamcrest.Matchers.hasItems(
+								"검토 Wiki: 운동화 → 러닝화 (narrower)",
+								"검토 Wiki: 운동화 → 워킹화 (narrower)")));
+	}
+
+	/**
+	 * PUBLISHED Wiki가 없으면 의미를 추측하지 않고 기존 FTS/vector 검색으로 fallback해
+	 * exact 관계가 없는 운동화 질문을 빈 결과로 유지하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void fallsBackToExistingRetrievalWithoutPublishedWiki() throws Exception {
+		jdbcTemplate.update("DELETE FROM wiki_pages");
+		collectorResultStoreService.store(loadRunningShoeCollectorResult());
+		String condition = purchaseCondition("[]")
+				.replace("\"productType\": {\"value\": \"구두\"", "\"productType\": {\"value\": \"운동화\"")
+				.replace("\"270\"", "\"265\"");
+		String sessionId = createConfirmedResearchSession("운동화 265", condition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(0))
+				.andExpect(jsonPath("$.result.candidates").isEmpty());
+	}
+
+	/** 사람 검토가 없는 DRAFT Wiki는 운영 index 적재를 거절하는지 검증한다. */
+	@Test
+	void rejectsDraftWikiPageFromRuntimeIndex() {
+		WikiPageDocument draft = new WikiPageDocument(
+				"running-shoes-taxonomy",
+				1,
+				"DRAFT",
+				"운동화 분류",
+				null,
+				null,
+				null,
+				List.of(new WikiClaimDocument(
+						"running-shoes",
+						"운동화",
+						"narrower",
+						"러닝화",
+						true,
+						0.99,
+						List.of("test-source"),
+						List.of("test.category=러닝화"))));
+
+		assertThatThrownBy(() -> wikiConceptIndexService.indexReviewedPage(draft))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("DRAFT Wiki page");
+	}
+
+	/**
 	 * DB 검색어가 비어 있으면 전체 상품을 노출하지 않고 400으로 거절하는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청에 실패한 경우
@@ -311,19 +397,19 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
-	 * 상품 후보를 3개보다 많이 요청하면 화면 계약을 벗어나므로 400으로 거절하는지 검증한다.
+	 * 상품 후보를 5개보다 많이 요청하면 화면 계약을 벗어나므로 400으로 거절하는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청에 실패한 경우
 	 */
 	@Test
-	void rejectsCandidateRequestOverThreeProducts() throws Exception {
+	void rejectsCandidateRequestOverFiveProducts() throws Exception {
 		mockMvc.perform(post("/internal/v1/product-candidates/search")
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("""
 							{
 							  "question": "출근용 구두를 찾아줘",
 							  "query": "구두",
-							  "limit": 4
+							  "limit": 6
 							}
 							"""))
 				.andExpect(status().isBadRequest());
@@ -458,6 +544,49 @@ class ProductStorageIntegrationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.result.totalCount").value(0))
 				.andExpect(jsonPath("$.result.candidates").isEmpty());
+	}
+
+	/**
+	 * 같은 판매처의 브랜드/상품명/카테고리가 같은 색상별 판매 행을 카드 하나로 묶고
+	 * 원본 판매처 상품과 선택 속성은 모두 보존하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void groupsSameProductFamilyWithoutDiscardingMerchantListings() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		CollectorResult blackVariant = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-variant-002")
+						.replace("1010110882", "1010110883")
+						.replace("\"color\": null", "\"color\": \"BLACK\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(blackVariant);
+		CollectorResult brownWithoutRequestedSize = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-variant-003")
+						.replace("1010110882", "1010110884")
+						.replace("\"270\"", "\"260\"")
+						.replace("\"color\": null", "\"color\": \"BROWN\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(brownWithoutRequestedSize);
+		String sessionId = createConfirmedResearchSession("270 검정 구두", purchaseCondition("[]"));
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(2))
+				.andExpect(jsonPath("$.result.candidates.length()").value(1))
+				.andExpect(jsonPath("$.result.groups.length()").value(1))
+				.andExpect(jsonPath("$.result.groups[0].groupingBasis").value("DERIVED"))
+				.andExpect(jsonPath("$.result.groups[0].listings.length()").value(3))
+				.andExpect(jsonPath("$.result.groups[0].listings[*].product.externalId")
+						.value(org.hamcrest.Matchers.containsInAnyOrder("1010110882", "1010110883", "1010110884")))
+				.andExpect(jsonPath("$.result.groups[0].listings[?(@.product.externalId == '1010110883')].attributes.color[0]")
+						.value("BLACK"))
+				.andExpect(jsonPath("$.result.groups[0].listings[?(@.product.externalId == '1010110884')].attributes.color[0]")
+						.value("BROWN"))
+				.andExpect(jsonPath("$.result.groups[0].listings[?(@.product.externalId == '1010110884')].assessment.sizeStatus")
+						.value("MISMATCH"));
 	}
 
 	/**
@@ -762,6 +891,73 @@ class ProductStorageIntegrationTests {
 	 */
 	private CollectorResult loadAbcmartCollectorResult() throws Exception {
 		return objectMapper.readValue(Files.readString(abcmartFixturePath()), CollectorResult.class);
+	}
+
+	/**
+	 * 원문 운동화에는 exact 일치하지 않지만 Wiki 확장어 러닝화와 265 옵션에는 일치하는 fixture를 만든다.
+	 *
+	 * @return 러닝화 검색 회귀 테스트용 CollectorResult
+	 * @throws Exception fixture 파일을 읽거나 JSON을 변환할 수 없는 경우
+	 */
+	private CollectorResult loadRunningShoeCollectorResult() throws Exception {
+		String fixture = Files.readString(abcmartFixturePath())
+				.replace("backend-test-001", "backend-test-running-001")
+				.replace("1010110882", "running-test-001")
+				.replace("\"query\": \"구두\"", "\"query\": \"러닝화\"")
+				.replace("\"name\": \"페니 로퍼\"", "\"name\": \"테스트 러닝 페이서\"")
+				.replace("[\"신발\", \"구두\", \"로퍼\"]", "[\"신발\", \"스포츠\", \"러닝화\"]")
+				.replace("\"270\"", "\"265\"")
+				.replace("\"color\": null", "\"color\": \"BLACK\"");
+		return objectMapper.readValue(fixture, CollectorResult.class);
+	}
+
+	/**
+	 * 원문 운동화에는 exact 일치하지 않지만 Wiki 확장어 워킹화와 265 옵션에는 일치하는 fixture를 만든다.
+	 *
+	 * @return 워킹화 검색 회귀 테스트용 CollectorResult
+	 * @throws Exception fixture 파일을 읽거나 JSON을 변환할 수 없는 경우
+	 */
+	private CollectorResult loadWalkingShoeCollectorResult() throws Exception {
+		String fixture = Files.readString(abcmartFixturePath())
+				.replace("backend-test-001", "backend-test-walking-001")
+				.replace("1010110882", "walking-test-001")
+				.replace("\"query\": \"구두\"", "\"query\": \"워킹화\"")
+				.replace("\"name\": \"페니 로퍼\"", "\"name\": \"테스트 워킹 밸런스\"")
+				.replace("[\"신발\", \"구두\", \"로퍼\"]", "[\"신발\", \"스포츠\", \"워킹화\"]")
+				.replace("\"270\"", "\"265\"")
+				.replace("\"color\": null", "\"color\": \"BLACK\"");
+		return objectMapper.readValue(fixture, CollectorResult.class);
+	}
+
+	/** 검토자와 출처가 연결된 테스트용 PUBLISHED 운동화 분류 page를 만든다. */
+	private WikiPageDocument publishedRunningShoeWikiPage() {
+		return new WikiPageDocument(
+				"running-shoes-taxonomy",
+				1,
+				"PUBLISHED",
+				"운동화 분류",
+				"integration-test-reviewer",
+				OffsetDateTime.parse("2026-08-08T18:00:00+09:00"),
+				null,
+				List.of(
+						new WikiClaimDocument(
+								"running-shoes",
+								"운동화",
+								"narrower",
+								"러닝화",
+								true,
+								0.9,
+								List.of("test-source"),
+								List.of("test.category=러닝화")),
+						new WikiClaimDocument(
+								"walking-shoes",
+								"운동화",
+								"narrower",
+								"워킹화",
+								true,
+								0.85,
+								List.of("test-source"),
+								List.of("test.category=워킹화"))));
 	}
 
 	/**
