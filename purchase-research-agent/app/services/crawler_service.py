@@ -12,6 +12,7 @@ SUPPORTED_BRANDS = list(BRANDS.keys())
 
 
 class CrawlerService:
+    """등록된 Python 판매처 크롤러를 검색, 상세 수집과 계약 검사 흐름으로 연결한다."""
 
     async def search_items(
         self,
@@ -19,12 +20,37 @@ class CrawlerService:
         site: str,
         max_items: int = 500,
         detail_limit: int = 0,
+        page: int = 1,
+        max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
+        """판매처 검색을 지정한 페이지 범위에서 실행한다.
+
+        Args:
+            keyword: 판매처에 전달할 검색어다.
+            site: 등록된 판매처 식별자다.
+            max_items: 반환할 상품 상한이다.
+            detail_limit: 상세정보를 추가할 상위 상품 수다.
+            page: 수집을 시작할 1 기반 페이지다.
+            max_pages: 최대 수집 페이지 수이며 ``None``이면 상품 상한까지 진행한다.
+
+        Returns:
+            수집 상품과 부분 실패 경고 목록이다.
+
+        Raises:
+            ValueError: 판매처나 페이지 범위가 올바르지 않은 경우다.
+        """
         if site not in SITE_CRAWLERS:
             raise ValueError(f"지원하지 않는 사이트: {site}. 지원 목록: {SUPPORTED_SITES}")
+        if page < 1 or (max_pages is not None and max_pages < 1):
+            raise ValueError("page와 max_pages는 1 이상이어야 합니다")
 
         crawler = SITE_CRAWLERS[site]()
-        products, errors = await crawler.crawl(keyword, max_items)
+        products, errors = await crawler.crawl(
+            keyword,
+            max_items,
+            start_page=page,
+            max_pages=max_pages,
+        )
 
         if detail_limit > 0 and products:
             products, detail_errors = await crawler.attach_details(products, limit=detail_limit)

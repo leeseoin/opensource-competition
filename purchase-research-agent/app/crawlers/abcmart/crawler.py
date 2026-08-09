@@ -78,20 +78,37 @@ def _extract_prdtno(url: str) -> str | None:
 
 
 class AbcMartCrawler(SiteCrawler):
+    """ABC마트 검색 JSON과 렌더링 HTML을 페이지별로 교차 검증한다."""
 
     site_id = "abcmart"
 
     async def crawl(
-        self, keyword: str, max_items: int
+        self,
+        keyword: str,
+        max_items: int,
+        *,
+        start_page: int = 1,
+        max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
-        """JSON을 기본 수집하고 같은 모든 검색 페이지의 HTML을 전수 검증한다."""
+        """지정한 페이지의 JSON을 기본 수집하고 같은 HTML을 전수 검증한다.
+
+        Args:
+            keyword: ABC마트 검색어다.
+            max_items: 반환할 고유 상품 상한이다.
+            start_page: 수집을 시작할 1 기반 페이지다.
+            max_pages: 처리할 페이지 상한이며 없으면 상품 상한까지 진행한다.
+
+        Returns:
+            교차 검증 정보가 포함된 원본 상품과 부분 실패 경고 목록이다.
+        """
 
         errors: list[str] = []
         all_products: list[dict] = []
         seen_prdt_nos: set[str] = set()
         browser_cfg = BrowserConfig(ignore_https_errors=True)
         json_fetcher = AbcJsonFetcher()
-        page = 1
+        page = start_page
+        processed_pages = 0
         ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         headers = {
@@ -160,6 +177,9 @@ class AbcMartCrawler(SiteCrawler):
                     errors.append(f"page {page} 예외(재시도 후에도 실패):\n{last_tb}")
                     break
 
+                processed_pages += 1
+                if max_pages is not None and processed_pages >= max_pages:
+                    break
                 if not new or not json_page.has_next:
                     break
 

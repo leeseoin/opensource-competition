@@ -37,7 +37,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
 	python-collector-sync python-collector-test \
-	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-test \
+	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
 	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
@@ -58,7 +58,9 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make python-crawler-sync 정우님 Python 크롤러 uv.lock 환경 준비' \
 		'  make python-crawler-setup 정우님 Python 크롤러 환경과 Chromium 준비' \
 		'  make python-crawler-run 정우님 Python 크롤러와 DB 적재 API 실행' \
+		'  make python-crawler-worker Python RabbitMQ 검색 Worker 실행' \
 		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
+		'  make python-crawler-rabbitmq-test 격리 RabbitMQ vhost에서 Python Worker 검증' \
 		'  make product-backend-run  Spring Boot 상품 서버 실행' \
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
@@ -125,8 +127,18 @@ python-crawler-setup: python-crawler-env python-crawler-sync ## 정우님 Python
 python-crawler-run: python-crawler-env python-crawler-sync ## 정우님 Python 크롤러와 Spring Boot DB 적재 연결 API를 실행한다.
 	cd $(PYTHON_CRAWLER_DIR) && uv run --frozen uvicorn app.main:app --host 0.0.0.0 --port $(PYTHON_CRAWLER_PORT) --env-file .env
 
+python-crawler-worker: python-crawler-sync ## Python RabbitMQ 검색 작업 Worker를 계속 실행한다.
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" uv run --frozen python -m scripts.collection_worker
+
+python-crawler-worker-once: python-crawler-sync ## Python RabbitMQ 검색 작업 하나를 처리하고 종료한다.
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" uv run --frozen python -m scripts.collection_worker --once
+
 python-crawler-test: python-crawler-sync ## 정우님 Python 결과의 CollectorResult 변환 단위 테스트를 실행한다.
 	cd $(PYTHON_CRAWLER_DIR) && PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache uv run --frozen python -m unittest discover -s tests -v
+
+python-crawler-rabbitmq-test: python-crawler-sync ## TEST_RABBITMQ_URL의 격리 vhost에서 Python Worker를 검증한다.
+	@test -n "$(TEST_RABBITMQ_URL)" || (printf '%s\n' 'TEST_RABBITMQ_URL이 필요합니다.'; exit 1)
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(TEST_RABBITMQ_URL)" uv run --frozen python -m scripts.check_collection_worker_rabbitmq
 
 product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
 	cd $(PRODUCT_BACKEND_DIR) && ./gradlew bootRun

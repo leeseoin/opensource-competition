@@ -4,12 +4,13 @@
 
 - 프로젝트명: Purchase Research Agent(가칭)
 - 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
-- 현재 상태: ABC마트/29CM 검색 Collector와 RabbitMQ Worker 구현, Spring Boot Product Backend의 작업 발행/결과 소비/Flyway/JPA 저장/작업 상태 DB 및 상품 조회 API 구현, MCP/Web은 부분 구현
-- 핵심 기술: Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
+- 현재 상태: Python ABC마트/29CM Collector와 RabbitMQ Queue v1 Worker 구현, Go Collector는 전환 비교 기준으로 유지, Spring Boot Product Backend의 작업 발행/결과 소비/Flyway/JPA 저장/작업 상태 DB 및 상품 조회 API 구현, MCP/Web은 부분 구현
+- 핵심 기술: Python, Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
 ## 구성요소 책임
 
-- `services/collector`: Go. 외부 판매처 접근, 검색·상세·옵션·리뷰 parsing, rate limit, timeout, retry, 차단 감지
+- `purchase-research-agent`: Python. 전환 대상 Collector runtime, 외부 판매처 검색/상세/옵션/리뷰 parsing과 RabbitMQ Queue v1 작업 처리
+- `services/collector`: Go. 전환 비교와 복구 기준, 판매처 접근 안전성/rate limit/timeout/retry 구현
 - `services/product-backend`: Java/Spring Boot. 상품 조회 API, RabbitMQ 작업 orchestration과 결과 소비, 데이터 검증/정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교/재검증
 - `services/mcp-server`: MCP. Codex/Claude Code가 사용할 도구를 제공하고 Product Backend REST API를 호출하는 얇은 연결 계층
 - `frontend/purchase-web`: Next.js + React. `/chat` 사용자 챗봇과 `/admin/collections` 수집 관리 화면, Agent Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
@@ -17,7 +18,7 @@
 
 ## 핵심 경계
 
-- 외부 판매처에는 Go Collector만 접근한다.
+- 외부 판매처에는 활성 Collector Worker만 접근한다. Python/Go Worker를 같은 검색 Queue에서 동시에 실행하지 않는다.
 - PostgreSQL의 최종 쓰기는 Spring Boot Product Backend만 수행한다.
 - MCP Server는 판매처, PostgreSQL, RabbitMQ에 직접 접근하지 않고 Product Backend REST API만 호출한다.
 - RabbitMQ는 수집 작업·결과 전달에 사용하고 Redis를 두 번째 작업 Queue로 사용하지 않는다.
@@ -25,7 +26,7 @@
 - browser의 Next.js UI와 Codex Plugin은 크롤러나 DB를 직접 호출하지 않는다.
 - PoC에서 최종 사용자 질문은 Next.js server의 Codex Gateway를 거쳐 Codex로 전달한다.
 - Codex 실행 권한과 인증정보는 browser에 노출하지 않고 server에서만 관리한다.
-- Go는 판매처별 `CollectorResult`를 반환하고 최종 추천을 판단하지 않는다.
+- Python/Go Collector는 판매처별 `CollectorResult`를 반환하고 최종 추천을 판단하지 않는다.
 - Product Backend는 Collector가 제공하지 않은 판매처 사실을 생성하지 않는다.
 - Codex는 구조화된 근거를 설명하며 상품 사실을 추측하지 않는다.
 
@@ -110,8 +111,9 @@
 ## 실행과 검증
 
 PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
-Go consumer와 result publisher는 구현됐다. 기존 Python producer/result consumer와
-DB 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot의 검색 작업 producer,
+Python/Go consumer와 result publisher는 구현됐다. Python Worker는 Queue v1의
+ACK/retry/DLQ/publisher confirm을 처리한다. 기존 Python producer/result consumer와
+DB 직접 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot의 검색 작업 producer,
 결과 consumer, DB 적재와 작업 상태 DB는 구현됐으며 Redis application adapter와
 Agent Gateway stream은 구현 전이다. MCP와 Next.js 구매 조건 확인/후보 조회 경로는
 부분 구현됐다.
@@ -121,6 +123,7 @@ Spring Boot의 Flyway 초기 schema, CollectorResult 검증/JPA 적재 및 상�
 예정 검증 계층:
 
 - Go unit/contract test: parser, rate limit, 저장된 HTML fixture
+- Python unit/contract test: parser, page/필터, Queue 계약, ACK/retry/DLQ
 - Java unit/integration test: 정규화, DB 적재, review signal, REST API와 Queue 계약
 - MCP contract test: 도구 입력/출력과 Product Backend API 연결
 - E2E: 구매 질문 → 실제 수집 → 근거 비교 → 재검증

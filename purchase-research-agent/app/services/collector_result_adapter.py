@@ -9,6 +9,8 @@ from typing import Any
 from app.services.collector_result_validation import validate_collector_result
 from app.services.verification_summary import summarize_verifications
 
+_COLLECTOR_VERSION = "python-collector-v1"
+
 
 def parse_won(value: str | int | float | None) -> int | None:
     """원화 문자열에서 정수 금액을 추출한다.
@@ -37,6 +39,7 @@ def build_collector_result(
     collected_at: str,
     crawler_errors: list[str] | None = None,
     total_count: int | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Python 크롤링 상품을 Spring Boot ``CollectorResult``로 변환한다.
 
@@ -48,6 +51,7 @@ def build_collector_result(
         collected_at: ISO 8601 형식의 수집 완료 시각이다.
         crawler_errors: 부분 실패로 기록할 크롤러 오류 문자열이다.
         total_count: 여러 저장 batch가 공유할 전체 수집 상품 수다.
+        filters: 실제 Queue 검색 작업에 포함된 정규화 필터다.
 
     Returns:
         Product Backend의 ``POST /internal/v1/collection-results`` 입력 객체다.
@@ -67,11 +71,11 @@ def build_collector_result(
         "status": status,
         "merchant": merchant,
         "query": query,
-        "filters": {},
+        "filters": filters or {},
         "totalCount": total_count if total_count is not None else len(products),
         "hasNext": None,
         "collectedAt": collected_at,
-        "collectorVersion": "dev-jw-python-bridge-v1",
+        "collectorVersion": _COLLECTOR_VERSION,
         "products": [
             _convert_product(product, collected_at)
             for product in products
@@ -151,7 +155,7 @@ def _convert_product(product: dict[str, Any], collected_at: str) -> dict[str, An
         "externalId": external_id,
         "name": name,
         "brand": str(product.get("brand") or ""),
-        "categoryPath": [],
+        "categoryPath": _category_path(product),
         "productUrl": source_url,
         "imageUrls": [image_url] if image_url else [],
         "price": _money(amount),
@@ -160,7 +164,7 @@ def _convert_product(product: dict[str, Any], collected_at: str) -> dict[str, An
             "summary": None,
             "provenance": provenance,
         },
-        "stockStatus": "unknown",
+        "stockStatus": _stock_status(product.get("in_stock")),
         "rating": None,
         "reviewCount": _optional_int(product.get("review_count")),
         "options": _convert_options(product, external_id, amount, provenance),
@@ -214,10 +218,44 @@ def _convert_options(
     options: list[dict[str, Any]] = []
     for size in sizes:
         options.append(_option(f"{external_id}-size-{size}", size, size, None, amount, provenance))
-    if not sizes:
-        for color in colors:
-            options.append(_option(f"{external_id}-color-{color}", color, None, color, amount, provenance))
+    for color in colors:
+        options.append(_option(f"{external_id}-color-{color}", color, None, color, amount, provenance))
     return options
+
+
+def _category_path(product: dict[str, Any]) -> list[str]:
+    """원본 category path를 순서가 있는 공통 category 목록으로 변환한다.
+
+    Args:
+        product: category 또는 category_path를 가진 Python 원본 상품이다.
+
+    Returns:
+        상위에서 하위 순서를 유지하고 중복을 제거한 category 목록이다.
+    """
+
+    path = str(product.get("category_path") or "")
+    values = [part.strip() for part in path.split(">") if part.strip()]
+    category = str(product.get("category") or "").strip()
+    if category and category not in values:
+        values.append(category)
+    return values
+
+
+def _stock_status(raw: Any) -> str:
+    """명시적인 Python 재고 boolean만 공통 재고 상태로 변환한다.
+
+    Args:
+        raw: 판매 가능 여부 boolean 또는 알 수 없는 값이다.
+
+    Returns:
+        ``available``, ``out_of_stock`` 또는 ``unknown`` 상태다.
+    """
+
+    if raw is True:
+        return "available"
+    if raw is False:
+        return "out_of_stock"
+    return "unknown"
 
 
 def _option(
@@ -280,7 +318,7 @@ def _provenance(source_url: str, collected_at: str) -> dict[str, Any]:
     return {
         "sourceUrl": source_url,
         "collectedAt": collected_at,
-        "collectorVersion": "dev-jw-python-bridge-v1",
+        "collectorVersion": _COLLECTOR_VERSION,
     }
 
 

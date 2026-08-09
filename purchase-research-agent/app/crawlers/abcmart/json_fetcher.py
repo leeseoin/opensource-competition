@@ -94,6 +94,12 @@ class AbcJsonFetcher:
     def _parse_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """ABC마트 JSON 상품 한 건을 기존 Python 크롤러 상품 구조로 변환한다.
 
+        Args:
+            item: 공개 검색 JSON의 상품 객체다.
+
+        Returns:
+            가격, category, 판매 가능 사이즈와 재고 상태가 포함된 원본 상품이다.
+
         Raises:
             RuntimeError: 상품 ID 또는 이름이 없는 경우다.
         """
@@ -103,6 +109,7 @@ class AbcJsonFetcher:
         if not product_id or not title:
             raise RuntimeError("ABC마트 JSON 상품 ID 또는 이름이 비어 있습니다")
         color = str(item.get("COLOR_ID") or "")
+        category_path = str(item.get("CTGR_NAME_ALL") or "")
         return {
             "source_product_id": product_id,
             "title": title,
@@ -116,6 +123,9 @@ class AbcJsonFetcher:
             "link": f"{_PRODUCT_BASE}{product_id}",
             "site": "abcmart",
             "review_count": _optional_int(item.get("RVW_COUNT")) or 0,
+            "category": category_path.split(">")[-1].strip() if category_path else "",
+            "category_path": category_path,
+            "in_stock": _in_stock(item.get("SOLD_OUT")),
             "options": {
                 "colors": [color] if color else [],
                 "sizes": _sizes(item.get("PRDT_OPTION"), item.get("SIZE_LIST")),
@@ -140,9 +150,52 @@ def _optional_int(value: Any) -> int | None:
 
 
 def _sizes(option_text: Any, size_list: Any) -> list[str]:
-    """표시 순서를 유지하며 JSON 옵션 사이즈의 중복을 제거한다."""
+    """재고 수량이 확인되면 구매 가능한 사이즈만 표시 순서대로 반환한다.
 
-    values = [part.strip() for part in str(option_text or "").split(",") if part.strip()]
+    Args:
+        option_text: 수량 필드가 없을 때 사용할 쉼표 구분 사이즈다.
+        size_list: 사이즈별 재고 수량 객체다.
+
+    Returns:
+        양수 재고 사이즈 또는 수량을 알 수 없을 때의 표시 사이즈다.
+    """
+
     if isinstance(size_list, dict):
-        values.extend(str(size) for size in size_list)
+        values = [str(size) for size, quantity in size_list.items() if _positive_int(quantity)]
+    else:
+        values = [part.strip() for part in str(option_text or "").split(",") if part.strip()]
     return list(dict.fromkeys(values))
+
+
+def _positive_int(value: Any) -> bool:
+    """재고 원본값이 0보다 큰 정수인지 안전하게 반환한다.
+
+    Args:
+        value: 문자열 또는 숫자 재고 수량이다.
+
+    Returns:
+        정수 변환이 가능하고 양수인 경우 참이다.
+    """
+
+    try:
+        return int(value) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _in_stock(value: Any) -> bool | None:
+    """ABC마트 SOLD_OUT 값을 판매 가능 여부로 변환한다.
+
+    Args:
+        value: ``y`` 또는 ``n``으로 예상되는 원본 값이다.
+
+    Returns:
+        명시된 값의 반대 재고 상태이며 알 수 없으면 ``None``이다.
+    """
+
+    normalized = str(value or "").strip().casefold()
+    if normalized == "y":
+        return False
+    if normalized == "n":
+        return True
+    return None

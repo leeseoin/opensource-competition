@@ -154,16 +154,17 @@
 
 - [x] 단일 판매처 검색 요청 API와 Spring Boot `CollectionTask` producer 구현
 - [x] persistent 메시지, priority와 RabbitMQ publisher confirm 적용
-- [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(부분 구현: page 필드 추가, 현재 page=1만 허용)**
+- [ ] 검색 요청에 `page` 또는 판매처별 cursor를 전달하는 pagination 계약 추가 **(부분 구현: Spring/Python Worker는 page 1..200 지원, Go Worker는 page=1만 지원)**
 - [ ] `maxPages`, `maxProducts`, `requestBudget` 상한 추가
 - [ ] 여러 검색어와 판매처를 입력받는 batch collection use case 구현
 - [ ] 검색 결과에서 발견한 상품 URL을 상세 작업으로 등록
 - [ ] 이미 성공한 URL과 현재 처리 중인 URL의 중복 작업 방지
 - [ ] 정기 수집과 사용자 재검증 작업의 priority 차등 적용
 
-### 4.4 Go Collector Worker
+### 4.4 Collector Worker
 
 - [x] RabbitMQ 작업을 소비하는 Go Worker entrypoint 추가
+- [ ] `QUEUE-001` Python Worker가 현재 CollectionTask/CollectionResult v1을 소비/발행하고 ACK/retry/DLQ를 동일하게 처리 **(구현 완료/추적 문서 갱신 중)**
 - [ ] `TaskQueue` port와 RabbitMQ adapter 분리 **(부분 구현: Processor와 RabbitMQ lifecycle 분리)**
 - [ ] 판매처별 최대 Worker 수 설정
 - [ ] Redis 기반 판매처별 전체 요청 간격 제한

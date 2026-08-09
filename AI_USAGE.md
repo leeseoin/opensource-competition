@@ -79,6 +79,7 @@
 | 2026-08-03 | Codex를 사용해 전달받은 Python 통합 Schema를 운영 CollectorResult와 분리하고 Python/Go 최대 10,000개 수집 및 성능 비교 설계를 작성 | 사용자가 Python/Go 비교 목표와 브랜치 경계를 결정하고 Schema/20건 예제/dev-jw 구현/현재 Go DTO를 대조해 필드 변환과 검증 기준을 확인 |
 | 2026-08-03 | Codex를 사용해 dev-jw Python 크롤러의 판매처 Adapter를 선별 이식하고 pagination/중복 제거/checkpoint/요청 예산/안전 중단/공통 계약 검증 코어를 구현 | 저장된 ABC마트/29CM fixture, 전달받은 20건 예제, checkpoint 재개와 429 중단을 7개 자동 테스트로 검증 |
 | 2026-08-09 | Codex를 사용해 정우님 Python 크롤러 실행환경을 Python 3.12/uv.lock으로 고정하고 루트 실행/테스트 명령을 uv 기준으로 전환 | 사용자가 Python runtime 통합 방향을 승인하고 13개 단위 테스트, FastAPI health, aio-pika import와 로컬 RabbitMQ 연결을 검증 |
+| 2026-08-09 | Codex를 사용해 Python 크롤러를 Spring Boot CollectionTask/CollectionResult v1과 연결하고 RabbitMQ ACK/retry/DLQ/publisher confirm 경로를 구현 | 사용자가 Python 최종 전환 방향과 자동 작업을 승인하고 24개 Python 테스트 및 격리된 로컬 RabbitMQ vhost의 success/retry/DLQ 통합 경로를 검증 / 실제 판매처 요청은 실행하지 않음 |
 | 2026-08-05 | Codex를 사용해 Python ABC마트/29CM의 JSON/HTML 검증 집계를 Go Collector와 동일한 CollectorResult 구조로 정렬하고 전송 전 JSON Schema 검사를 추가 | 사용자가 실제 두 판매처 3개 수집과 PostgreSQL 저장을 확인했으며 Python 13개 테스트와 Spring Boot Testcontainers 전체 테스트로 계약 호환성을 검증 |
 | 2026-08-06 | Codex를 사용해 Agent Gateway의 빈 실행 설정 fallback과 Codex OAuth 인증 만료 오류 비노출 처리를 구현 | 실제 폐기된 token 401 응답을 재현하고 Next.js unit test/lint/production build로 안전한 사용자 메시지와 stderr 비노출을 검증 |
 | 2026-08-06 | Codex를 사용해 필수/선호 구매 조건 계약과 PostgreSQL 전문 검색/pg_trgm 후보 검색을 구현 | 공통 JSON Schema, Java/MCP/Web 계약 대조와 PostgreSQL Testcontainers 통합 테스트 및 Next.js/MCP build/test로 검증 / runtime AI model과 embedding은 추가하지 않음 |

@@ -36,13 +36,20 @@ class Cm29Crawler(SiteCrawler):
     site_id = "29cm"
 
     async def crawl(
-        self, keyword: str, max_items: int
+        self,
+        keyword: str,
+        max_items: int,
+        *,
+        start_page: int = 1,
+        max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
         """29CM 검색 JSON을 수집하고 선택 상품 전체의 상세 HTML을 검증한다.
 
         Args:
             keyword: 실제 29CM 검색어다.
             max_items: 저장하고 검증할 최대 고유 상품 수다.
+            start_page: 수집을 시작할 1 기반 페이지다.
+            max_pages: 처리할 페이지 상한이며 없으면 상품 상한까지 진행한다.
 
         Returns:
             검증 결과가 포함된 상품 목록과 수집 또는 비교 경고다.
@@ -51,7 +58,8 @@ class Cm29Crawler(SiteCrawler):
         errors: list[str] = []
         all_products: list[dict] = []
         seen_ids: set[str] = set()
-        page = 1
+        page = start_page
+        processed_pages = 0
         ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=True) as client:
@@ -89,6 +97,9 @@ class Cm29Crawler(SiteCrawler):
                 all_products.extend(selected)
                 print(f"[29CM:search] page={page} +{len(selected)}개 / 누적 {len(all_products)}개")
 
+                processed_pages += 1
+                if max_pages is not None and processed_pages >= max_pages:
+                    break
                 if not new or not data.get("pagination", {}).get("hasNext", False):
                     break
 
@@ -133,16 +144,30 @@ class Cm29Crawler(SiteCrawler):
         return new
 
     def _parse(self, items: list[dict]) -> list[dict]:
-        """29CM 검색 JSON 상품을 Python 크롤러의 공통 원본 구조로 변환한다."""
+        """29CM 검색 JSON 상품을 Python 크롤러의 공통 원본 구조로 변환한다.
+
+        Args:
+            items: 공개 listing 응답의 상품 객체 목록이다.
+
+        Returns:
+            가격, category, 재고와 공개 출처를 포함한 원본 상품 목록이다.
+        """
 
         products: list[dict] = []
         for item in items:
             info = item.get("itemInfo", {})
             url = item.get("itemUrl", {})
+            event = item.get("itemEvent", {}).get("eventProperties", {})
 
-            sell_price = info.get("sellPrice")
+            sell_price = info.get("sellPrice", info.get("displayPrice"))
             original_price = info.get("originalPrice")
             discount_percent = _discount_percent(sell_price, original_price)
+            categories = [
+                str(event.get(key) or "").strip()
+                for key in ("largeCategoryName", "middleCategoryName", "smallCategoryName")
+                if str(event.get(key) or "").strip()
+            ]
+            sold_out = info.get("isSoldOut")
 
             products.append({
                 "source_product_id": str(item.get("itemId", "")),
@@ -156,6 +181,10 @@ class Cm29Crawler(SiteCrawler):
                 "style_code": "",  # 29CM 목록 API는 style code를 안 준다
                 "link": url.get("webLink", ""),
                 "site": "29cm",
+                "review_count": info.get("reviewCount"),
+                "category": categories[-1] if categories else "",
+                "category_path": " > ".join(categories),
+                "in_stock": not sold_out if isinstance(sold_out, bool) else None,
             })
         return products
 

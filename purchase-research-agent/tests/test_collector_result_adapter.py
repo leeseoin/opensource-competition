@@ -32,6 +32,8 @@ class CollectorResultAdapterTests(unittest.TestCase):
                 "site": "abcmart",
                 "review_count": 1,
                 "options": {"sizes": ["270", "270"], "colors": ["BLACK"]},
+                "category_path": "신발 > 구두",
+                "in_stock": True,
                 "reviews": [{
                     "review_source_id": "review-1",
                     "content": "편합니다",
@@ -50,9 +52,11 @@ class CollectorResultAdapterTests(unittest.TestCase):
         self.assertNotIn("verificationSummary", result)
         self.assertNotIn("verification", result["products"][0])
         self.assertEqual(result["products"][0]["price"]["amount"], 19000)
-        self.assertEqual(len(result["products"][0]["options"]), 1)
+        self.assertEqual(len(result["products"][0]["options"]), 2)
+        self.assertEqual(result["products"][0]["categoryPath"], ["신발", "구두"])
+        self.assertEqual(result["products"][0]["stockStatus"], "available")
         self.assertEqual(result["products"][0]["reviews"][0]["createdAt"], "2026-08-04T00:00:00+09:00")
-        self.assertEqual(result["products"][0]["provenance"]["collectorVersion"], "dev-jw-python-bridge-v1")
+        self.assertEqual(result["products"][0]["provenance"]["collectorVersion"], "python-collector-v1")
 
     def test_marks_crawler_errors_as_partial_warnings(self) -> None:
         """일부 크롤링 오류가 저장 가능한 partial 상태와 경고로 바뀌는지 검증한다."""

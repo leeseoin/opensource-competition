@@ -1,7 +1,7 @@
 # Purchase Research Agent 시스템 구조
 
 작성일: 2026-07-13
-최종 수정일: 2026-08-06
+최종 수정일: 2026-08-09
 상태: in progress
 
 이 문서는 현재 합의된 전체 구조와 각 폴더의 책임을 설명하는 기준 문서다. 날짜별 보고서는 당시 상황을 보존하고, 구조가 바뀌면 이 문서를 먼저 갱신한다.
@@ -45,7 +45,9 @@ Spring Boot Product Backend
   ├── RabbitMQ: 수집 작업과 결과
   └── Redis: 속도 제한, 중복 방지, 짧은 진행 상태
                       ↓
-                Go Collector Worker
+                Collector Worker
+                - Python 전환 runtime
+                - Go 비교/복구 기준
                 - 판매처별 검색과 parsing
                 - timeout, retry, 차단 감지
                 - 제한된 병렬 처리
@@ -111,16 +113,18 @@ Wiki는 가격, 재고와 옵션을 저장하지 않는다. 가격/재고/옵션
 
 ## 4. 구성요소 책임
 
-### Go Collector
+### Collector Worker
 
-- 외부 판매처에 접근하는 유일한 구성요소
+- 외부 판매처에 접근하는 유일한 논리 구성요소
 - 판매처별 공개 JSON, HTML, JSON-LD 중 안정적인 데이터 소스 선택
 - 검색, 상세, 옵션, 재고, 공개 리뷰 parsing
 - RabbitMQ 작업 소비와 `CollectorResult` 발행
 - 판매처별 요청 간격, timeout, 재시도 상한, 차단 감지
 - `sourceUrl`, `collectedAt`, `collectorVersion` 포함
 
-Go Collector는 DB에 저장하거나 최종 추천을 판단하지 않는다.
+현재 Python 전환 runtime은 `purchase-research-agent`이고 Go 구현은 계약 비교와 복구를
+위한 기준으로 유지한다. 두 runtime은 같은 검색 Queue를 경쟁 소비하므로 전환 검증 중에는
+하나만 실행한다. Collector Worker는 DB에 저장하거나 최종 추천을 판단하지 않는다.
 
 ### Spring Boot Product Backend
 
@@ -174,7 +178,7 @@ HTTP handler가 판매처 이름을 직접 분기하지 않는다. Registry가 �
 
 ## 6. Contract 역할
 
-`contracts/`는 Go Collector, Product Backend, MCP Server가 같은 JSON 구조를 사용하도록 정한 서비스 사이의 규격이다. Spring Boot 기준으로 보면 서비스 사이에서 공유하는 요청과 응답 DTO 명세에 가깝다.
+`contracts/`는 Python/Go Collector, Product Backend, MCP Server가 같은 JSON 구조를 사용하도록 정한 서비스 사이의 규격이다. Spring Boot 기준으로 보면 서비스 사이에서 공유하는 요청과 응답 DTO 명세에 가깝다.
 
 ```text
 ABC마트 PRICE / 29CM salePrice
@@ -188,11 +192,11 @@ ABC마트 PRICE / 29CM salePrice
 
 | Contract | 방향 | 역할 |
 |---|---|---|
-| `search-request.schema.json` | Product Backend → Go | 판매처, 검색어, 조건 전달 |
-| `collector-result.schema.json` | Go → Product Backend | 상품, 옵션, 리뷰, 출처, 실패 정보 |
-| `collection-task.schema.json` | Product Backend → RabbitMQ → Go | 비동기 수집 작업 |
-| `collection-result.schema.json` | Go → RabbitMQ → Product Backend | 비동기 수집 결과 |
-| `verification-result.schema.json` | Go → Product Backend | 구매 전 최신 정보와 변경 내용 |
+| `search-request.schema.json` | Product Backend → Collector | 판매처, 검색어, 조건 전달 |
+| `collector-result.schema.json` | Collector → Product Backend | 상품, 옵션, 리뷰, 출처, 실패 정보 |
+| `collection-task.schema.json` | Product Backend → RabbitMQ → Collector | 비동기 수집 작업 |
+| `collection-result.schema.json` | Collector → RabbitMQ → Product Backend | 비동기 수집 결과 |
+| `verification-result.schema.json` | Collector → Product Backend | 구매 전 최신 정보와 변경 내용 |
 
 Contract가 바뀌면 Schema, Go DTO, Java DTO, 테스트를 같은 작업에서 갱신한다.
 
@@ -212,6 +216,11 @@ services/
 │   ├── src/main/java/              # collection, product, evidence 도메인별 package
 │   └── src/test/java/              # unit와 integration test
 └── mcp-server/                     # MCP 연결 서버
+
+purchase-research-agent/            # Python 전환 Collector runtime
+├── app/crawlers/                   # ABC마트/29CM Adapter
+├── app/messaging/                  # Queue v1 계약과 RabbitMQ Worker
+└── tests/                          # fixture와 Queue 단위 테스트
 
 plugins/purchase-research-agent/    # Codex workflow
 contracts/                          # JSON Schema와 예제
@@ -247,19 +256,20 @@ com.purchasesearch.product_backend
 
 | 영역 | 상태 | 설명 |
 |---|---|---|
-| Go Collector | 부분 구현 | ABC마트/29CM 검색, Registry, RabbitMQ 작업 소비와 결과 발행 |
+| Python Collector | 부분 구현 | ABC마트/29CM 검색/상세, Queue v1 작업 소비와 결과 발행, ACK/retry/DLQ 통합 검증 |
+| Go Collector | 전환 기준 | ABC마트/29CM/무신사 검색, Registry, Queue 운영 안전성 비교 기준 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
 | Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 필수/선호 조건 조회, PostgreSQL FTS/trigram, 선택적 pgvector/BGE-M3 adapter / Wiki 운영 연결은 planned |
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 및 collection job/task 상태 저장 검증 |
 | MCP Server | 부분 구현 | 조사 세션 생성/확인/후보 검색 도구와 Product Backend REST 연결 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 / stream과 관리자 화면 남음 |
-| RabbitMQ | 부분 구현 | Spring 작업 발행, Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
+| RabbitMQ | 부분 구현 | Spring 작업 발행, Python/Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |
 
 ## 9. 구현 순서
 
-1. Product Backend부터 Go Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
+1. Product Backend부터 Python Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
 2. 수집 작업 상태를 PostgreSQL에 저장한다. **(구현/통합 테스트 완료)**
 3. 상품 후보 검색 baseline과 품질 평가 data를 만들고 전문 검색을 구현한다. **(DRAFT 평가까지 완료)**
 4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(adapter/DRAFT 비교 완료, 실제 BGE-M3 평가 남음)**

@@ -41,6 +41,36 @@ uv sync --frozen --python 3.12
 uv run --frozen uvicorn app.main:app --host 0.0.0.0 --port 8012
 ```
 
+## RabbitMQ Worker
+
+Spring Boot가 발행하는 `CollectionTask v1` 검색 작업은 다음 명령으로 처리합니다.
+Go Worker와 같은 검색 Queue를 경쟁 소비하므로 전환 검증 중에는 둘 중 하나만 실행합니다.
+
+```bash
+# 계속 실행
+make python-crawler-worker
+
+# 작업 한 건 처리 후 종료
+make python-crawler-worker-once
+```
+
+Python Worker는 `purchase-research.collection.search.v1`을 소비하고 결과를
+`purchase-research.collection.result.v1`에 발행합니다. prefetch 1, persistent 메시지,
+publisher confirm, 5초 retry Queue와 DLQ 이름은 Go/Spring 계약과 동일합니다. 결과 발행이
+확인된 뒤에만 원본 작업을 ACK하며, 발행 실패 시 원본을 requeue합니다.
+
+검색 작업은 page 1부터 200까지 한 페이지씩 처리합니다. 가격/카테고리/사이즈/색상/재고
+필터는 확인된 원본 필드로 AND 적용하고, 한 필드에 여러 값이 있으면 그중 하나의 일치를
+허용합니다. 현재 `ko-KR`/`KRW`만 지원하고 의미를 보존할 수 없는 `attributes` 필터는
+무시하지 않고 non-retryable 실패로 반환합니다.
+
+실제 판매처 요청이 없는 RabbitMQ 통합 검증은 운영 vhost가 아닌 별도 테스트 vhost URL을
+지정해 실행합니다.
+
+```bash
+make python-crawler-rabbitmq-test TEST_RABBITMQ_URL='amqp://사용자:암호@127.0.0.1:35672/격리_vhost'
+```
+
 ## API 엔드포인트
 
 ### `POST /api/v1/collect-and-store`

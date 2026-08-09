@@ -31,8 +31,25 @@ class SiteCrawler(ABC):
     site_id: str
 
     @abstractmethod
-    async def crawl(self, keyword: str, max_items: int) -> tuple[list[dict], list[str]]:
-        """키워드 검색 기반 크롤링"""
+    async def crawl(
+        self,
+        keyword: str,
+        max_items: int,
+        *,
+        start_page: int = 1,
+        max_pages: int | None = None,
+    ) -> tuple[list[dict], list[str]]:
+        """지정한 시작 페이지부터 제한된 범위의 키워드 검색을 수행한다.
+
+        Args:
+            keyword: 판매처에 전달할 검색어다.
+            max_items: 반환할 고유 상품 상한이다.
+            start_page: 수집을 시작할 1 기반 페이지다.
+            max_pages: 처리할 페이지 상한이며 없으면 상품 상한까지 진행한다.
+
+        Returns:
+            원본 상품 목록과 수집 경고 목록이다.
+        """
 
     @abstractmethod
     async def crawl_category(self, category: str, max_items: int) -> tuple[list[dict], list[str]]:
