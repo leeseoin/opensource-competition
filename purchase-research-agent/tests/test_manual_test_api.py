@@ -38,6 +38,11 @@ class ManualTestApiTests(unittest.TestCase):
         schema = document["components"]["schemas"]["ManualCollectionTaskRequest"]
         self.assertEqual(schema["properties"]["limit"]["default"], 3)
         self.assertEqual(schema["properties"]["query"]["default"], "구두")
+        self.assertEqual(set(schema["properties"]), {"merchant", "query", "limit"})
+        self.assertEqual(
+            schema["example"],
+            {"merchant": "abcmart", "query": "구두", "limit": 3},
+        )
 
     @patch("app.api.endpoints.manual_test.BackendStoreService.health", new_callable=AsyncMock)
     def test_readiness_explains_disabled_worker(self, health: AsyncMock) -> None:
@@ -69,8 +74,7 @@ class ManualTestApiTests(unittest.TestCase):
         self.assertEqual(request["merchant"], "abcmart")
         self.assertEqual(request["limit"], 3)
         self.assertEqual(request["maxAttempts"], 2)
-        self.assertNotIn("priceMax", request["filters"])
-        self.assertEqual(request["filters"]["sizes"], [])
+        self.assertEqual(request["filters"], {})
         self.assertIn("jobId", response.json()["nextStep"])
 
     @patch(
@@ -80,7 +84,7 @@ class ManualTestApiTests(unittest.TestCase):
     def test_completed_job_points_to_product_step(self, get_job: AsyncMock) -> None:
         """완료된 2단계 job 응답이 저장 상품 조회를 다음 단계로 안내하는지 검증한다."""
 
-        get_job.return_value = {"jobId": "job-001", "status": "SUCCESS", "productCount": 3}
+        get_job.return_value = {"jobId": "job-001", "status": "COMPLETED", "productCount": 3}
 
         response = self.client.get("/api/v1/manual-test/02-collection-jobs/job-001")
 

@@ -7,50 +7,44 @@ import os
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.backend_store_service import BackendStoreError, BackendStoreService
 
 router = APIRouter()
 
 
-class ManualSearchFilters(BaseModel):
-    """판매처가 확인할 수 있는 가격, 옵션과 재고 조건을 표현한다."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    price_min: int | None = Field(default=None, alias="priceMin", ge=0)
-    price_max: int | None = Field(default=None, alias="priceMax", ge=0)
-    categories: list[str] = Field(default_factory=list, max_length=50)
-    sizes: list[str] = Field(default_factory=list, max_length=50)
-    colors: list[str] = Field(default_factory=list, max_length=50)
-    in_stock_only: bool = Field(default=False, alias="inStockOnly")
-    attributes: dict[str, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def validate_price_range(self) -> "ManualSearchFilters":
-        """최소 가격이 최대 가격을 넘는 입력을 거부한다."""
-
-        if self.price_min is not None and self.price_max is not None:
-            if self.price_min > self.price_max:
-                raise ValueError("priceMin은 priceMax보다 클 수 없습니다")
-        return self
-
-
 class ManualCollectionTaskRequest(BaseModel):
-    """Swagger 단계 테스트에서 Queue에 등록할 소량 검색 조건이다."""
+    """Swagger 첫 검증에 필요한 판매처, 검색어와 개수만 입력받는다."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"merchant": "abcmart", "query": "구두", "limit": 3}
+        }
+    )
 
     merchant: Literal["abcmart", "29cm"] = "abcmart"
     query: str = Field(default="구두", min_length=1, max_length=200)
-    page: int = Field(default=1, ge=1, le=200)
     limit: int = Field(default=3, ge=1, le=10)
-    locale: Literal["ko-KR"] = "ko-KR"
-    currency: Literal["KRW"] = "KRW"
-    priority: int = Field(default=10, ge=0, le=100)
-    max_attempts: int = Field(default=2, alias="maxAttempts", ge=1, le=5)
-    filters: ManualSearchFilters = Field(default_factory=ManualSearchFilters)
+
+    def to_backend_request(self) -> dict[str, Any]:
+        """간단한 Swagger 입력에 안전한 내부 Queue 기본값을 채운다.
+
+        Returns:
+            Product Backend CollectionTaskRequest 계약에 맞춘 소량 검색 요청이다.
+        """
+
+        return {
+            "merchant": self.merchant,
+            "query": self.query,
+            "page": 1,
+            "limit": self.limit,
+            "locale": "ko-KR",
+            "currency": "KRW",
+            "priority": 10,
+            "maxAttempts": 2,
+            "filters": {},
+        }
 
 
 def _worker_status(request: Request) -> dict[str, Any]:
@@ -139,7 +133,8 @@ async def readiness(request: Request) -> dict[str, Any]:
     status_code=202,
     summary="1단계 소량 수집 작업 등록",
     description=(
-        "기본값은 ABC마트 구두 3개이며 조건 필터는 비어 있습니다. 실제 판매처를 요청하므로 반복 실행을 피하고 "
+        "판매처, 검색어와 최대 개수만 입력합니다. 기본값은 ABC마트 구두 3개입니다. "
+        "실제 판매처를 요청하므로 반복 실행을 피하고 "
         "응답의 jobId를 2단계에 입력하세요."
     ),
 )
@@ -147,7 +142,7 @@ async def create_collection_task(request: ManualCollectionTaskRequest) -> dict[s
     """Swagger 입력을 Product Backend 작업 등록 API로 전달한다.
 
     Args:
-        request: 판매처, 검색어, 개수와 확인 필터다.
+        request: 판매처, 검색어와 최대 상품 개수다.
 
     Returns:
         Queue 접수 상태와 2단계에 넣을 jobId다.
@@ -157,9 +152,7 @@ async def create_collection_task(request: ManualCollectionTaskRequest) -> dict[s
     """
 
     try:
-        result = await BackendStoreService().create_collection_task(
-            request.model_dump(by_alias=True, exclude_none=True)
-        )
+        result = await BackendStoreService().create_collection_task(request.to_backend_request())
     except BackendStoreError as exc:
         raise _backend_error(exc) from exc
     result["nextStep"] = "2단계 경로의 job_id에 이 응답의 jobId를 입력하세요."
@@ -170,7 +163,7 @@ async def create_collection_task(request: ManualCollectionTaskRequest) -> dict[s
     "/manual-test/02-collection-jobs/{job_id}",
     tags=["02 진행 조회"],
     summary="2단계 수집 진행 상태 조회",
-    description="1단계 응답의 jobId를 입력합니다. SUCCESS/PARTIAL/FAILED가 될 때까지 확인할 수 있습니다.",
+    description="1단계 응답의 jobId를 입력합니다. COMPLETED/PARTIAL/FAILED가 될 때까지 확인할 수 있습니다.",
 )
 async def get_collection_job(
     job_id: str = Path(min_length=1, max_length=100, description="1단계 응답의 jobId"),
@@ -191,7 +184,7 @@ async def get_collection_job(
         result = await BackendStoreService().get_collection_job(job_id)
     except BackendStoreError as exc:
         raise _backend_error(exc) from exc
-    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+    if result.get("status") in {"COMPLETED", "PARTIAL"}:
         result["nextStep"] = "3단계 저장 상품 조회를 실행하세요."
     elif result.get("status") == "FAILED":
         result["nextStep"] = "tasks의 error를 확인한 뒤 1단계 조건을 조정하세요."
