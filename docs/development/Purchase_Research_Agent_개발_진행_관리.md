@@ -1972,18 +1972,20 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-10 OPS-002 Python Swagger 단계 테스트
 
-- 진행상황: **부분 구현**. commit `7852165`에서 Python Collector의 수동 Queue 검증을
+- 진행상황: **부분 구현**. commit `7852165`, `fdd16f3`에서 Python Collector의 수동 Queue 검증을
   Swagger의 00 준비 확인, 01 작업 등록, 02 job 상태 조회와 03 저장 상품 조회로 연결했다.
   `make python-crawler-swagger`가 인프라 health를 기다리고 Spring Boot와 Python API/Worker를
   함께 실행한다.
 - 구현 위치:
-  - `purchase-research-agent/app/api/endpoints/manual_test.py:103` `readiness`: Backend와
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:17` `ManualCollectionTaskRequest`:
+    판매처, 검색어와 최대 개수만 노출하고 내부 Queue 기본값 생성
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:97` `readiness`: Backend와
     내장 Worker 준비 상태 확인
-  - `purchase-research-agent/app/api/endpoints/manual_test.py:146` `create_collection_task`:
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:141` `create_collection_task`:
     소량 수집 작업 등록과 다음 단계 안내
-  - `purchase-research-agent/app/api/endpoints/manual_test.py:175` `get_collection_job`:
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:168` `get_collection_job`:
     job 진행 상태와 수집 개수 조회
-  - `purchase-research-agent/app/api/endpoints/manual_test.py:209` `search_stored_products`:
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:202` `search_stored_products`:
     Product Backend를 통한 PostgreSQL 최신 상품 조회
   - `purchase-research-agent/app/main.py:34` `lifespan`: 통합 실행 모드의 Python Worker
     시작과 종료
@@ -1995,9 +1997,13 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   조립해야 해 수동 검증 순서와 입력을 놓치기 쉬웠다.
 - 원인: 기존 Python Swagger에는 Queue 작업 등록, job 상태와 DB 결과를 하나의 흐름으로
   보여주는 endpoint와 통합 실행 lifecycle이 없었다.
+- 추가 문제: 내부 Queue 계약을 request body로 그대로 노출해 Swagger가 0원 가격과 `string`
+  배열 및 지원하지 않는 attributes placeholder를 예시로 만들었다. job 완료 안내도 실제
+  `COMPLETED` 대신 task의 `SUCCESS` 상태를 사용했다.
 - 해결: Python은 Product Backend REST API만 호출한다는 경계를 유지하면서 번호가 붙은
   proxy endpoint를 추가했다. 최초 연결 검증이 정확 조건 때문에 0건으로 끝나지 않도록
-  기본값은 필터 없는 구두 3개로 제한했다.
+  기본값은 필터 없는 구두 3개로 제한했다. Swagger 입력은 판매처, 검색어와 최대 개수만
+  노출하고 나머지 Queue 값은 서버가 채우며 job 완료 상태는 `COMPLETED`로 정렬했다.
 - 남은 위험: 이번 실행 검증에서는 실제 판매처 요청을 발생시키지 않았다. Swagger 01부터
   03까지의 실제 수집 결과 사람 확인과 계약 CI, 구조화 로그 및 metric은 남아 있어
   `OPS-002` 상태는 부분 구현을 유지한다.

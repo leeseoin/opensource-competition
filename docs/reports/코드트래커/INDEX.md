@@ -4,7 +4,7 @@
 
 ## 최신 기록
 
-- 2026-08-10 / [`OPS-002` Python Swagger 단계 테스트](2026-08-10-OPS-002-Python_Swagger_단계_테스트.md) / `7852165` / Python Queue 수집 준비부터 PostgreSQL 결과 조회까지 번호가 붙은 Swagger 흐름과 통합 실행 명령 추가
+- 2026-08-10 / [`OPS-002` Python Swagger 단계 테스트](2026-08-10-OPS-002-Python_Swagger_단계_테스트.md) / `7852165`, `fdd16f3` / Python Queue 수집 준비부터 PostgreSQL 결과 조회까지 번호가 붙은 Swagger 흐름과 세 필드 작업 등록 입력 추가
 - 2026-08-09 / [`MERCHANT-001` Python 접근 안전성](2026-08-09-MERCHANT-001-Python_접근_안전성.md) / `6ecc6c8` / TLS 검증과 redirect 차단 및 401/403/429/5xx 안전 분류를 Python 수집 경로에 적용
 - 2026-08-09 / [`QUEUE-001` Python Collection Queue Worker](2026-08-09-QUEUE-001-Python_Collection_Queue_Worker.md) / `32d6446` / Python runtime을 Queue v1에 연결하고 confirm 뒤 ACK, retry, DLQ를 실제 broker로 검증
 - 2026-08-08 / [`ANALYSIS-004` 범용 상품군 선택 UI](2026-08-08-ANALYSIS-004-범용_상품군_선택_UI.md) / `e8dc28d` / 최대 5개 상품군으로 중복을 묶고 컬러별 원본 판매 행과 재고 선택 UI 구현
