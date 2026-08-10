@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal, Protocol
 
 import aio_pika
 from aio_pika.abc import AbstractChannel, AbstractExchange, AbstractIncomingMessage, AbstractQueue
 
-from app.messaging.contracts import STATUS_FAILED, CollectionTask, decode_collection_task
+from app.messaging.contracts import (
+    STATUS_FAILED,
+    CollectionTask,
+    decode_collection_task,
+    extract_collection_task_identity,
+    validate_collection_result_envelope,
+)
 
 COLLECTION_EXCHANGE = "purchase-research.collection.v1"
 DEAD_LETTER_EXCHANGE = "purchase-research.collection.dlx.v1"
@@ -52,14 +59,24 @@ async def decide_message(body: bytes, processor: TaskProcessor) -> WorkerDecisio
         processor: 판매처 검색을 실행할 비동기 처리기다.
 
     Returns:
-        발행할 body와 routing key 및 발행 성공 뒤의 확인 처리다. 계약 위반 입력은
-        결과를 만들 수 없으므로 발행 없이 reject한다.
+        발행할 body와 routing key 및 발행 성공 뒤의 확인 처리다. 계약 위반 입력도 안전한
+        taskId와 jobId를 복구할 수 있으면 실패 결과를 발행한 뒤 reject한다.
     """
 
     try:
         task = decode_collection_task(body)
     except ValueError:
-        return WorkerDecision(action="reject")
+        identity = extract_collection_task_identity(body)
+        if identity is None:
+            return WorkerDecision(action="reject")
+        task_id, job_id = identity
+        result = _invalid_task_result(task_id, job_id)
+        return WorkerDecision(
+            action="reject",
+            routing_key=RESULT_ROUTING_KEY,
+            body=_json_body(result),
+            message_id=task_id,
+        )
 
     result = await processor.process(task)
     error = result.get("error")
@@ -247,3 +264,34 @@ def _json_body(value: dict) -> bytes:
     """
 
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def _invalid_task_result(task_id: str, job_id: str) -> dict:
+    """식별 가능한 계약 위반 작업을 Spring이 종료할 수 있는 실패 결과로 만든다.
+
+    Args:
+        task_id: 공통 식별자 형식을 만족한 작업 식별자다.
+        job_id: 공통 식별자 형식을 만족한 상위 job 식별자다.
+
+    Returns:
+        CollectionResult v1 계약을 만족하는 non-retryable 실패 결과다.
+    """
+
+    completed_at = datetime.now(timezone.utc).isoformat()
+    result = {
+        "schemaVersion": "1",
+        "taskId": task_id,
+        "jobId": job_id,
+        "status": "failed",
+        "startedAt": completed_at,
+        "completedAt": completed_at,
+        "durationMs": 0,
+        "collectorResult": None,
+        "error": {
+            "code": "COLLECTION_TASK_CONTRACT_INVALID",
+            "message": "CollectionTask 계약을 위반해 실행하지 않았습니다.",
+            "retryable": False,
+        },
+    }
+    validate_collection_result_envelope(result)
+    return result

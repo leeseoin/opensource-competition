@@ -288,6 +288,23 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(decision.routing_key)
         self.assertIsNone(decision.body)
 
+    async def test_identifiable_invalid_task_publishes_failure_before_dlq(self) -> None:
+        """식별 가능한 계약 위반은 실패 결과를 발행하고 원본을 DLQ로 보내는지 검증한다."""
+
+        raw = json.loads(_task_body())
+        raw["payload"]["filters"]["priceMin"] = None
+
+        decision = await decide_message(json.dumps(raw).encode(), FixedProcessor({}))
+
+        result = json.loads(decision.body)
+        validate_collection_result_envelope(result)
+        self.assertEqual(decision.action, "reject")
+        self.assertEqual(decision.routing_key, RESULT_ROUTING_KEY)
+        self.assertEqual(result["taskId"], "python-task-001")
+        self.assertEqual(result["jobId"], "python-job-001")
+        self.assertEqual(result["error"]["code"], "COLLECTION_TASK_CONTRACT_INVALID")
+        self.assertFalse(result["error"]["retryable"])
+
     async def test_ack_happens_after_confirmed_publish(self) -> None:
         """성공 결과 발행이 완료된 뒤에만 원본 작업을 ACK하는지 검증한다."""
 

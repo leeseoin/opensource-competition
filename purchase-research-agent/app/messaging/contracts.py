@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ _TASK_SCHEMA_PATH = _REPO_ROOT / "contracts" / "collection" / "v1" / "collection
 _RESULT_SCHEMA_PATH = _REPO_ROOT / "contracts" / "collection" / "v1" / "collection-result.schema.json"
 _task_validator: jsonschema.Draft202012Validator | None = None
 _result_validator: jsonschema.Draft202012Validator | None = None
+_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 @dataclass(frozen=True)
@@ -111,6 +113,33 @@ def decode_collection_task(body: bytes) -> CollectionTask:
         idempotency_key=raw["idempotencyKey"],
         payload=raw["payload"],
     )
+
+
+def extract_collection_task_identity(body: bytes) -> tuple[str, str] | None:
+    """계약 위반 JSON에서 안전한 taskId와 jobId만 제한적으로 복구한다.
+
+    Args:
+        body: 계약 검증에 실패한 RabbitMQ 원본 body다.
+
+    Returns:
+        두 식별자가 공통 형식을 만족하면 taskId와 jobId 쌍이며, 아니면 ``None``이다.
+    """
+
+    try:
+        raw = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    task_id = raw.get("taskId")
+    job_id = raw.get("jobId")
+    if not isinstance(task_id, str) or not isinstance(job_id, str):
+        return None
+    if _IDENTIFIER_PATTERN.fullmatch(task_id) is None:
+        return None
+    if _IDENTIFIER_PATTERN.fullmatch(job_id) is None:
+        return None
+    return task_id, job_id
 
 
 def validate_collection_result_envelope(envelope: dict[str, Any]) -> None:
