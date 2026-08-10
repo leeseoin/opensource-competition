@@ -2004,9 +2004,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   proxy endpoint를 추가했다. 최초 연결 검증이 정확 조건 때문에 0건으로 끝나지 않도록
   기본값은 필터 없는 구두 3개로 제한했다. Swagger 입력은 판매처, 검색어와 최대 개수만
   노출하고 나머지 Queue 값은 서버가 채우며 job 완료 상태는 `COMPLETED`로 정렬했다.
-- 남은 위험: 이번 실행 검증에서는 실제 판매처 요청을 발생시키지 않았다. Swagger 01부터
-  03까지의 실제 수집 결과 사람 확인과 계약 CI, 구조화 로그 및 metric은 남아 있어
-  `OPS-002` 상태는 부분 구현을 유지한다.
+- 남은 위험: 계약 CI, 구조화 로그 및 metric은 남아 있어 `OPS-002` 상태는 부분 구현을
+  유지한다.
 - 검증:
   - `make python-crawler-test`: 39개 통과
   - `make python-crawler-safety-check`: 통과
@@ -2014,8 +2013,57 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make python-crawler-swagger`: 로컬 인프라/Backend/Python API/Worker 기동 성공
   - `GET /api/v1/manual-test/00-readiness`: `ready: true`, Backend `UP`, Worker 실행 확인
   - `GET /openapi.json`: 번호가 붙은 네 단계 tag와 경로 확인
+  - 실제 ABC마트 `구두`, limit 3: 약 4.5초 뒤 `COMPLETED`, 상품 3건과 verification
+    matched 3건 및 PostgreSQL 조회 3건 확인
   - 종료 검증: Spring Boot와 Python 종료, data container healthy 유지
   - `git diff --check`: 통과
+
+### 2026-08-10 QUEUE-001 계약 위반 작업 실패 연결
+
+- 진행상황: **완료**. commit `ca58f3b`에서 식별 가능한 CollectionTask 계약 위반이
+  검색 DLQ에만 남아 Spring 작업 상태가 `QUEUED`로 고정되던 경로를 `FAILED`로 종결했다.
+- 구현 위치:
+  - `purchase-research-agent/app/messaging/contracts.py:118`
+    `extract_collection_task_identity`: 계약 위반 원본에서 제한된 형식의 작업 식별자 복구
+  - `purchase-research-agent/app/messaging/rabbitmq.py:54` `decide_message`: 실패 결과 발행
+    confirm 뒤 원본 reject 결정
+  - `purchase-research-agent/app/messaging/rabbitmq.py:269` `_invalid_task_result`: 비재시도
+    계약 위반 결과 생성
+  - `purchase-research-agent/tests/test_collection_queue.py:291`
+    `test_identifiable_invalid_task_publishes_failure_before_dlq`: 실패 결과와 DLQ 결정 검증
+- 발생 문제: 검색 DLQ에는 메시지가 있었지만 Swagger job은 계속 `QUEUED`였다.
+- 원인: Python Worker가 계약을 해석하지 못한 원본을 reject하면서 Spring Boot가 소비할
+  실패 결과를 발행하지 않았다.
+- 해결: 안전한 `taskId`와 `jobId`만 복구해 결과 계약을 만족하는
+  `COLLECTION_TASK_CONTRACT_INVALID`를 발행하고 원본은 기존 DLQ에 보존했다.
+- 검증:
+  - `make python-crawler-test`: 40개 통과
+  - 실제 RabbitMQ 기존 오류 메시지 재처리: `QUEUED → FAILED`, 원본 검색 DLQ 확인
+  - `git diff --check`: 통과
+- 남은 위험: 식별 불가능한 JSON은 임의 작업 상태와 연결하지 않고 DLQ에만 보존한다.
+  비정상 종료 뒤 미확인 작업 복구 검증은 운영 안정성 후속 작업으로 유지한다.
+
+### 2026-08-10 QUEUE-002 빈 가격 필터와 실제 판매처 Queue E2E
+
+- 진행상황: **완료**. commit `3ff397c`에서 Spring Queue 메시지의 빈 선택 가격 필드를
+  생략했고, ABC마트 실제 검색부터 PostgreSQL 저장과 조회까지 수직 흐름을 검증했다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectionTaskMessage.java:68`
+    `SearchFilters`: null 선택 필드 Queue 직렬화 제외
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java:109`
+    `createsSearchTaskAndPersistsQueuedStatus`: 실제 Rabbit 메시지의 null 가격 필드 제외 검증
+- 발생 문제: 최소 Swagger 입력의 작업이 Python Schema에서 가격 `null` 때문에 거부됐다.
+- 원인: Java 선택 필드의 기본 JSON 표현과 공유 Schema의 필드 누락 표현이 달랐다.
+- 해결: 값이 없는 가격 조건은 필드를 생략하고 숫자가 있을 때만 integer로 발행한다.
+- 검증:
+  - `./gradlew test --tests com.purchasesearch.product_backend.CollectionTaskPublisherIntegrationTests --rerun-tasks`: 통과
+  - `./gradlew test --rerun-tasks`: 전체 Spring Boot 테스트 통과
+  - 실제 ABC마트 `구두`, limit 3 Queue E2E: 약 4.5초, 성공 1 task, 상품 3건,
+    verification matched 3건
+  - PostgreSQL 상품 조회: ABC마트 구두 3건 반환
+  - `git diff --check`: 통과
+- 남은 위험: 여러 검색어와 페이지, 29CM Queue smoke test 및 비정상 종료 복구는 후속
+  범위다.
 
 ## 작업 기록 템플릿
 

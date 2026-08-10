@@ -72,6 +72,12 @@ job 최종 성공 안내와 다음 단계 판정도 `COMPLETED`로 정렬했다.
 
 ## 남은 작업
 
-- Swagger 1단계에서 실제 판매처 작업을 실행하고 2단계 최종 상태 및 3단계 저장 상품을 사람이
-  확인하는 opt-in Queue E2E
 - 실제 판매처 smoke test는 요청 제한을 지키며 기본 CI 밖에서 유지
+
+## 2026-08-10 실제 수직 흐름 추가 검증
+
+- `POST /api/v1/manual-test/01-collection-tasks`: ABC마트 `구두`, limit 3 등록
+- `GET /api/v1/manual-test/02-collection-jobs/{jobId}`: 약 4.5초 뒤 `COMPLETED`, 상품 3건,
+  verification matched 3건 확인
+- `GET /api/v1/manual-test/03-products?merchant=abcmart&query=구두&limit=3`: PostgreSQL
+  저장 상품 3건 확인

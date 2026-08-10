@@ -181,17 +181,17 @@
 - [x] 검증된 결과를 JPA transaction으로 저장
 - [x] `collection_jobs`, `collection_tasks` JPA entity 작성
 - [x] `collection_jobs`, `collection_tasks` Flyway migration 작성
-- [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록
+- [ ] 성공·실패·중복·저장 상품 수와 소요시간 기록 **(부분 구현: 성공/실패/저장 상품 수/소요시간 완료, 중복 수 집계 남음)**
 - [ ] Redis에 짧은 수집 진행 상태를 저장하고 PostgreSQL에 최종 상태 보존
-- [ ] Worker 또는 Backend 장애 후 작업 상태 복구 정책 구현
+- [ ] Worker 또는 Backend 장애 후 작업 상태 복구 정책 구현 **(부분 구현: 식별 가능한 계약 위반은 원본 DLQ 보존과 함께 FAILED로 종결, 비정상 종료 복구 남음)**
 
 ### 4.6 검증
 
 - [x] `OPS-002` Python Swagger 준비 확인/작업 등록/job 상태/저장 상품 조회 단계 API와 통합 실행 명령
 - [ ] RabbitMQ 없이 실행하는 fixture 기반 Go Processor/Java 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
-- [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Go 작업 retry/DLQ와 Spring 결과 ACK/DLQ를 서비스별 검증)**
-- [ ] ABC마트 검색 작업 1건 RabbitMQ → Go → Spring Boot → PostgreSQL 실제 수직 흐름 검증
+- [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Python/Go 작업 retry/DLQ, Spring 결과 ACK/DLQ와 계약 위반 작업의 FAILED 연결 검증, 비정상 종료 재전달 남음)**
+- [x] `QUEUE-002` ABC마트 검색 작업 1건 RabbitMQ → Python Worker → Spring Boot → PostgreSQL 실제 수직 흐름 검증
 - [ ] ABC마트 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 29CM 여러 검색어·여러 페이지 batch 수집 opt-in smoke test
 - [ ] 동일 상품 재수집 시 상품 중복 없이 snapshot만 증가하는 DB 검증

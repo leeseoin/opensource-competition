@@ -264,13 +264,13 @@ com.purchasesearch.product_backend
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 및 collection job/task 상태 저장 검증 |
 | MCP Server | 부분 구현 | 조사 세션 생성/확인/후보 검색 도구와 Product Backend REST 연결 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 / stream과 관리자 화면 남음 |
-| RabbitMQ | 부분 구현 | Spring 작업 발행, Python/Go Worker와 Spring 결과 소비/DLQ 구현 / 실제 판매처 전체 E2E 남음 |
+| RabbitMQ | 부분 구현 | Spring 작업 발행, Python/Go Worker와 Spring 결과 소비/DLQ 구현 / ABC마트 Python 실제 Queue E2E 완료, 여러 검색어와 페이지 수집 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |
 
 ## 9. 구현 순서
 
-1. Product Backend부터 Python Worker와 PostgreSQL까지 실제 Queue E2E를 검증한다.
+1. Product Backend부터 Python Worker와 PostgreSQL까지 실제 Queue E2E를 확장해 여러 검색어와 페이지를 검증한다. **(ABC마트 단일 작업 완료)**
 2. 수집 작업 상태를 PostgreSQL에 저장한다. **(구현/통합 테스트 완료)**
 3. 상품 후보 검색 baseline과 품질 평가 data를 만들고 전문 검색을 구현한다. **(DRAFT 평가까지 완료)**
 4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(adapter/DRAFT 비교 완료, 실제 BGE-M3 평가 남음)**

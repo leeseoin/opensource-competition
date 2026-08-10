@@ -194,6 +194,7 @@ products
 
 ## 7. 다음 구현 순서
 
-다음 작업은 Product Backend → RabbitMQ → Go Worker → RabbitMQ → Product Backend →
-PostgreSQL 전체 E2E를 실제 ABC마트와 29CM 요청으로 검증하는 것이다. 그 뒤 작업 상태를
-PostgreSQL에 저장하고 Redis 중복 차단을 연결한다.
+Product Backend → RabbitMQ → Python Worker → RabbitMQ → Product Backend → PostgreSQL의
+ABC마트 단일 검색 E2E는 2026-08-10에 검증했다. 다음 작업은 29CM과 여러 검색어 및 여러
+페이지로 범위를 확장하고, Worker 또는 Backend 비정상 종료 복구와 Redis 중복 차단을
+연결하는 것이다.
