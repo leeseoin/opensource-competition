@@ -4,6 +4,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
  * CollectionTaskMessage는 Spring Boot가 Go Collector Worker에 발행하는 Queue v1 계약이다.
  *
@@ -62,6 +64,7 @@ public record CollectionTaskMessage(
 	 * @param inStockOnly 재고 보유 상품만 요청할지 여부
 	 * @param attributes 판매처 확장 검색 속성
 	 */
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record SearchFilters(
 			Integer priceMin,
 			Integer priceMax,

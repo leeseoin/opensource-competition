@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import org.junit.jupiter.api.AfterEach;
@@ -106,6 +107,7 @@ class CollectionTaskPublisherIntegrationTests {
 				.andExpect(jsonPath("$.tasks[0].taskId").value(response.taskId()));
 
 		Message message = receiveSearchTask();
+		String messageBody = new String(message.getBody(), StandardCharsets.UTF_8);
 		CollectionTaskMessage task = objectMapper.readValue(message.getBody(), CollectionTaskMessage.class);
 
 		assertThat(task.schemaVersion()).isEqualTo("1");
@@ -124,6 +126,7 @@ class CollectionTaskPublisherIntegrationTests {
 		assertThat(task.payload().currency()).isEqualTo("KRW");
 		assertThat(task.payload().filters().sizes()).containsExactly("270");
 		assertThat(task.payload().filters().inStockOnly()).isTrue();
+		assertThat(messageBody).doesNotContain("\"priceMin\":null", "\"priceMax\":null");
 		assertThat(message.getMessageProperties().getReceivedDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
 		assertThat(message.getMessageProperties().getPriority()).isEqualTo(20);
 		assertThat(message.getMessageProperties().getMessageId()).isEqualTo(task.taskId());
