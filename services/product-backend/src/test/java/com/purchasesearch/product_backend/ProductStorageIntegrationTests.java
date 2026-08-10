@@ -383,6 +383,24 @@ class ProductStorageIntegrationTests {
 								"검토 Wiki: 운동화 → 워킹화 (narrower)")));
 	}
 
+	/** PUBLISHED synonym이 사용자 상품 표현을 표준 상품 종류로 바꿔 검색에 사용하는지 검증한다. */
+	@Test
+	void resolvesProductTypeWithPublishedWikiSynonym() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		wikiConceptIndexService.indexReviewedPage(publishedDressShoeSynonymPage());
+		String synonymCondition = purchaseCondition("[]").replace(
+				"\"value\": \"구두\"",
+				"\"value\": \"정장신발\"");
+		String sessionId = createConfirmedResearchSession("정장신발을 찾아줘", synonymCondition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.conditions.productType.normalizedValue").value("구두"))
+				.andExpect(jsonPath("$.conditions.productType.derivedBy").value("wiki"))
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].name").value("페니 로퍼"));
+	}
+
 	/**
 	 * PUBLISHED Wiki가 없으면 의미를 추측하지 않고 기존 FTS/vector 검색으로 fallback해
 	 * exact 관계가 없는 운동화 질문을 빈 결과로 유지하는지 검증한다.
@@ -1044,6 +1062,27 @@ class ProductStorageIntegrationTests {
 								0.85,
 								List.of("test-source"),
 								List.of("test.category=워킹화"))));
+	}
+
+	/** 테스트에서만 사용하는 사람 검토 완료 구두 synonym page를 만든다. */
+	private WikiPageDocument publishedDressShoeSynonymPage() {
+		return new WikiPageDocument(
+				"dress-shoes-synonym",
+				1,
+				"PUBLISHED",
+				"구두 동의어",
+				"integration-test-reviewer",
+				OffsetDateTime.parse("2026-08-10T23:00:00+09:00"),
+				null,
+				List.of(new WikiClaimDocument(
+						"dress-shoes-formal",
+						"구두",
+						"synonym",
+						"정장신발",
+						true,
+						0.95,
+						List.of("test-source"),
+						List.of("test.category=구두"))));
 	}
 
 	/**
