@@ -9,6 +9,7 @@ import os
 
 from app.messaging.processor import CollectionTaskProcessor
 from app.messaging.rabbitmq import RabbitCollectionWorker
+from app.services.rate_limiter import create_rate_limiter_from_env
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,7 +33,7 @@ async def run_worker(args: argparse.Namespace) -> None:
     """
 
     url = os.environ.get("PURCHASE_RESEARCH_RABBITMQ_URL", "")
-    processor = CollectionTaskProcessor(timeout_seconds=args.timeout)
+    processor = CollectionTaskProcessor(timeout_seconds=args.timeout, rate_limiter=create_rate_limiter_from_env())
     worker = RabbitCollectionWorker(url, processor)
     await worker.run(once=args.once)
 

@@ -13,6 +13,7 @@ from app.api.endpoints import manual_test, search, store
 from app.messaging.processor import CollectionTaskProcessor
 from app.messaging.rabbitmq import RabbitCollectionWorker
 from app.services.crawler_service import SUPPORTED_SITES
+from app.services.rate_limiter import create_rate_limiter_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.collection_worker_task = None
     if enabled:
         rabbitmq_url = os.getenv("PURCHASE_RESEARCH_RABBITMQ_URL", "")
-        worker = RabbitCollectionWorker(rabbitmq_url, CollectionTaskProcessor())
+        processor = CollectionTaskProcessor(rate_limiter=create_rate_limiter_from_env())
+        worker = RabbitCollectionWorker(rabbitmq_url, processor)
         worker_task = asyncio.create_task(worker.run(), name="python-collection-worker")
         app.state.collection_worker_task = worker_task
         logger.info("Swagger 통합 모드의 Python Queue Worker를 시작했습니다")
