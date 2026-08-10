@@ -352,6 +352,24 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.result.candidates").isEmpty());
 	}
 
+	/**
+	 * 구두 검색으로 수집됐더라도 실제 상품명과 카테고리가 워킹화면 필수 상품 종류 후보에서
+	 * 제외해 수집 문맥이 상품 사실을 덮어쓰지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void excludesUnrelatedCategoryCollectedUnderRequiredProductTypeQuery() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		collectorResultStoreService.store(loadWalkingShoeCollectedAsDressShoes());
+		String sessionId = createConfirmedResearchSession("10만 원 이하 270 구두", purchaseCondition("[]"));
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].name").value("페니 로퍼"));
+	}
+
 	/** 사람 검토가 없는 DRAFT Wiki는 운영 index 적재를 거절하는지 검증한다. */
 	@Test
 	void rejectsDraftWikiPageFromRuntimeIndex() {
@@ -925,6 +943,22 @@ class ProductStorageIntegrationTests {
 				.replace("\"name\": \"페니 로퍼\"", "\"name\": \"테스트 워킹 밸런스\"")
 				.replace("[\"신발\", \"구두\", \"로퍼\"]", "[\"신발\", \"스포츠\", \"워킹화\"]")
 				.replace("\"270\"", "\"265\"")
+				.replace("\"color\": null", "\"color\": \"BLACK\"");
+		return objectMapper.readValue(fixture, CollectorResult.class);
+	}
+
+	/**
+	 * 검색어는 구두지만 실제 상품 분류는 워킹화인 false-positive fixture를 만든다.
+	 *
+	 * @return 필수 상품 종류 fail-closed 회귀 테스트용 결과
+	 * @throws Exception fixture JSON 변환에 실패한 경우
+	 */
+	private CollectorResult loadWalkingShoeCollectedAsDressShoes() throws Exception {
+		String fixture = Files.readString(abcmartFixturePath())
+				.replace("backend-test-001", "backend-test-unrelated-001")
+				.replace("1010110882", "unrelated-test-001")
+				.replace("\"name\": \"페니 로퍼\"", "\"name\": \"테스트 워킹 밸런스\"")
+				.replace("[\"신발\", \"구두\", \"로퍼\"]", "[\"신발\", \"스포츠\", \"워킹화\"]")
 				.replace("\"color\": null", "\"color\": \"BLACK\"");
 		return objectMapper.readValue(fixture, CollectorResult.class);
 	}

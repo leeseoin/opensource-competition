@@ -21,18 +21,22 @@ public class ResearchSessionService {
 
 	private final ResearchSessionRepository repository;
 	private final ProductCandidateService productCandidateService;
+	private final PurchaseConditionResolver conditionResolver;
 
 	/**
 	 * 조사 세션 저장소와 상품 후보 검색을 연결한다.
 	 *
 	 * @param repository 조사 세션 저장소
 	 * @param productCandidateService 상품 후보 검색 서비스
+	 * @param conditionResolver 사용자 표현을 표준 조건으로 변환하는 서비스
 	 */
 	public ResearchSessionService(
 			ResearchSessionRepository repository,
-			ProductCandidateService productCandidateService) {
+			ProductCandidateService productCandidateService,
+			PurchaseConditionResolver conditionResolver) {
 		this.repository = repository;
 		this.productCandidateService = productCandidateService;
+		this.conditionResolver = conditionResolver;
 	}
 
 	/**
@@ -44,7 +48,8 @@ public class ResearchSessionService {
 	@Transactional
 	public ResearchSessionResponse create(ResearchSessionRequest request) {
 		ResearchSession session = ResearchSession.draft(
-				request.question(), request.runtime(), request.pluginId(), request.conditions());
+				request.question(), request.runtime(), request.pluginId(),
+				conditionResolver.resolveDraft(request.conditions()));
 		return ResearchSessionResponse.from(repository.save(session), null);
 	}
 
@@ -63,7 +68,7 @@ public class ResearchSessionService {
 		if (!request.conditions().missingConditions().isEmpty()) {
 			throw new ResearchSessionException("확인하지 않은 구매 조건이 남아 있습니다.");
 		}
-		session.confirm(request.conditions());
+		session.confirm(conditionResolver.resolveConfirmed(request.conditions()));
 		return ResearchSessionResponse.from(session, null);
 	}
 

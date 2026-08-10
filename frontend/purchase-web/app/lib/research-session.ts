@@ -3,10 +3,23 @@ import type { ProductCandidateResponse } from "./product-candidates.ts";
 /** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
 export type ConditionPriority = "required" | "preferred";
 
+/** ConditionDerivation은 표준 조건값을 만든 근거를 구분한다. */
+export type ConditionDerivation = "original" | "rule" | "dictionary" | "wiki" | "fuzzy" | "llm";
+
 /** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
 export interface PrioritizedText {
   value: string;
   priority: ConditionPriority;
+  normalizedValue?: string | null;
+  canonicalId?: string | null;
+  confidence?: number | null;
+  derivedBy?: ConditionDerivation | null;
+  requiresConfirmation?: boolean;
+}
+
+/** AttributeCondition은 상품군별 조건을 공통 key/value 구조로 표현한다. */
+export interface AttributeCondition extends PrioritizedText {
+  key: string;
 }
 
 /** PurchaseCondition은 AI가 구조화하고 사용자가 확인할 공통 구매 조건이다. */
@@ -17,6 +30,7 @@ export interface PurchaseCondition {
   colors: PrioritizedText[];
   sizes: PrioritizedText[];
   requirements: PrioritizedText[];
+  attributes?: AttributeCondition[];
   merchant: string | null;
   missingConditions: string[];
   assumptions: string[];
@@ -57,6 +71,17 @@ function isPrioritizedTextArray(value: unknown): value is PrioritizedText[] {
   return Array.isArray(value) && value.every(isPrioritizedText);
 }
 
+/** 알 수 없는 값이 범용 속성 조건 배열인지 확인한다. */
+function isAttributeArray(value: unknown): value is AttributeCondition[] {
+  return value === undefined || (Array.isArray(value) && value.every((item) => {
+    if (!isPrioritizedText(item)) {
+      return false;
+    }
+    return typeof (item as AttributeCondition).key === "string"
+      && /^[a-z][a-z0-9._-]*$/.test((item as AttributeCondition).key);
+  }));
+}
+
 /** 문자열 배열인지와 각 값이 비어 있지 않은지 확인한다. */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && item.trim().length > 0);
@@ -83,6 +108,7 @@ export function isPurchaseCondition(value: unknown): value is PurchaseCondition 
     && isPrioritizedTextArray(condition.colors)
     && isPrioritizedTextArray(condition.sizes)
     && isPrioritizedTextArray(condition.requirements)
+    && isAttributeArray(condition.attributes)
     && (condition.merchant === null
       || (typeof condition.merchant === "string" && /^[a-z0-9][a-z0-9-]*$/.test(condition.merchant)))
     && isStringArray(condition.missingConditions)

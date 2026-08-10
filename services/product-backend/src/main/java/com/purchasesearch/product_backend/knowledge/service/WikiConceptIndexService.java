@@ -155,6 +155,53 @@ public class WikiConceptIndexService {
 		}
 	}
 
+	/**
+	 * 최신 PUBLISHED Wiki에서 입력과 직접 연결된 synonym 하나를 표준 표현 후보로 반환한다.
+	 *
+	 * @param value 사용자 또는 AI가 제공한 조건값
+	 * @return confidence가 가장 높은 반대편 synonym 또는 관계가 없거나 조회 실패하면 빈 값
+	 */
+	@Transactional(readOnly = true)
+	public java.util.Optional<WikiExpansionTerm> resolveSynonym(String value) {
+		if (!StringUtils.hasText(value)) {
+			return java.util.Optional.empty();
+		}
+		String normalized = value.trim();
+		try {
+			List<WikiExpansionTerm> rows = jdbcTemplate.query("""
+					WITH latest_published AS (
+					  SELECT DISTINCT ON (page_id) id
+					  FROM wiki_pages
+					  WHERE status = 'PUBLISHED'
+					  ORDER BY page_id, version DESC
+					)
+					SELECT
+					  CASE WHEN LOWER(claim.subject) = LOWER(?) THEN claim.object ELSE claim.subject END AS expanded_term,
+					  claim.relation,
+					  claim.claim_id,
+					  claim.confidence
+					FROM wiki_claims claim
+					JOIN latest_published page ON page.id = claim.wiki_page_id
+					WHERE claim.relation = 'synonym'
+					  AND (LOWER(claim.subject) = LOWER(?) OR LOWER(claim.object) = LOWER(?))
+					ORDER BY claim.confidence DESC, claim.claim_id
+					LIMIT 1
+					""",
+					(resultSet, rowNumber) -> new WikiExpansionTerm(
+							resultSet.getString("expanded_term"),
+							resultSet.getString("relation"),
+							resultSet.getString("claim_id"),
+							resultSet.getDouble("confidence")),
+					normalized,
+					normalized,
+					normalized);
+			return rows.stream().findFirst();
+		} catch (DataAccessException exception) {
+			LOGGER.warn("검토 Wiki synonym 조회에 실패해 규칙 정규화로 fallback합니다: {}", exception.getMessage());
+			return java.util.Optional.empty();
+		}
+	}
+
 	/** PUBLISHED 전환에 필요한 사람 검토, 허용 relation과 provenance를 fail-closed로 검증한다. */
 	private void validateReviewedPage(WikiPageDocument page) {
 		if (page == null || !List.of("PUBLISHED", "SUPERSEDED").contains(page.status())) {

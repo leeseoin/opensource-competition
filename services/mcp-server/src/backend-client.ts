@@ -1,10 +1,23 @@
 /** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
 export type ConditionPriority = "required" | "preferred";
 
+/** ConditionDerivation은 정규화 값의 생성 근거를 구분한다. */
+export type ConditionDerivation = "original" | "rule" | "dictionary" | "wiki" | "fuzzy" | "llm";
+
 /** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
 export interface PrioritizedText {
   value: string;
   priority: ConditionPriority;
+  normalizedValue?: string | null;
+  canonicalId?: string | null;
+  confidence?: number | null;
+  derivedBy?: ConditionDerivation | null;
+  requiresConfirmation?: boolean;
+}
+
+/** AttributeCondition은 상품군별 속성을 공통 key/value 계약으로 전달한다. */
+export interface AttributeCondition extends PrioritizedText {
+  key: string;
 }
 
 /** PurchaseCondition은 MCP가 Product Backend에 전달할 사용자 확인 대상 구매 조건이다. */
@@ -15,6 +28,7 @@ export interface PurchaseCondition {
   colors: PrioritizedText[];
   sizes: PrioritizedText[];
   requirements: PrioritizedText[];
+  attributes?: AttributeCondition[];
   merchant: string | null;
   missingConditions: string[];
   assumptions: string[];

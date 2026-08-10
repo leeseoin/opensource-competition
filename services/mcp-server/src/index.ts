@@ -5,15 +5,33 @@ import { z } from "zod";
 import { ProductBackendClient, type PurchaseCondition } from "./backend-client.js";
 
 const prioritySchema = z.enum(["required", "preferred"]);
+const derivationSchema = z.enum(["original", "rule", "dictionary", "wiki", "fuzzy", "llm"]);
+
+const normalizationFields = {
+  normalizedValue: z.string().min(1).max(200).nullable().optional(),
+  canonicalId: z.string().regex(/^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$/).max(160).nullable().optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  derivedBy: derivationSchema.nullable().optional(),
+  requiresConfirmation: z.boolean().optional(),
+};
 
 const prioritizedTextSchema = z.object({
   value: z.string().min(1).max(100),
   priority: prioritySchema,
+  ...normalizationFields,
 });
 
 const prioritizedRequirementSchema = z.object({
   value: z.string().min(1).max(200),
   priority: prioritySchema,
+  ...normalizationFields,
+});
+
+const attributeSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9._-]*$/).max(100),
+  value: z.string().min(1).max(200),
+  priority: prioritySchema,
+  ...normalizationFields,
 });
 
 const priceSchema = z.object({
@@ -30,6 +48,7 @@ const conditionSchema = z.object({
   colors: z.array(prioritizedTextSchema).max(20),
   sizes: z.array(prioritizedTextSchema).max(20),
   requirements: z.array(prioritizedRequirementSchema).max(30),
+  attributes: z.array(attributeSchema).max(50).optional(),
   merchant: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(64).nullable(),
   missingConditions: z.array(z.string().min(1).max(200)).max(20),
   assumptions: z.array(z.string().min(1).max(500)).max(20),

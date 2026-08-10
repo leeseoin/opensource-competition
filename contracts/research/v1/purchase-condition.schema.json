@@ -23,6 +23,12 @@
     "colors": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/prioritizedShortText" } },
     "sizes": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/prioritizedShortText" } },
     "requirements": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/prioritizedRequirement" } },
+    "attributes": {
+      "description": "상품군에 종속되지 않는 범용 속성 조건이다. 기존 colors/sizes와 병행해 점진적으로 전환한다.",
+      "type": "array",
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/attributeCondition" }
+    },
     "merchant": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 64 },
     "missingConditions": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
     "assumptions": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 500 } },
@@ -40,7 +46,12 @@
       "required": ["value", "priority"],
       "properties": {
         "value": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "priority": { "$ref": "#/$defs/conditionPriority" }
+        "priority": { "$ref": "#/$defs/conditionPriority" },
+        "normalizedValue": { "type": ["string", "null"], "minLength": 1, "maxLength": 100 },
+        "canonicalId": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$", "maxLength": 160 },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "derivedBy": { "$ref": "#/$defs/derivedBy" },
+        "requiresConfirmation": { "type": "boolean" }
       }
     },
     "prioritizedRequirement": {
@@ -49,7 +60,31 @@
       "required": ["value", "priority"],
       "properties": {
         "value": { "type": "string", "minLength": 1, "maxLength": 200 },
-        "priority": { "$ref": "#/$defs/conditionPriority" }
+        "priority": { "$ref": "#/$defs/conditionPriority" },
+        "normalizedValue": { "type": ["string", "null"], "minLength": 1, "maxLength": 200 },
+        "canonicalId": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$", "maxLength": 160 },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "derivedBy": { "$ref": "#/$defs/derivedBy" },
+        "requiresConfirmation": { "type": "boolean" }
+      }
+    },
+    "derivedBy": {
+      "type": ["string", "null"],
+      "enum": ["original", "rule", "dictionary", "wiki", "fuzzy", "llm", null]
+    },
+    "attributeCondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "value", "priority"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$", "maxLength": 100 },
+        "value": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "priority": { "$ref": "#/$defs/conditionPriority" },
+        "normalizedValue": { "type": ["string", "null"], "minLength": 1, "maxLength": 200 },
+        "canonicalId": { "type": ["string", "null"], "pattern": "^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$", "maxLength": 160 },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "derivedBy": { "$ref": "#/$defs/derivedBy" },
+        "requiresConfirmation": { "type": "boolean" }
       }
     }
   }

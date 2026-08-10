@@ -105,7 +105,7 @@ public class ProductCandidateService {
 		String colorsCsv = toRequiredCsv(conditions.colors(), false);
 		CandidateSearchResult searchResult = productQueryService.searchCandidates(
 				conditions.merchant(),
-				conditions.productType().value(),
+				conditions.productType().effectiveValue(),
 				requiredPrice ? conditions.price().min() : null,
 				requiredPrice ? conditions.price().max() : null,
 				requiredPrice ? conditions.price().currency() : null,
@@ -117,6 +117,7 @@ public class ProductCandidateService {
 				.map(product -> new RankedCandidate(
 						product,
 						assessCandidate(product, conditions, searchResult.signals().get(product.id()))))
+				.filter(candidate -> matchesRequiredProductType(candidate, conditions))
 				.sorted(candidateComparator())
 				.toList();
 		List<CandidateGroup> groups = expandGroups(groupCandidates(ranked, DEFAULT_LIMIT), conditions);
@@ -128,12 +129,44 @@ public class ProductCandidateService {
 				.toList();
 		return new ProductCandidateResponse(
 				question.trim(),
-				conditions.productType().value().trim(),
-				result.totalCount(),
+				conditions.productType().effectiveValue().trim(),
+				ranked.size(),
 				result.hasNext() || ranked.size() > representatives.size(),
 				representatives,
 				representativeAssessments,
 				groups);
+	}
+
+	/**
+	 * 필수 상품 종류는 수집 검색어가 아니라 실제 상품명/브랜드/카테고리 또는 검토 Wiki 하위 개념으로 확인한다.
+	 */
+	private boolean matchesRequiredProductType(RankedCandidate candidate, PurchaseCondition conditions) {
+		if (conditions.productType().priority() != ConditionPriority.required) {
+			return true;
+		}
+		String searchable = String.join(" ",
+				candidate.product().name(),
+				candidate.product().brand() == null ? "" : candidate.product().brand(),
+				String.join(" ", candidate.product().categoryPath())).toLowerCase(Locale.ROOT);
+		String expected = conditions.productType().effectiveValue().trim().toLowerCase(Locale.ROOT);
+		if (searchable.contains(expected)) {
+			return true;
+		}
+		return candidate.assessment().matchReasons().stream()
+				.filter(reason -> reason.startsWith("검토 Wiki:"))
+				.map(this::wikiTarget)
+				.anyMatch(target -> !target.isBlank() && searchable.contains(target));
+	}
+
+	/** 검토 Wiki 설명의 화살표 뒤 확장어만 상품 종류 fail-closed 판정에 사용한다. */
+	private String wikiTarget(String reason) {
+		int arrow = reason.indexOf('→');
+		int relation = reason.indexOf('(', arrow + 1);
+		if (arrow < 0) {
+			return "";
+		}
+		String target = relation < 0 ? reason.substring(arrow + 1) : reason.substring(arrow + 1, relation);
+		return target.trim().toLowerCase(Locale.ROOT);
 	}
 
 	/** 후보의 상품 종류 관련성과 선호 조건 일치를 우선하는 결정론적 정렬 규칙을 만든다. */
@@ -416,7 +449,7 @@ public class ProductCandidateService {
 			return MatchStatus.UNKNOWN;
 		}
 		boolean matched = conditions.stream()
-				.map(PrioritizedShortText::value)
+				.map(PrioritizedShortText::effectiveValue)
 				.map(value -> normalizeValue(value, size))
 				.anyMatch(observed::contains);
 		return matched ? MatchStatus.MATCH : MatchStatus.MISMATCH;
@@ -487,7 +520,7 @@ public class ProductCandidateService {
 		}
 		String joined = conditions.stream()
 				.filter(condition -> condition.priority() == ConditionPriority.required)
-				.map(PrioritizedShortText::value)
+				.map(PrioritizedShortText::effectiveValue)
 				.map(value -> normalizeValue(value, size))
 				.filter(value -> !value.isBlank())
 				.distinct()
