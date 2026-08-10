@@ -279,6 +279,58 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 상품 상세/근거와 두 후보 비교 API가 최신 snapshot provenance를 같은 상품 ID로 반환하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void returnsProductDetailEvidenceAndComparison() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		CollectorResult second = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-detail-002")
+						.replace("1010110882", "detail-test-002")
+						.replace("\"name\": \"페니 로퍼\"", "\"name\": \"클래식 더비\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(second);
+		long firstId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "1010110882")
+				.orElseThrow().getId();
+		long secondId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "detail-test-002")
+				.orElseThrow().getId();
+
+		mockMvc.perform(get("/internal/v1/products/{productId}", firstId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.product.externalId").value("1010110882"))
+				.andExpect(jsonPath("$.freshness.status").value("STALE"))
+				.andExpect(jsonPath("$.evidence[0].sourceUrl").exists())
+				.andExpect(jsonPath("$.verifications[0].status").value("MATCHED"));
+
+		mockMvc.perform(get("/internal/v1/products/{productId}/evidence", firstId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].collectorVersion").value("abcmart-search-v2"));
+
+		mockMvc.perform(post("/internal/v1/product-comparisons")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"productIds\":[%d,%d]}".formatted(firstId, secondId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products.length()").value(2))
+				.andExpect(jsonPath("$.fields[?(@.key == 'price')]").exists())
+				.andExpect(jsonPath("$.fields[?(@.key == 'freshness')]").exists());
+	}
+
+	/** 비교 API가 같은 상품 ID를 중복 비교하지 않도록 400으로 거절하는지 검증한다. */
+	@Test
+	void rejectsDuplicateProductComparisonIds() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		long productId = merchantProductRepository.findAll().getFirst().getId();
+
+		mockMvc.perform(post("/internal/v1/product-comparisons")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"productIds\":[%d,%d]}".formatted(productId, productId)))
+				.andExpect(status().isBadRequest());
+	}
+
+	/**
 	 * 후보 검색 결과가 없을 때 성공 응답과 빈 후보 목록을 반환하는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청에 실패한 경우

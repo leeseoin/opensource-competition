@@ -285,6 +285,17 @@ public class ProductQueryService {
 	}
 
 	/**
+	 * 판매처 상품 ID로 최신 snapshot과 옵션이 결합된 상품을 조회한다.
+	 *
+	 * @param merchantProductId 판매처 상품 ID
+	 * @return 상품이 존재하면 최신 요약
+	 */
+	@Transactional(readOnly = true)
+	public java.util.Optional<ProductSummary> findById(long merchantProductId) {
+		return merchantProductRepository.findById(merchantProductId).map(this::toSummary);
+	}
+
+	/**
 	 * 빈 검색 조건을 repository가 처리할 수 있는 null로 변환한다.
 	 *
 	 * @param value 원본 검색 조건

@@ -103,6 +103,24 @@ export class ProductBackendClient {
     });
   }
 
+  /** 판매처 상품 하나의 최신 사실, 최신성, 근거와 검증을 조회한다. */
+  getProduct(productId: number): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/products/${productId}`, { method: "GET" });
+  }
+
+  /** 판매처 상품 하나에 연결된 공개 근거만 조회한다. */
+  getEvidence(productId: number): Promise<unknown[]> {
+    return this.call(`/internal/v1/products/${productId}/evidence`, { method: "GET" });
+  }
+
+  /** 선택한 판매처 상품 2개 이상 5개 이하를 주요 사실별로 비교한다. */
+  compareProducts(productIds: number[]): Promise<Record<string, unknown>> {
+    return this.call("/internal/v1/product-comparisons", {
+      method: "POST",
+      body: JSON.stringify({ productIds }),
+    });
+  }
+
   /**
    * Product Backend JSON API를 호출하고 오류를 MCP가 처리할 수 있는 예외로 변환한다.
    *
@@ -111,7 +129,7 @@ export class ProductBackendClient {
    * @return 조사 세션 응답
    * @throws BackendRequestError timeout, 연결 실패 또는 비정상 HTTP 응답
    */
-  private async call(path: string, init: RequestInit): Promise<ResearchSessionResponse> {
+  private async call<T>(path: string, init: RequestInit): Promise<T> {
     let response: Response;
     try {
       response = await this.request(`${this.baseUrl}${path}`, {
@@ -126,6 +144,6 @@ export class ProductBackendClient {
     if (!response.ok) {
       throw new BackendRequestError(response.status, body.slice(0, 1000));
     }
-    return JSON.parse(body) as ResearchSessionResponse;
+    return JSON.parse(body) as T;
   }
 }

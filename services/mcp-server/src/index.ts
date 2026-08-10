@@ -107,6 +107,36 @@ async function main(): Promise<void> {
     async ({ sessionId }) => toToolResult(await client.searchCandidates(sessionId)),
   );
 
+  server.registerTool(
+    "get_product",
+    {
+      description: "후보 상품 하나의 최신 가격, 재고, 옵션, 최신성과 공개 근거를 조회한다.",
+      inputSchema: { productId: z.number().int().positive() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ productId }) => toToolResult(await client.getProduct(productId)),
+  );
+
+  server.registerTool(
+    "get_evidence",
+    {
+      description: "후보 상품의 가격과 재고 사실을 뒷받침하는 공개 출처와 수집 시각을 조회한다.",
+      inputSchema: { productId: z.number().int().positive() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ productId }) => toToolResult({ evidence: await client.getEvidence(productId) }),
+  );
+
+  server.registerTool(
+    "compare_products",
+    {
+      description: "선택한 후보 2개 이상 5개 이하의 가격, 재고, 판매처, 카테고리와 최신성을 비교한다.",
+      inputSchema: { productIds: z.array(z.number().int().positive()).min(2).max(5) },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ productIds }) => toToolResult(await client.compareProducts(productIds)),
+  );
+
   await server.connect(new StdioServerTransport());
 }
 

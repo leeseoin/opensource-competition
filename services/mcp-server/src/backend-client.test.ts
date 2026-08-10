@@ -46,3 +46,26 @@ test("Product Backend 상태 오류를 MCP 오류로 변환한다", async () => 
     (error: unknown) => error instanceof BackendRequestError && error.status === 409,
   );
 });
+
+/** 상품 상세/근거/비교 도구가 정해진 REST 경계만 호출하는지 검증한다. */
+test("상품 조사 도구 요청을 Product Backend REST API에 전달한다", async () => {
+  const requests: Array<{ url: string; method: string; body?: string }> = [];
+  const client = new ProductBackendClient("http://backend", async (input, init) => {
+    requests.push({ url: String(input), method: init?.method ?? "GET", body: init?.body?.toString() });
+    return Response.json({ ok: true });
+  });
+
+  await client.getProduct(11);
+  await client.getEvidence(11);
+  await client.compareProducts([11, 12]);
+
+  assert.deepEqual(requests, [
+    { url: "http://backend/internal/v1/products/11", method: "GET", body: undefined },
+    { url: "http://backend/internal/v1/products/11/evidence", method: "GET", body: undefined },
+    {
+      url: "http://backend/internal/v1/product-comparisons",
+      method: "POST",
+      body: JSON.stringify({ productIds: [11, 12] }),
+    },
+  ]);
+});

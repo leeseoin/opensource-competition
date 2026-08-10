@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-06
+최종 갱신일: 2026-08-11
 
 ## 이 문서를 공개하는 이유
 
@@ -32,8 +32,9 @@
 ## 실행 시 사용하는 AI의 현재 상태
 
 - Codex Plugin은 `purchase-research-agent` workflow와 로컬 stdio MCP 설정을 포함한다.
-- Purchase Research MCP Server는 조사 세션 생성/조건 확인/확정 조건 상품 검색 도구를
-  Product Backend REST API에 연결한다. PostgreSQL과 판매처에는 직접 접근하지 않는다.
+- Purchase Research MCP Server는 조사 세션 생성/조건 확인/확정 조건 상품 검색과
+  상품 상세/공개 근거/후보 비교 도구를 Product Backend REST API에 연결한다.
+  PostgreSQL과 판매처에는 직접 접근하지 않는다.
 - Next.js Agent Gateway는 server에서 Codex CLI를 읽기 전용/비대화형으로 실행해
   `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
 - Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
@@ -85,3 +86,4 @@
 | 2026-08-06 | Codex를 사용해 Agent Gateway의 빈 실행 설정 fallback과 Codex OAuth 인증 만료 오류 비노출 처리를 구현 | 실제 폐기된 token 401 응답을 재현하고 Next.js unit test/lint/production build로 안전한 사용자 메시지와 stderr 비노출을 검증 |
 | 2026-08-06 | Codex를 사용해 필수/선호 구매 조건 계약과 PostgreSQL 전문 검색/pg_trgm 후보 검색을 구현 | 공통 JSON Schema, Java/MCP/Web 계약 대조와 PostgreSQL Testcontainers 통합 테스트 및 Next.js/MCP build/test로 검증 / runtime AI model과 embedding은 추가하지 않음 |
 | 2026-08-06 | Codex를 사용해 pgvector 0.8.2와 선택적 로컬 BGE-M3/Ollama embedding adapter 및 전문 검색 fallback을 구현 | provider port, 1024차원/schema validation/content hash와 pgvector cosine 검색을 unit/integration test로 검증 / model weight 미포함 및 품질 평가 전 기본 비활성화 |
+| 2026-08-11 | Codex를 사용해 상품 상세/공개 근거/후보 비교 Backend API와 읽기 전용 MCP 도구를 구현 | MCP가 PostgreSQL이나 판매처에 직접 접근하지 않는 REST 경계, Spring Boot 통합 테스트와 MCP stdio 도구 계약 테스트로 검증 |
