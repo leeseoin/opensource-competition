@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-08-06
+최종 갱신일: 2026-08-10
 
 ## 목적
 
@@ -46,7 +46,7 @@
 | 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수, 근거와 주의사항 연결 |
 | MCP와 Codex Plugin | 부분 구현 | stdio MCP 도구, Product Backend REST 연결, Codex 조건 구조화와 확인 후 검색 E2E | stream/취소/Plugin 설치와 Claude Code 실행 경계 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 | 실제 browser/접근성/stream과 `/admin/collections` 구현 |
-| 공통 품질과 운영 | 부분 구현 | 루트 Makefile과 PostgreSQL/Redis/RabbitMQ 로컬 실행 기반 | Java 저장 경로, Queue 통합 테스트와 E2E |
+| 공통 품질과 운영 | 부분 구현 | 루트 Makefile, 로컬 인프라와 Python Swagger 단계 검증 기반 | 계약 CI, 구조화 로그와 실제 판매처 Queue E2E |
 | Python/Go 크롤러 비교 | 완료 | 공통 Contract, pagination/checkpoint, 양쪽 판매처 최대 10,000개 실수집과 최신 비교 보고서 | 새 판매처 또는 수집 방식 변경 시 회귀 측정 |
 
 ## 영역별 상세 체크리스트
@@ -397,7 +397,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 | 별도 MCP Server 경계 | 문서 완료 | `services/mcp-server/README.md:6` `현재 상태`; `plugins/purchase-research-agent/.mcp.json:2` `mcpServers` | 미구현 명령을 등록하지 않은 빈 설정 확인 |
 | `BACKEND-001` Collector 결과 수동 적재 API | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionResultController.java:35` `CollectionResultController`; `collection/service/CollectorResultStoreService.java:82` `store`; `collection/entity/CollectionSearchContext.java:25` `CollectionSearchContext`; `product/repository/MerchantProductRepository.java:35` `search`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:153` `storesCollectorResultAndReturnsLatestProductWithoutDuplicatingProduct` | `./gradlew test --rerun-tasks` 통과 / ABC마트와 29CM 실제 수동 저장 검증 / 요청 검색어와 filters 저장 및 조회 완료 / 동시 최초 저장 충돌과 Queue E2E 남음 |
 | `QUEUE-002` Spring RabbitMQ 작업 발행과 결과 저장 | 구현 완료 및 검증 필요 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/controller/CollectionTaskController.java` `publish/publishPages`; `collection/service/CollectionTaskPublisher.java` `publish/publishPages`; `collection/service/CollectionJobService.java` `register/recordCompleted/recordFailed`; `collection/messaging/CollectionResultConsumer.java:43` `consume`; `src/test/java/com/purchasesearch/product_backend/CollectionTaskPublisherIntegrationTests.java`; `CollectionResultConsumerIntegrationTests.java` | RabbitMQ Testcontainers에서 단일/다중 페이지 발행, 작업 상태 DB, persistent/confirm/멱등성, 결과 저장/DLQ 통과 / 실제 판매처 전체 E2E와 장애 복구 남음 |
-| `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `collection/controller/CollectionResultController.java:57` `store OpenAPI annotations`; `src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:221` `exposesOpenApiDocumentAndSwaggerUi` | Swagger/OpenAPI 통합 테스트 통과 / 계약 CI, 구조화 로그, metric과 운영 보안 점검 남음 |
+| `OPS-002` CI/보안/관측 가능성 | 부분 구현 | `services/product-backend/src/main/java/com/purchasesearch/product_backend/common/config/OpenApiConfiguration.java:14` `OpenApiConfiguration`; `purchase-research-agent/app/api/endpoints/manual_test.py:103` `readiness/create_collection_task/get_collection_job/search_stored_products`; `purchase-research-agent/app/main.py:34` `lifespan`; `purchase-research-agent/tests/test_manual_test_api.py:14` `ManualTestApiTests` | Spring/Python Swagger와 OpenAPI 테스트 통과 / Python 통합 실행에서 Backend 및 Worker 준비 상태 확인 / 계약 CI, 구조화 로그, metric과 실제 판매처 Queue E2E 남음 |
 | `OPS-003` 기능 ID 기반 개발 추적 | 완료 | `.agents/skills/feature-catalog/SKILL.md:6` `기능 목록 동기화`; `.agents/skills/code-tracker/SKILL.md:6` `코드 변경 기록 작성`; `.agents/skills/feature-progress/SKILL.md:6` `기능 진행상황 점검`; `docs/development/기능_ID_기반_개발_추적_프로세스.md:11` `문서별 책임` | 스킬 3개 YAML/필수 필드, 기능 ID 25개 중복, `make docs-check`, `git diff --check` 통과 / 구현 commit `3b59cd7`과 코드트래커 commit `10bf0ab`을 실제 상태 감사로 연결 |
 | Python RabbitMQ 작업/결과 Worker | 이전 구현 | `services/research-backend`의 삭제 전 `RabbitMQBroker`, `enqueue_search`, `consume_results` | 이전 Python 17개 테스트와 실제 상품 3개 저장 기록, 현재 코드 제거 |
 
@@ -1968,6 +1968,47 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make python-crawler-safety-check`: 통과
   - `make test`: 전체 통과
   - `make docs-check`: 통과
+  - `git diff --check`: 통과
+
+### 2026-08-10 OPS-002 Python Swagger 단계 테스트
+
+- 진행상황: **부분 구현**. commit `7852165`에서 Python Collector의 수동 Queue 검증을
+  Swagger의 00 준비 확인, 01 작업 등록, 02 job 상태 조회와 03 저장 상품 조회로 연결했다.
+  `make python-crawler-swagger`가 인프라 health를 기다리고 Spring Boot와 Python API/Worker를
+  함께 실행한다.
+- 구현 위치:
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:103` `readiness`: Backend와
+    내장 Worker 준비 상태 확인
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:146` `create_collection_task`:
+    소량 수집 작업 등록과 다음 단계 안내
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:175` `get_collection_job`:
+    job 진행 상태와 수집 개수 조회
+  - `purchase-research-agent/app/api/endpoints/manual_test.py:209` `search_stored_products`:
+    Product Backend를 통한 PostgreSQL 최신 상품 조회
+  - `purchase-research-agent/app/main.py:34` `lifespan`: 통합 실행 모드의 Python Worker
+    시작과 종료
+  - `scripts/run-python-crawler-swagger.sh:13` `cleanup`: 이 명령이 시작한 Spring Boot만
+    정리하는 process lifecycle
+  - `purchase-research-agent/tests/test_manual_test_api.py:14` `ManualTestApiTests`: OpenAPI
+    단계, 기본 입력, Backend 전달, 실패와 다음 단계 안내 검증
+- 발생 문제: 여러 terminal에서 Backend, Worker와 API를 따로 실행하고 HTTP 요청을 직접
+  조립해야 해 수동 검증 순서와 입력을 놓치기 쉬웠다.
+- 원인: 기존 Python Swagger에는 Queue 작업 등록, job 상태와 DB 결과를 하나의 흐름으로
+  보여주는 endpoint와 통합 실행 lifecycle이 없었다.
+- 해결: Python은 Product Backend REST API만 호출한다는 경계를 유지하면서 번호가 붙은
+  proxy endpoint를 추가했다. 최초 연결 검증이 정확 조건 때문에 0건으로 끝나지 않도록
+  기본값은 필터 없는 구두 3개로 제한했다.
+- 남은 위험: 이번 실행 검증에서는 실제 판매처 요청을 발생시키지 않았다. Swagger 01부터
+  03까지의 실제 수집 결과 사람 확인과 계약 CI, 구조화 로그 및 metric은 남아 있어
+  `OPS-002` 상태는 부분 구현을 유지한다.
+- 검증:
+  - `make python-crawler-test`: 39개 통과
+  - `make python-crawler-safety-check`: 통과
+  - `sh -n scripts/run-python-crawler-swagger.sh`: 통과
+  - `make python-crawler-swagger`: 로컬 인프라/Backend/Python API/Worker 기동 성공
+  - `GET /api/v1/manual-test/00-readiness`: `ready: true`, Backend `UP`, Worker 실행 확인
+  - `GET /openapi.json`: 번호가 붙은 네 단계 tag와 경로 확인
+  - 종료 검증: Spring Boot와 Python 종료, data container healthy 유지
   - `git diff --check`: 통과
 
 ## 작업 기록 템플릿

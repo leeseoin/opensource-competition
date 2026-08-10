@@ -1,7 +1,7 @@
 # Purchase Research Agent 구현 계획
 
 작성일: 2026-07-13
-최종 수정일: 2026-08-06
+최종 수정일: 2026-08-10
 상태: in progress
 
 ## 체크박스 관리 규칙
@@ -187,6 +187,7 @@
 
 ### 4.6 검증
 
+- [x] `OPS-002` Python Swagger 준비 확인/작업 등록/job 상태/저장 상품 조회 단계 API와 통합 실행 명령
 - [ ] RabbitMQ 없이 실행하는 fixture 기반 Go Processor/Java 계약 단위 테스트
 - [ ] Redis rate limiter와 중복 방지 단위 테스트
 - [ ] RabbitMQ retry/ACK/Dead Letter Queue 통합 테스트 **(부분 구현: Go 작업 retry/DLQ와 Spring 결과 ACK/DLQ를 서비스별 검증)**
