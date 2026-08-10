@@ -91,3 +91,4 @@
 | 2026-08-06 | Codex를 사용해 pgvector 0.8.2와 선택적 로컬 BGE-M3/Ollama embedding adapter 및 전문 검색 fallback을 구현 | provider port, 1024차원/schema validation/content hash와 pgvector cosine 검색을 unit/integration test로 검증 / model weight 미포함 및 품질 평가 전 기본 비활성화 |
 | 2026-08-11 | Codex를 사용해 상품 상세/공개 근거/후보 비교 Backend API와 읽기 전용 MCP 도구를 구현 | MCP가 PostgreSQL이나 판매처에 직접 접근하지 않는 REST 경계, Spring Boot 통합 테스트와 MCP stdio 도구 계약 테스트로 검증 |
 | 2026-08-11 | Codex를 사용해 데이터 최신성 기반 수집 요청과 선택 상품 가격/재고 재검증 Backend API 및 MCP 도구를 구현 | 기존 검색 Queue 계약만 사용하고 MCP의 RabbitMQ 직접 접근을 금지했으며 Spring Boot unit/integration test와 MCP stdio 계약 테스트로 검증 |
+| 2026-08-11 | Codex를 사용해 범용 조건 정규화와 MCP 도구 9개의 설계/기능 목록/TODO/코드트래커 상태를 실제 코드에 맞게 동기화 | 자동 test와 실제 Queue 재검증 결과를 대조했으며 DRAFT Wiki의 PUBLISHED 전환과 최종 diff는 사람의 후속 검토 대상으로 유지 |

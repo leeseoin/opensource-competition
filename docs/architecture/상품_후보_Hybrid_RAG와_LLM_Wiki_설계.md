@@ -97,6 +97,13 @@ LLM Wiki는 상품 원장이나 검색엔진 전체를 대체하지 않는다. �
 기존 `PurchaseCondition` 변경은 Web/MCP/Product Backend가 함께 사용하는 별도 계약
 변경으로 수행한다. 사용자가 강도를 확인하기 전에는 검색을 실행하지 않는다.
 
+2026-08-11 구현은 각 문자열 조건에 사용자 원문 `value`와 별도의 `normalizedValue`,
+`canonicalId`, `confidence`, `derivedBy`, `requiresConfirmation`을 둔다. 색상/상품 종류/
+용도/밀리미터 사이즈의 결정적 정규화와 한 글자 오타 후보를 먼저 적용하고, 사람 검토가
+끝난 PUBLISHED Wiki 동의어만 추가로 사용한다. 상품군에 종속되지 않는 `attributes`로
+소재/용량/호환 기종 같은 새 조건을 같은 계약에 추가할 수 있다. 낮은 신뢰도의 오타
+정규화는 검색 전에 사용자 확인을 요구하며 원문은 덮어쓰지 않는다.
+
 ## 5. 후보 검색 흐름
 
 ### 5.1 의미 확장
@@ -327,8 +334,9 @@ PostgreSQL extension 정보는 `THIRD_PARTY_NOTICES.md`, `AI_USAGE.md`와 대회
 필요 설명을 추가했으며 pgvector 0.8.2와 선택적 로컬 BGE-M3/Ollama adapter를 연결했다.
 embedding은 기본 비활성화이며 model 실패 시 전문 검색을 사용한다. 20개 고정 상품과
 60개 DRAFT 질문을 사용한 PostgreSQL 통합 평가는 구현했다. 신발 상품군/한영 표현
-Wiki Lite도 immutable source와 DRAFT page로 작성하고 source 해시/claim 출처/Published
-사람 검토 계약을 lint한다. 다만 DRAFT Wiki는 운영 검색에 연결하지 않았다.
+Wiki Lite도 immutable source와 DRAFT page로 작성하고 source 해시/claim 출처/PUBLISHED
+사람 검토 계약을 lint한다. DRAFT Wiki는 운영 검색에 연결하지 않으며, 2026-08-08부터
+PUBLISHED page의 직접 관계와 2026-08-11부터 PUBLISHED 동의어만 운영 경로에서 사용한다.
 
 ### 2026-08-06 DRAFT 평가 결과
 
@@ -340,8 +348,9 @@ Wiki Lite도 immutable source와 DRAFT page로 작성하고 source 해시/claim 
 
 목표 Recall@20 0.90, nDCG@3 0.80과 false zero 0.05 미만을 아직 충족하지 못했다.
 평가 data 자체도 사람 relevance 검토 전인 DRAFT이므로 수치는 구현 단계 비교용이다.
-Wiki 모의 평가는 직접 `narrower`/`synonym` 관계와 reciprocal rank fusion을 사용했으며
-Product Backend의 운영 검색 경로에는 포함되지 않는다.
+Wiki 모의 평가는 직접 `narrower`/`synonym` 관계와 reciprocal rank fusion을 사용했다.
+이 DRAFT 평가 결과 자체는 운영 순위를 결정하지 않으며, 별도로 승인된 PUBLISHED page만
+Product Backend 운영 검색과 조건 정규화에 포함된다.
 
 ### 2026-08-07 도입 전/후 A/B 평가
 

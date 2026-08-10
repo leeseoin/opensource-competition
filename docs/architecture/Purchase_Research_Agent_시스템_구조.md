@@ -1,7 +1,7 @@
 # Purchase Research Agent 시스템 구조
 
 작성일: 2026-07-13
-최종 수정일: 2026-08-09
+최종 수정일: 2026-08-11
 상태: in progress
 
 이 문서는 현재 합의된 전체 구조와 각 폴더의 책임을 설명하는 기준 문서다. 날짜별 보고서는 당시 상황을 보존하고, 구조가 바뀌면 이 문서를 먼저 갱신한다.
@@ -16,7 +16,7 @@
 "면접용 구두 찾아줘"
 → 사이즈, 발볼, 예산 질문
 → PostgreSQL에서 조건에 맞는 상품 검색
-→ 근거가 충분하면 후보 3개 비교
+→ 근거가 충분하면 후보 상품군 최대 5개 비교
 → 정보가 부족하면 제한된 추가 수집
 → 선택 상품의 가격과 270 옵션 재검증
 ```
@@ -89,7 +89,8 @@ DB에서 조건과 의미 검색
 현재 구현은 PostgreSQL의 상품명, 브랜드, 수집 검색어와 확인된 가격/재고/옵션을
 SQL 조건으로 검색한다. 필수/선호 조건, PostgreSQL FTS/trigram과 선택적
 pgvector/BGE-M3 adapter 및 실패 fallback까지 부분 구현했다. 구매 도메인 Wiki는
-DRAFT source/page/lint와 offline 품질 비교만 구현했으며 운영 검색에는 연결하지 않았다.
+사람이 검토한 `PUBLISHED` page만 운영 검색과 조건 동의어 정규화에 사용한다. DRAFT
+page는 평가와 검토에만 사용한다.
 
 목표 흐름은 다음과 같다.
 
@@ -102,7 +103,7 @@ PostgreSQL 구조화 필터 + 전문 검색 + 벡터 검색
   ↓
 설명 가능한 후보 재정렬
   ↓
-후보 3개와 일치/불일치/확인 불가 근거
+후보 상품군 최대 5개와 일치/불일치/확인 불가 근거
 ```
 
 Wiki는 가격, 재고와 옵션을 저장하지 않는다. 가격/재고/옵션은 Collector가 수집한
@@ -141,7 +142,7 @@ Product Backend는 Collector가 제공하지 않은 판매처 사실을 만들�
 
 ### MCP Server
 
-- `search_products`, `get_product`, `compare_products`, `verify_offer` 같은 MCP 도구 제공
+- 조사 세션, 후보 검색, 상세/근거/비교, 조건부 수집과 재검증 MCP 도구 제공
 - Codex/Claude Code 요청을 Product Backend REST API 요청으로 변환
 - 도구 입력과 반환 데이터의 형식 검사
 - 오류와 근거 부족 상태를 AI가 이해할 수 있는 형태로 반환
@@ -260,9 +261,9 @@ com.purchasesearch.product_backend
 | Python Collector | 부분 구현 | ABC마트/29CM 검색/상세, Queue v1 작업 소비와 결과 발행, ACK/retry/DLQ 통합 검증 |
 | Go Collector | 전환 기준 | ABC마트/29CM/무신사 검색, Registry, Queue 운영 안전성 비교 기준 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
-| Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, CollectorResult/Queue DTO, RabbitMQ 결과 Consumer, 도메인별 JPA 구성, 필수/선호 조건 조회, PostgreSQL FTS/trigram, 선택적 pgvector/BGE-M3 adapter / Wiki 운영 연결은 planned |
+| Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, 결과 저장, 범용 조건 정규화, FTS/trigram, 선택적 pgvector/BGE-M3 adapter, PUBLISHED Wiki 의미 확장, 상품 상세/근거/비교와 조건부 수집/재검증 API |
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 및 collection job/task 상태 저장 검증 |
-| MCP Server | 부분 구현 | 조사 세션 생성/확인/후보 검색 도구와 Product Backend REST 연결 |
+| MCP Server | 구현 완료 및 검증 필요 | 조사 세션/후보 검색/상세/근거/비교/조건부 수집/재검증 도구 9개와 Product Backend REST 연결 / 실제 Codex 및 Claude Code 전체 도구 선택 E2E 남음 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 / stream과 관리자 화면 남음 |
 | RabbitMQ | 부분 구현 | Spring 작업 발행, Python/Go Worker 시작/결과와 Spring 소비/DLQ 구현 / ABC마트 Python `QUEUED → RUNNING → COMPLETED` E2E 완료, 여러 검색어와 페이지 수집 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
@@ -273,8 +274,8 @@ com.purchasesearch.product_backend
 1. Product Backend부터 Python Worker와 PostgreSQL까지 실제 Queue E2E를 확장해 여러 검색어와 페이지를 검증한다. **(ABC마트 단일 작업 완료)**
 2. 수집 작업 상태를 PostgreSQL에 저장한다. **(구현/통합 테스트 완료)**
 3. 상품 후보 검색 baseline과 품질 평가 data를 만들고 전문 검색을 구현한다. **(DRAFT 평가까지 완료)**
-4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(adapter/DRAFT 비교 완료, 실제 BGE-M3 평가 남음)**
-5. MCP Server가 REST API를 호출하도록 연결한다. **(조사 세션 경로 완료)**
+4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(PUBLISHED Wiki 운영 연결 완료, 실제 BGE-M3 평가 남음)**
+5. MCP Server가 REST API를 호출하도록 연결한다. **(도구 9개와 Backend Queue 재검증 완료, CLI 전체 E2E 남음)**
 6. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다. **(채팅 후보 경로 부분 구현)**
 
 세부 체크박스와 완료 조건은 [구현 계획](../planning/Purchase_Research_Agent_TODO.md)과 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에서 관리한다.

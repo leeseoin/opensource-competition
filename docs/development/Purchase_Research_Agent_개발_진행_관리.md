@@ -39,12 +39,12 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | 환경설정, Java Contract, Flyway schema, 검색 문맥/JPA 적재, 작업 상태 DB, RabbitMQ 작업 발행/결과 Consumer, 상품 조회 API | 동시 저장 보강, 실제 전체 Queue E2E |
+| Spring Boot Product Backend와 DB | 부분 구현 | Java Contract, Flyway/JPA 저장, 작업 상태, Queue 연동, 조건 정규화, 후보/상세/근거/비교/조건부 수집/재검증 API | 동시 저장 보강, 상품 상세 수집 계약과 다중 작업 E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring producer, Go Worker, Spring 결과 Consumer 및 retry/DLQ | 실제 전체 Queue E2E, Redis limiter, 다중 페이지 |
 | Hybrid 상품 후보 검색 | 부분 구현 | 필수/선호 조건, FTS/trigram, 선택적 pgvector adapter와 60개 DRAFT 평가 | 실제 BGE-M3/10,000개 p95/결정론적 점수 구현 |
-| 검토형 구매 도메인 Wiki | 부분 구현 | DRAFT source/page/schema/lint와 offline 품질 비교 | 사람 검토와 품질 개선 전 운영 비활성화 |
-| 리뷰 분석과 비교 | 미착수 | 구현 코드 없음 | 후보 3개에 점수, 근거와 주의사항 연결 |
-| MCP와 Codex Plugin | 부분 구현 | stdio MCP 도구, Product Backend REST 연결, Codex 조건 구조화와 확인 후 검색 E2E | stream/취소/Plugin 설치와 Claude Code 실행 경계 |
+| 검토형 구매 도메인 Wiki | 부분 구현 | DRAFT 검토 경계와 PUBLISHED 직접 관계/동의어 운영 검색 | 용도/색상/구두 사람 검토와 1,000개 품질 평가 |
+| 리뷰 분석과 비교 | 부분 구현 | 상품 2개에서 5개의 가격/재고/판매처/category/최신성 비교 | 리뷰 신호와 공통 스펙 비교 및 점수 근거 연결 |
+| MCP와 Codex Plugin | 구현 완료 및 검증 필요 | stdio MCP 도구 9개, Product Backend REST 연결, 조건 확인 후 검색 E2E와 Backend Queue 재검증 | 실제 Codex/Claude Code 전체 도구 선택, stream/취소와 Plugin 설치 |
 | Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 | 실제 browser/접근성/stream과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile, 로컬 인프라와 Python Swagger 단계 검증 기반 | 계약 CI, 구조화 로그와 실제 판매처 Queue E2E |
 | Python/Go 크롤러 비교 | 완료 | 공통 Contract, pagination/checkpoint, 양쪽 판매처 최대 10,000개 실수집과 최신 비교 보고서 | 새 판매처 또는 수집 방식 변경 시 회귀 측정 |
@@ -302,16 +302,17 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] Python MCP SDK 의존성 추가
 - [x] stdout protocol과 stderr log 분리
 - [x] `search_products` 구현과 테스트 **(`search_product_candidates`)**
-- [ ] `get_product` 구현과 테스트
-- [ ] `compare_products` 구현과 테스트
-- [ ] `verify_offer` 구현과 테스트
-- [ ] `get_verification_status` 구현과 테스트
-- [ ] `get_evidence` 구현과 테스트
+- [x] `get_product` 구현과 테스트
+- [x] `compare_products` 구현과 테스트
+- [x] `request_collection` 구현과 테스트
+- [x] `verify_offer` 구현과 테스트
+- [x] `get_verification_status` 구현과 테스트
+- [x] `get_evidence` 구현과 테스트
 - [ ] 공식 사실·리뷰 신호·Agent 추론 응답 구분
 - [ ] stale, blocked, partial 상태 사용자 설명 검증
 - [ ] 선택 상품 응답 전 재검증 workflow 연결
 - [ ] Plugin validation과 로컬 설치 검증
-- [ ] Codex E2E: 질문 구체화부터 재검증까지 **(부분 구현: 질문/확인/DB 후보 완료, 구매 전 재검증 남음)**
+- [ ] Codex E2E: 질문 구체화부터 재검증까지 **(부분 구현: 질문/확인/DB 후보와 Backend Queue 재검증 완료, Codex의 재검증 도구 선택 확인 남음)**
 
 완료 조건: Codex 또는 Claude Code에서 구매 조건 질문, DB 후보 검색, 근거 비교,
 선택 offer 재검증을 같은 MCP 도구로 수행해야 한다.
@@ -2099,6 +2100,79 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `make docs-check`: 통과
 - 남은 위험: `cancelled` 상태와 Worker/Backend 비정상 종료 뒤 장시간 RUNNING 작업 복구는
   후속 운영 안정성 범위다.
+
+### 2026-08-11 ANALYSIS-004 범용 구매 조건 정규화
+
+- 진행상황: **부분 구현**. commit `a30ace4`, `60a0116`에서 사용자 원문과 표준값을
+  분리하고 범용 속성, 확인이 필요한 오타 후보와 PUBLISHED Wiki 동의어를 검색 전에
+  해석하도록 연결했다.
+- 구현 위치:
+  - `contracts/research/v1/purchase-condition.schema.json:63` `normalizedValue`:
+    canonical ID, confidence, derivedBy와 확인 필요 상태
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/service/PurchaseConditionResolver.java:23`
+    `PurchaseConditionResolver`: 색상/상품 종류/용도/사이즈/범용 속성 해석
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/knowledge/service/WikiConceptIndexService.java:165`
+    `resolveSynonym`: PUBLISHED 동의어만 반환
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:388`
+    `resolvesProductTypeWithPublishedWikiSynonym`: 동의어 기반 실제 후보 검색
+- 발생 문제: 수집 검색어가 상품 종류 필수 조건의 근거로 섞여 `구두` 수집 결과의
+  워킹화를 구두로 오인할 수 있었다.
+- 원인: 작업 문맥과 실제 상품 사실을 같은 keyword 신호로 사용했다.
+- 해결: 필수 상품 종류는 상품명/브랜드/categoryPath 또는 검토된 Wiki 관계가 실제로
+  일치할 때만 통과시킨다. 낮은 신뢰도 오타는 사용자가 확인하기 전 검색하지 않는다.
+- 검증:
+  - `PurchaseConditionResolverTests`: 갈색/BROWN/270mm와 오타 확인 경계 통과
+  - `ProductStorageIntegrationTests`: 수집 검색어 오인 방지와 PUBLISHED 동의어 통과
+  - PurchaseCondition JSON Schema와 정규화 예제 검증 통과
+- 남은 위험: 신발 외 상품군 fixture 확대와 DRAFT 지식의 사람 검토가 필요하다.
+
+### 2026-08-11 MCP-001 상품 조사 도구 9개
+
+- 진행상황: **구현 완료 및 검증 필요**. commit `874c378`, `1538c03`에서 조사 세션/후보
+  검색에 상세/근거/비교/조건부 수집/재검증을 추가했다. 실제 Codex와 Claude Code의
+  전체 도구 선택 E2E는 남아 있다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductDetailService.java:58`
+    `getProduct`: 최신 상품 사실/근거/최신성 반환
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductDetailService.java:88`
+    `compare`: 상품 2개에서 5개의 공통 비교 행 구성
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionRefreshService.java:46`
+    `request`: FRESH 수집 생략과 STALE/MISSING 제한 수집 발행
+  - `services/mcp-server/src/index.ts:73` `main`: MCP 도구 9개와 안전한 호출 순서
+- 발생 문제: 후보를 찾은 뒤 상세 사실, 공개 출처, 비교와 최신성을 MCP로 확인할 방법이
+  없어 모델이 검색 응답 밖의 사실을 추측할 위험이 있었다.
+- 원인: MCP 초기 구현이 조사 세션과 후보 검색 세 도구에만 집중했다.
+- 해결: 모든 새 도구를 Product Backend REST API의 얇은 adapter로 구현하고 MCP의 DB/
+  RabbitMQ/판매처 직접 접근 금지 경계를 유지했다.
+- 검증:
+  - `cd services/mcp-server && npm test`: 4개 통과
+  - `ProductStorageIntegrationTests.returnsProductDetailEvidenceAndComparison`: 통과
+  - 실제 상품 상세/근거/비교 REST E2E: 정상 반환
+  - 최신 구두 조건부 수집: `FRESH`, `NO_ACTION`
+- 남은 위험: 실제 CLI 전체 도구 선택, stream/취소, 관리자 화면이 남아 있다.
+
+### 2026-08-11 VERIFY-001 우선순위 상품 재검증
+
+- 진행상황: **부분 구현**. commit `1538c03`에서 추천 snapshot과 새 수집 snapshot의
+  가격/재고를 분리해 비교하는 요청과 상태 조회를 구현했다.
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V10__add_offer_verification_requests.sql:1`
+    `offer_verification_requests`: 기준 snapshot과 Queue 작업 및 최종 상태
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/evidence/service/OfferVerificationService.java:69`
+    `request`: 최대 5개 우선 검색 재검증 발행
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/evidence/service/OfferVerificationService.java:95`
+    `get`: 새 snapshot 비교와 변경/미확인/실패 상태 판정
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/evidence/service/OfferVerificationServiceTests.java:59`
+    `requestsPrioritySearchRefresh`: 우선순위와 안전 상한 검증
+- 발생 문제: 현재 Queue 계약에는 상품 상세 직접 수집 operation이 없다.
+- 원인: Python 전환 작업이 검색 operation의 수직 E2E를 먼저 완성했다.
+- 해결: 전략을 `PRIORITY_SEARCH_REFRESH`로 정직하게 표시하고 새 검색에 같은 상품이 없으면
+  확인을 추측하지 않고 `NOT_FOUND`로 판정한다.
+- 검증:
+  - `OfferVerificationServiceTests`: 우선 요청과 가격 변경 판정 통과
+  - 실제 ABC마트 Queue E2E: 상품 512가 `QUEUED → VERIFIED`, 가격 29,000원과 재고
+    `available` 동일, 최신 수집 시각 갱신
+- 남은 위험: 상품 상세 operation과 옵션/배송 단위 직접 검증이 남아 있다.
 
 ## 작업 기록 템플릿
 
