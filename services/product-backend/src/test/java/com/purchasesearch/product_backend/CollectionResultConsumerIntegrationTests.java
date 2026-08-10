@@ -163,6 +163,83 @@ class CollectionResultConsumerIntegrationTests {
 	}
 
 	/**
+	 * running 상태가 상품 저장 없이 task와 job을 RUNNING으로 바꾸고 최종 성공으로 이어지는지 검증한다.
+	 *
+	 * @throws Exception 최종 CollectorResult fixture를 읽거나 처리하지 못한 경우
+	 */
+	@Test
+	void recordsRunningBeforeFinalResult() throws Exception {
+		CollectionTaskMessage task = trackedTask("backend-test-001", "queue-test-job-running");
+		collectionJobService.register(java.util.List.of(task));
+
+		ProcessingOutcome runningOutcome = messageService.process(
+				runningEnvelope(task.taskId(), task.jobId()).getBytes(StandardCharsets.UTF_8));
+		CollectionJobResponse runningJob = collectionJobService.get(task.jobId());
+
+		assertThat(runningOutcome).isEqualTo(ProcessingOutcome.TASK_RUNNING);
+		assertThat(runningJob.status()).isEqualTo("RUNNING");
+		assertThat(runningJob.queuedTaskCount()).isZero();
+		assertThat(runningJob.runningTaskCount()).isEqualTo(1);
+		assertThat(runningJob.completedAt()).isNull();
+		assertThat(runningJob.tasks()).singleElement().satisfies(taskStatus -> {
+			assertThat(taskStatus.status()).isEqualTo("RUNNING");
+			assertThat(taskStatus.startedAt()).isNotNull();
+			assertThat(taskStatus.completedAt()).isNull();
+		});
+		assertThat(productRepository.count()).isZero();
+
+		ProcessingOutcome finalOutcome = messageService.process(
+				successfulEnvelope(normalizedCollectorResult(), task.taskId(), task.jobId())
+						.getBytes(StandardCharsets.UTF_8));
+		CollectionJobResponse completedJob = collectionJobService.get(task.jobId());
+
+		assertThat(finalOutcome).isEqualTo(ProcessingOutcome.STORED);
+		assertThat(completedJob.status()).isEqualTo("COMPLETED");
+		assertThat(completedJob.runningTaskCount()).isZero();
+		assertThat(completedJob.succeededTaskCount()).isEqualTo(1);
+	}
+
+	/**
+	 * 최종 결과 뒤 늦게 재전달된 running 상태가 완료 작업을 RUNNING으로 되돌리지 않는지 검증한다.
+	 *
+	 * @throws Exception CollectorResult fixture를 읽거나 처리하지 못한 경우
+	 */
+	@Test
+	void ignoresLateRunningEventAfterCompletion() throws Exception {
+		CollectionTaskMessage task = trackedTask("backend-test-001", "queue-test-job-late-running");
+		collectionJobService.register(java.util.List.of(task));
+		messageService.process(successfulEnvelope(normalizedCollectorResult(), task.taskId(), task.jobId())
+				.getBytes(StandardCharsets.UTF_8));
+
+		ProcessingOutcome outcome = messageService.process(
+				runningEnvelope(task.taskId(), task.jobId()).getBytes(StandardCharsets.UTF_8));
+		CollectionJobResponse job = collectionJobService.get(task.jobId());
+
+		assertThat(outcome).isEqualTo(ProcessingOutcome.TASK_RUNNING);
+		assertThat(job.status()).isEqualTo("COMPLETED");
+		assertThat(job.runningTaskCount()).isZero();
+		assertThat(job.tasks().getFirst().status()).isEqualTo("SUCCESS");
+	}
+
+	/**
+	 * running 상태에 완료 정보가 포함되면 상태와 상품을 변경하지 않고 계약 위반으로 거부하는지 검증한다.
+	 */
+	@Test
+	void rejectsRunningEventWithCompletionData() throws Exception {
+		CollectionTaskMessage task = trackedTask("backend-test-001", "queue-test-job-invalid-running");
+		collectionJobService.register(java.util.List.of(task));
+		String invalid = runningEnvelope(task.taskId(), task.jobId())
+				.replace("\"completedAt\":null", "\"completedAt\":\"2026-08-02T16:00:01+09:00\"")
+				.replace("\"durationMs\":null", "\"durationMs\":1000");
+
+		assertThatThrownBy(() -> messageService.process(invalid.getBytes(StandardCharsets.UTF_8)))
+				.isInstanceOf(InvalidCollectionResultMessageException.class)
+				.hasMessageContaining("running");
+		assertThat(collectionJobService.get(task.jobId()).status()).isEqualTo("QUEUED");
+		assertThat(productRepository.count()).isZero();
+	}
+
+	/**
 	 * 여러 페이지 중 한 작업의 발행이 실패하고 다른 작업이 성공하면 job이 PARTIAL로 종료되는지 검증한다.
 	 *
 	 * @throws Exception Queue 계약 fixture를 읽거나 성공 결과를 처리하지 못한 경우
@@ -355,6 +432,29 @@ class CollectionResultConsumerIntegrationTests {
 				  "error":null
 				}
 				""".formatted(taskId, jobId, collectorResult);
+	}
+
+	/**
+	 * Worker가 작업을 소비한 직후 발행할 running Queue 봉투를 생성한다.
+	 *
+	 * @param taskId 시작한 페이지 작업 식별자
+	 * @param jobId 추적 중인 상위 job 식별자
+	 * @return 상품과 완료 정보가 없는 running JSON
+	 */
+	private String runningEnvelope(String taskId, String jobId) {
+		return """
+				{
+				  "schemaVersion":"1",
+				  "taskId":"%s",
+				  "jobId":"%s",
+				  "status":"running",
+				  "startedAt":"2026-08-02T16:00:00+09:00",
+				  "completedAt":null,
+				  "durationMs":null,
+				  "collectorResult":null,
+				  "error":null
+				}
+				""".formatted(taskId, jobId);
 	}
 
 	/**

@@ -92,6 +92,24 @@ class ManualTestApiTests(unittest.TestCase):
         self.assertIn("3단계", response.json()["nextStep"])
 
     @patch(
+        "app.api.endpoints.manual_test.BackendStoreService.get_collection_job",
+        new_callable=AsyncMock,
+    )
+    def test_running_job_explains_active_collection(self, get_job: AsyncMock) -> None:
+        """RUNNING 상태가 Queue 대기가 아니라 실제 판매처 수집 중이라고 안내하는지 검증한다."""
+
+        get_job.return_value = {
+            "jobId": "job-running",
+            "status": "RUNNING",
+            "runningTaskCount": 1,
+        }
+
+        response = self.client.get("/api/v1/manual-test/02-collection-jobs/job-running")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("수집 중", response.json()["nextStep"])
+
+    @patch(
         "app.api.endpoints.manual_test.BackendStoreService.search_products",
         new_callable=AsyncMock,
     )

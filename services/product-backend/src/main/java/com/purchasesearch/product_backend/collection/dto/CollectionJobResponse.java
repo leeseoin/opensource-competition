@@ -18,6 +18,7 @@ import com.purchasesearch.product_backend.collection.entity.CollectionTask;
  * @param endPage 마지막 검색 페이지
  * @param taskCount 전체 페이지 작업 수
  * @param queuedTaskCount 결과를 기다리는 작업 수
+ * @param runningTaskCount Worker가 실행 중인 작업 수
  * @param succeededTaskCount 성공한 작업 수
  * @param partialTaskCount 부분 성공한 작업 수
  * @param failedTaskCount 실행 또는 발행에 실패한 작업 수
@@ -37,6 +38,7 @@ public record CollectionJobResponse(
 		int endPage,
 		int taskCount,
 		long queuedTaskCount,
+		long runningTaskCount,
 		long succeededTaskCount,
 		long partialTaskCount,
 		long failedTaskCount,
@@ -55,6 +57,7 @@ public record CollectionJobResponse(
 	 */
 	public static CollectionJobResponse from(CollectionJob job, List<CollectionTask> taskEntities) {
 		long queued = taskEntities.stream().filter(task -> "QUEUED".equals(task.getStatus())).count();
+		long running = taskEntities.stream().filter(task -> "RUNNING".equals(task.getStatus())).count();
 		long succeeded = taskEntities.stream().filter(task -> "SUCCESS".equals(task.getStatus())).count();
 		long partial = taskEntities.stream().filter(task -> "PARTIAL".equals(task.getStatus())).count();
 		long failed = taskEntities.stream()
@@ -73,6 +76,7 @@ public record CollectionJobResponse(
 				job.getEndPage(),
 				job.getTotalTasks(),
 				queued,
+				running,
 				succeeded,
 				partial,
 				failed,

@@ -13,6 +13,7 @@ from aio_pika.abc import AbstractChannel, AbstractExchange, AbstractIncomingMess
 
 from app.messaging.contracts import (
     STATUS_FAILED,
+    STATUS_RUNNING,
     CollectionTask,
     decode_collection_task,
     extract_collection_task_identity,
@@ -166,18 +167,30 @@ class RabbitCollectionWorker:
             AMQPException: 발행 confirm 실패 후 원본을 requeue한 경우다.
         """
 
+        try:
+            task = decode_collection_task(message.body)
+        except ValueError:
+            task = None
+
+        if task is not None:
+            try:
+                await self._publish_result(
+                    exchange,
+                    _running_task_result(task),
+                    task.task_id,
+                )
+            except Exception:
+                await message.reject(requeue=True)
+                raise
+
         decision = await decide_message(message.body, self._processor)
         if decision.routing_key is not None and decision.body is not None:
             try:
-                await exchange.publish(
-                    aio_pika.Message(
-                        body=decision.body,
-                        content_type="application/json",
-                        delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-                        message_id=decision.message_id,
-                    ),
-                    routing_key=decision.routing_key,
-                    mandatory=True,
+                await self._publish(
+                    exchange,
+                    decision.routing_key,
+                    decision.body,
+                    decision.message_id,
                 )
             except Exception:
                 await message.reject(requeue=True)
@@ -189,6 +202,49 @@ class RabbitCollectionWorker:
         else:
             await message.reject(requeue=False)
             self._logger.warning("CollectionTask를 DLQ로 이동했습니다 message_id=%s", decision.message_id)
+
+    async def _publish_result(
+        self,
+        exchange: AbstractExchange,
+        result: dict,
+        message_id: str,
+    ) -> None:
+        """작업 상태 또는 최종 결과를 persistent 결과 메시지로 발행한다.
+
+        Args:
+            exchange: 결과 routing key가 연결된 Collection exchange다.
+            result: CollectionResult v1 계약을 만족하는 상태 또는 결과다.
+            message_id: 추적할 원본 작업 식별자다.
+        """
+
+        await self._publish(exchange, RESULT_ROUTING_KEY, _json_body(result), message_id)
+
+    async def _publish(
+        self,
+        exchange: AbstractExchange,
+        routing_key: str,
+        body: bytes,
+        message_id: str | None,
+    ) -> None:
+        """publisher confirm을 요구하는 persistent 메시지를 지정 경로에 발행한다.
+
+        Args:
+            exchange: 메시지를 전달할 Collection exchange다.
+            routing_key: 결과 또는 retry routing key다.
+            body: UTF-8 JSON body다.
+            message_id: broker와 로그에서 추적할 작업 식별자다.
+        """
+
+        await exchange.publish(
+            aio_pika.Message(
+                body=body,
+                content_type="application/json",
+                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+                message_id=message_id,
+            ),
+            routing_key=routing_key,
+            mandatory=True,
+        )
 
 
 async def declare_topology(
@@ -292,6 +348,31 @@ def _invalid_task_result(task_id: str, job_id: str) -> dict:
             "message": "CollectionTask 계약을 위반해 실행하지 않았습니다.",
             "retryable": False,
         },
+    }
+    validate_collection_result_envelope(result)
+    return result
+
+
+def _running_task_result(task: CollectionTask) -> dict:
+    """검증된 작업을 Spring 상태 갱신용 running 결과로 만든다.
+
+    Args:
+        task: Worker가 RabbitMQ에서 소비한 유효한 CollectionTask다.
+
+    Returns:
+        완료 정보와 상품 결과가 없는 CollectionResult v1 running 상태다.
+    """
+
+    result = {
+        "schemaVersion": "1",
+        "taskId": task.task_id,
+        "jobId": task.job_id,
+        "status": STATUS_RUNNING,
+        "startedAt": datetime.now(timezone.utc).isoformat(),
+        "completedAt": None,
+        "durationMs": None,
+        "collectorResult": None,
+        "error": None,
     }
     validate_collection_result_envelope(result)
     return result

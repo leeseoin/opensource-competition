@@ -114,7 +114,8 @@ class FakeExchange:
     async def publish(self, message: Any, routing_key: str, mandatory: bool) -> None:
         """발행 정보를 기록하고 설정된 경우 broker 오류를 발생시킨다."""
 
-        self.events.append(f"publish:{routing_key}:{mandatory}")
+        status = json.loads(message.body).get("status", "retry")
+        self.events.append(f"publish:{routing_key}:{status}:{mandatory}")
         if self.fail:
             raise RuntimeError("publisher confirm failed")
 
@@ -196,6 +197,24 @@ class CollectionTaskContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "timezone"):
             decode_collection_task(json.dumps(raw).encode())
+
+    def test_rejects_running_result_with_completion_data(self) -> None:
+        """running 상태에 완료 시각이나 실행 시간이 섞이면 결과 계약이 거부하는지 검증한다."""
+
+        result = {
+            "schemaVersion": "1",
+            "taskId": "python-task-001",
+            "jobId": "python-job-001",
+            "status": "running",
+            "startedAt": "2026-08-09T02:00:00+09:00",
+            "completedAt": "2026-08-09T02:00:01+09:00",
+            "durationMs": 1000,
+            "collectorResult": None,
+            "error": None,
+        }
+
+        with self.assertRaisesRegex(ValueError, "running"):
+            validate_collection_result_envelope(result)
 
 
 class CollectionTaskProcessorTests(unittest.IsolatedAsyncioTestCase):
@@ -316,7 +335,11 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
 
         await worker._handle_message(FakeExchange(events), FakeMessage(_task_body(), events))
 
-        self.assertEqual(events, [f"publish:{RESULT_ROUTING_KEY}:True", "ack"])
+        self.assertEqual(events, [
+            f"publish:{RESULT_ROUTING_KEY}:running:True",
+            f"publish:{RESULT_ROUTING_KEY}:success:True",
+            "ack",
+        ])
 
     async def test_publish_failure_requeues_original(self) -> None:
         """결과 발행이 실패하면 원본 작업을 ACK하지 않고 requeue하는지 검증한다."""
@@ -333,7 +356,7 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
                 FakeMessage(_task_body(), events),
             )
 
-        self.assertEqual(events, [f"publish:{RESULT_ROUTING_KEY}:True", "reject:True"])
+        self.assertEqual(events, [f"publish:{RESULT_ROUTING_KEY}:running:True", "reject:True"])
 
 
 if __name__ == "__main__":

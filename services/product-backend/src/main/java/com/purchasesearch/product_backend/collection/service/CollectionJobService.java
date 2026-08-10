@@ -108,6 +108,27 @@ public class CollectionJobService {
 	}
 
 	/**
+	 * Worker가 소비를 시작한 작업을 RUNNING으로 기록하고 상위 job 진행 상태를 갱신한다.
+	 * 중복 또는 최종 결과 뒤에 늦게 도착한 시작 이벤트는 기존 상태를 유지한다.
+	 *
+	 * @param envelope 검증된 running 상태 봉투
+	 * @return 추적 중인 작업을 처음 RUNNING으로 전환했으면 true
+	 */
+	@Transactional
+	public boolean recordRunning(CollectionResultEnvelope envelope) {
+		CollectionTask task = collectionTaskRepository.findById(envelope.taskId()).orElse(null);
+		if (task == null) {
+			return false;
+		}
+		validateJobIdentity(task, envelope);
+		boolean changed = task.start(envelope);
+		if (changed) {
+			refreshJobStatus(task.getJob().getJobId());
+		}
+		return changed;
+	}
+
+	/**
 	 * 정상적인 failed Worker 결과를 추적 중인 페이지 작업에 반영한다.
 	 *
 	 * @param envelope 오류 정보가 포함된 Queue 결과 봉투
@@ -151,7 +172,9 @@ public class CollectionJobService {
 		List<CollectionTask> tasks = collectionTaskRepository.findAllByJobJobIdOrderByPageAsc(jobId);
 		long terminalCount = tasks.stream().filter(CollectionTask::isTerminal).count();
 		if (terminalCount < job.getTotalTasks()) {
-			job.updateStatus(terminalCount == 0 ? "QUEUED" : "PROCESSING", null);
+			boolean hasRunningTask = tasks.stream().anyMatch(task -> "RUNNING".equals(task.getStatus()));
+			String activeStatus = hasRunningTask ? "RUNNING" : terminalCount == 0 ? "QUEUED" : "PROCESSING";
+			job.updateStatus(activeStatus, null);
 			return;
 		}
 
@@ -179,7 +202,7 @@ public class CollectionJobService {
 	 * Queue 결과의 jobId가 등록 당시 task의 상위 job과 같은지 검사한다.
 	 *
 	 * @param task 추적 중인 페이지 작업
-	 * @param envelope Go Worker 결과 봉투
+	 * @param envelope Python/Go Worker 결과 봉투
 	 * @throws InvalidCollectionResultMessageException 다른 job의 결과가 섞인 경우
 	 */
 	private void validateJobIdentity(CollectionTask task, CollectionResultEnvelope envelope) {

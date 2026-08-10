@@ -17,6 +17,7 @@ SCHEMA_VERSION = "1"
 STATUS_SUCCESS = "success"
 STATUS_PARTIAL = "partial"
 STATUS_FAILED = "failed"
+STATUS_RUNNING = "running"
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TASK_SCHEMA_PATH = _REPO_ROOT / "contracts" / "collection" / "v1" / "collection-task.schema.json"
@@ -158,14 +159,22 @@ def validate_collection_result_envelope(envelope: dict[str, Any]) -> None:
     status = envelope["status"]
     collector_result = envelope["collectorResult"]
     error = envelope["error"]
+    completed_at = envelope["completedAt"]
+    duration_ms = envelope["durationMs"]
+    if status == STATUS_RUNNING:
+        if any(value is not None for value in (completed_at, duration_ms, collector_result, error)):
+            raise ValueError("running 상태에는 시작 시각과 식별자만 필요합니다")
+        return
+    if completed_at is None or duration_ms is None:
+        raise ValueError("최종 결과에는 completedAt과 durationMs가 필요합니다")
     if status in {STATUS_SUCCESS, STATUS_PARTIAL}:
         if not isinstance(collector_result, dict) or error is not None:
             raise ValueError("success/partial 결과에는 collectorResult만 필요합니다")
         validate_collector_result(collector_result)
         if collector_result["requestId"] != envelope["taskId"]:
             raise ValueError("taskId와 collectorResult.requestId가 일치해야 합니다")
-    elif not isinstance(error, dict):
-        raise ValueError("failed 결과에는 error가 필요합니다")
+    elif not isinstance(error, dict) or collector_result is not None:
+        raise ValueError("failed 결과에는 error만 필요합니다")
 
 
 def _task_schema_validator() -> jsonschema.Draft202012Validator:

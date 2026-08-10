@@ -44,7 +44,7 @@ public class CollectionResultMessageService {
 	}
 
 	/**
-	 * Queue 결과 한 건을 해석하고 성공 또는 부분 성공 결과만 transaction 저장한다.
+	 * Queue 상태 또는 결과 한 건을 해석하고 시작 상태를 갱신하거나 최종 결과를 저장한다.
 	 *
 	 * @param body RabbitMQ message body
 	 * @return 상품 저장 또는 정상 작업 실패 처리 결과
@@ -60,6 +60,10 @@ public class CollectionResultMessageService {
 		}
 		envelope.validateSemantics();
 
+		if ("running".equals(envelope.status())) {
+			collectionJobService.recordRunning(envelope);
+			return ProcessingOutcome.TASK_RUNNING;
+		}
 		if ("failed".equals(envelope.status())) {
 			collectionJobService.recordFailed(envelope);
 			return ProcessingOutcome.TASK_FAILED;
@@ -89,6 +93,7 @@ public class CollectionResultMessageService {
 	 * ProcessingOutcome은 Queue 결과가 저장됐는지 정상 실패로 종료됐는지 구분한다.
 	 */
 	public enum ProcessingOutcome {
+		TASK_RUNNING,
 		STORED,
 		TASK_FAILED
 	}

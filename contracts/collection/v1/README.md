@@ -1,25 +1,30 @@
 # Collection Queue Contract v1
 
 작성일: 2026-07-26
-최종 수정일: 2026-08-04
+최종 수정일: 2026-08-10
 
 ## 목적
 
-Spring Boot Product Backend와 Go Collector Worker가 RabbitMQ에서 주고받는 작업과 결과의 공통 JSON 형식을 정의한다.
+Spring Boot Product Backend와 Python/Go Collector Worker가 RabbitMQ에서 주고받는 작업,
+시작 상태와 결과의 공통 JSON 형식을 정의한다.
 
 ```text
 Product Backend
   └─ CollectionTask 발행
           ↓ RabbitMQ
-Go Collector Worker
-  └─ 판매처 검색 후 CollectionResult 발행
+Python/Go Collector Worker
+  ├─ 작업 소비 직후 running CollectionResult 발행
+  └─ 판매처 검색 후 최종 CollectionResult 발행
           ↓ RabbitMQ
 Product Backend Result Consumer
   └─ 계약 검증 후 PostgreSQL 저장
 ```
 
-현재 Spring Boot 작업 발행 API, Go Worker, Spring Boot 결과 Consumer 및 PostgreSQL
-저장은 구현되어 있다. 작업 상태의 PostgreSQL 영구 저장은 아직 구현되지 않았다.
+현재 Spring Boot 작업 발행 API, Python/Go Worker, Spring Boot 결과 Consumer, PostgreSQL
+저장과 작업 상태 영구 저장이 구현되어 있다.
+
+`running`은 작업을 소비한 시각만 알리므로 `completedAt`, `durationMs`, `collectorResult`와
+`error`가 모두 null이다. 최종 `success`, `partial`, `failed`가 같은 `taskId`로 뒤따른다.
 
 ## 현재 Contract 범위
 
@@ -75,7 +80,9 @@ uvx check-jsonschema \
   examples/collection-task.search.json
 
 uvx check-jsonschema \
+  --base-uri "file://$PWD/collection-result.schema.json" \
   --schemafile collection-result.schema.json \
+  examples/collection-result.running.json \
   examples/collection-result.success.json \
   examples/collection-result.failed.json
 ```

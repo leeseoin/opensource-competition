@@ -188,8 +188,10 @@ async def get_collection_job(
         result["nextStep"] = "3단계 저장 상품 조회를 실행하세요."
     elif result.get("status") == "FAILED":
         result["nextStep"] = "tasks의 error를 확인한 뒤 1단계 조건을 조정하세요."
+    elif result.get("status") == "RUNNING":
+        result["nextStep"] = "Python Worker가 판매처 상품을 수집 중입니다. 잠시 뒤 다시 실행하세요."
     else:
-        result["nextStep"] = "잠시 뒤 이 단계를 다시 실행하세요."
+        result["nextStep"] = "RabbitMQ에서 작업 순서를 기다리는 중입니다. 잠시 뒤 다시 실행하세요."
     return result
 
 

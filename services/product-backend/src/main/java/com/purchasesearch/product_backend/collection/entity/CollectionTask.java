@@ -114,9 +114,25 @@ public class CollectionTask {
 	}
 
 	/**
+	 * Worker가 작업을 소비한 시작 상태를 기록한다.
+	 * 이미 종료된 작업에 늦게 도착한 시작 이벤트는 상태를 되돌리지 않는다.
+	 *
+	 * @param envelope 시작 시각과 작업 식별자가 포함된 running 봉투
+	 * @return QUEUED에서 RUNNING으로 전환했으면 true
+	 */
+	public boolean start(CollectionResultEnvelope envelope) {
+		if (isTerminal() || "RUNNING".equals(status)) {
+			return false;
+		}
+		this.status = "RUNNING";
+		this.startedAt = envelope.startedAt();
+		return true;
+	}
+
+	/**
 	 * 성공 또는 부분 성공 Queue 결과와 검증 집계를 작업에 기록한다.
 	 *
-	 * @param envelope Go Worker 결과 봉투
+	 * @param envelope Python/Go Worker 결과 봉투
 	 * @param productCount DB에 처리한 상품 수
 	 */
 	public void complete(CollectionResultEnvelope envelope, int productCount) {
@@ -141,7 +157,7 @@ public class CollectionTask {
 	}
 
 	/**
-	 * Go Worker가 보낸 정상 실패 결과를 작업에 기록한다.
+	 * Python/Go Worker가 보낸 정상 실패 결과를 작업에 기록한다.
 	 *
 	 * @param envelope 오류 정보가 포함된 결과 봉투
 	 */
@@ -176,6 +192,9 @@ public class CollectionTask {
 	 * @return 더 이상 결과를 기다리지 않는 상태이면 true
 	 */
 	public boolean isTerminal() {
-		return !"QUEUED".equals(status);
+		return "SUCCESS".equals(status)
+				|| "PARTIAL".equals(status)
+				|| "FAILED".equals(status)
+				|| "PUBLISH_FAILED".equals(status);
 	}
 }

@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * CollectionResultEnvelope는 Go Worker가 RabbitMQ 결과 Queue에 발행하는 실행 결과 계약이다.
+ * CollectionResultEnvelope는 Python/Go Worker가 RabbitMQ 결과 Queue에 발행하는 시작 상태와 실행 결과 계약이다.
  *
  * @param schemaVersion Queue 계약 버전
  * @param taskId 수집 작업 식별자
@@ -37,13 +37,11 @@ public record CollectionResultEnvelope(
 		@Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 		String jobId,
 		@NotBlank
-		@Pattern(regexp = "^(success|partial|failed)$")
+		@Pattern(regexp = "^(running|success|partial|failed)$")
 		String status,
 		@NotNull
 		OffsetDateTime startedAt,
-		@NotNull
 		OffsetDateTime completedAt,
-		@NotNull
 		@Min(0)
 		Long durationMs,
 		@Valid
@@ -57,6 +55,17 @@ public record CollectionResultEnvelope(
 	 * @throws InvalidCollectionResultMessageException 상태별 필드 조합이나 시간 순서가 잘못된 경우
 	 */
 	public void validateSemantics() {
+		if ("running".equals(status)) {
+			if (completedAt != null || durationMs != null || collectorResult != null || error != null) {
+				throw new InvalidCollectionResultMessageException(
+						"running 상태에는 시작 시각과 식별자만 필요합니다.");
+			}
+			return;
+		}
+		if (completedAt == null || durationMs == null) {
+			throw new InvalidCollectionResultMessageException(
+					"최종 결과에는 completedAt과 durationMs가 필요합니다.");
+		}
 		if (completedAt.isBefore(startedAt)) {
 			throw new InvalidCollectionResultMessageException("completedAt은 startedAt보다 빠를 수 없습니다.");
 		}
@@ -71,8 +80,8 @@ public record CollectionResultEnvelope(
 			}
 			return;
 		}
-		if ("failed".equals(status) && error == null) {
-			throw new InvalidCollectionResultMessageException("failed 결과에는 error가 필요합니다.");
+		if ("failed".equals(status) && (error == null || collectorResult != null)) {
+			throw new InvalidCollectionResultMessageException("failed 결과에는 error만 필요합니다.");
 		}
 	}
 
