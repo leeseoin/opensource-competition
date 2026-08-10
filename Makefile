@@ -37,7 +37,7 @@ RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBI
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
 	python-collector-sync python-collector-test \
-	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test python-crawler-safety-check \
+	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-swagger python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test python-crawler-safety-check \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
 	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
@@ -58,6 +58,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make python-crawler-sync 정우님 Python 크롤러 uv.lock 환경 준비' \
 		'  make python-crawler-setup 정우님 Python 크롤러 환경과 Chromium 준비' \
 		'  make python-crawler-run 정우님 Python 크롤러와 DB 적재 API 실행' \
+		'  make python-crawler-swagger Python 단계 테스트 전체 환경 실행' \
 		'  make python-crawler-worker Python RabbitMQ 검색 Worker 실행' \
 		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
 		'  make python-crawler-rabbitmq-test 격리 RabbitMQ vhost에서 Python Worker 검증' \
@@ -127,6 +128,10 @@ python-crawler-setup: python-crawler-env python-crawler-sync ## 정우님 Python
 
 python-crawler-run: python-crawler-env python-crawler-sync ## 정우님 Python 크롤러와 Spring Boot DB 적재 연결 API를 실행한다.
 	cd $(PYTHON_CRAWLER_DIR) && uv run --frozen uvicorn app.main:app --host 0.0.0.0 --port $(PYTHON_CRAWLER_PORT) --env-file .env
+
+python-crawler-swagger: python-crawler-env python-crawler-sync ## 인프라, Backend와 Python API/Worker를 Swagger 단계 테스트용으로 실행한다.
+	docker compose up -d --wait postgres redis rabbitmq
+	PYTHON_CRAWLER_PORT="$(PYTHON_CRAWLER_PORT)" PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" ./scripts/run-python-crawler-swagger.sh
 
 python-crawler-worker: python-crawler-sync ## Python RabbitMQ 검색 작업 Worker를 계속 실행한다.
 	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" uv run --frozen python -m scripts.collection_worker

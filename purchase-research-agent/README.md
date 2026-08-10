@@ -27,6 +27,27 @@ make python-crawler-setup
 make python-crawler-run
 ```
 
+Queue 등록부터 PostgreSQL 저장까지 손으로 단계별 검증할 때는 별도 터미널에서
+RabbitMQ Worker와 Spring Boot를 각각 실행하지 않아도 됩니다. 저장소 루트에서 다음
+명령 하나를 실행합니다.
+
+```bash
+make python-crawler-swagger
+```
+
+명령이 준비 완료 주소를 출력하면 브라우저에서 `http://localhost:8012/docs`를 열고
+Swagger의 번호 순서대로 실행합니다.
+
+1. `00 준비 확인`에서 `ready: true`를 확인합니다.
+2. `01 작업 등록`에서 기본 소량 요청을 실행하고 `jobId`를 복사합니다.
+3. `02 진행 조회`에 `jobId`를 넣고 최종 상태와 수집 개수를 확인합니다.
+4. `03 결과 조회`에서 PostgreSQL에 저장된 상품, 가격, 옵션과 출처를 확인합니다.
+
+`01 작업 등록`은 실제 판매처 공개 페이지를 요청합니다. 기본값은 3개이며 짧은 간격으로
+반복 실행하지 않습니다. 종료할 때 `Ctrl+C`를 누르면 이 명령이 시작한 Spring Boot와
+Python API/Worker가 함께 종료되고 PostgreSQL/Redis/RabbitMQ container와 저장 data는
+유지됩니다.
+
 포트를 바꾸려면 다음처럼 실행합니다.
 
 ```bash
@@ -97,18 +118,9 @@ Python 크롤러로 상품을 수집한 뒤 현재 Spring Boot Product Backend�
 ```
 
 `BACKEND_BASE_URL`의 기본값은 `http://127.0.0.1:8080`입니다. Swagger UI는
-`http://localhost:8012/docs`에서 사용할 수 있습니다.
-
-```bash
-curl -X POST 'http://localhost:8012/api/v1/collect-and-store' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "merchant": "abcmart",
-    "query": "구두",
-    "limit": 3,
-    "detail_limit": 0
-  }'
-```
+`http://localhost:8012/docs`에서 사용할 수 있습니다. 이 API는 Queue를 우회해 Adapter와
+DB 적재만 빠르게 확인할 때 사용합니다. 전체 경로는 위의 번호가 붙은 단계 API로
+검증합니다.
 
 성공하면 응답의 `storeResult`에 `productCount`, `snapshotCount`, `optionCount`,
 `evidenceCount`, `verificationCount`가 표시됩니다. `verificationSummary`에서는
