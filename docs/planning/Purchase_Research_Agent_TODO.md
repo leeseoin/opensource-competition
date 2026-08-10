@@ -149,7 +149,7 @@
 - [x] RabbitMQ exchange, queue, routing key 이름과 version 정책 정의
 - [x] retry 가능 오류와 즉시 실패 오류 구분
 - [x] 최초 실행 포함 최대 2회와 Dead Letter Queue 이동 규칙 정의
-- [ ] `pending`, `running`, `success`, `partial`, `failed`, `cancelled` 상태 전이 정의
+- [ ] `pending`, `running`, `success`, `partial`, `failed`, `cancelled` 상태 전이 정의 **(부분 구현: QUEUED/RUNNING/SUCCESS/PARTIAL/FAILED와 발행 실패 완료, cancelled 남음)**
 
 ### 4.3 수집 작업 생성
 

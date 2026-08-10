@@ -2065,6 +2065,41 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 남은 위험: 여러 검색어와 페이지, 29CM Queue smoke test 및 비정상 종료 복구는 후속
   범위다.
 
+### 2026-08-10 QUEUE-001/QUEUE-002 수집 RUNNING 상태
+
+- 진행상황: **완료**. commit `523ba3f`에서 Python Worker가 유효 작업을 소비한 직후
+  시작 이벤트를 발행하고 Spring Boot가 job/task를 `RUNNING`으로 저장하도록 연결했다.
+- 구현 위치:
+  - `contracts/collection/v1/collection-result.schema.json:29` `status`: running과 최종
+    결과의 필드 조합 분리
+  - `purchase-research-agent/app/messaging/rabbitmq.py:155`
+    `RabbitCollectionWorker._handle_message`: 시작 이벤트 confirm 뒤 실제 처리
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/entity/CollectionTask.java:123`
+    `start`: 종료 상태를 되돌리지 않는 RUNNING 전이
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionJobService.java:118`
+    `recordRunning`: task와 상위 job 시작 상태 저장
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/dto/CollectionJobResponse.java:31`
+    `CollectionJobResponse`: `runningTaskCount` 응답
+  - `services/product-backend/src/main/resources/db/migration/V9__add_collection_running_status.sql:1`:
+    job/task CHECK 제약에 RUNNING 추가
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/CollectionResultConsumerIntegrationTests.java:171`
+    `recordsRunningBeforeFinalResult`: 시작/완료와 늦은 시작 이벤트 회귀 검증
+- 발생 문제: 실제 Python 수집 중에도 최종 결과가 오기 전까지 Swagger가 작업을
+  `QUEUED`로 표시했다.
+- 원인: CollectionResult v1이 최종 결과만 허용했고 Spring Boot가 Worker 소비 시점을
+  알 수 없었다.
+- 해결: 완료 정보가 null인 `running` 상태를 계약에 추가했다. 시작 상태는 상품 저장 없이
+  PostgreSQL에 기록하고, 중복 또는 최종 결과 뒤의 시작 이벤트는 상태를 되돌리지 않는다.
+- 검증:
+  - `make python-crawler-test`: 42개 통과
+  - `./gradlew test --rerun-tasks`: 전체 통과
+  - `make test`: Go/Python/Spring/MCP/Web 전체 통과
+  - 실제 ABC마트 작업: 등록 약 0.06초 뒤 `RUNNING/runningTaskCount=1`, 약 11.9초 뒤
+    `COMPLETED`, 상품 3건과 verification matched 3건
+  - `make docs-check`: 통과
+- 남은 위험: `cancelled` 상태와 Worker/Backend 비정상 종료 뒤 장시간 RUNNING 작업 복구는
+  후속 운영 안정성 범위다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

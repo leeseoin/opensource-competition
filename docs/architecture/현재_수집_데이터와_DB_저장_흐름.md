@@ -175,7 +175,7 @@ products
 5. [완료] `merchant + externalId` upsert와 snapshot 추가 transaction
 6. [완료] 저장된 최신 상품 검색 REST API
 7. [완료] RabbitMQ `CollectionTask` producer와 publisher confirm
-8. [완료] `CollectionResult` consumer와 계약 위반 결과 DLQ 처리
+8. [완료] `CollectionResult` running/최종 결과 consumer와 계약 위반 결과 DLQ 처리
 9. [완료] ABC마트와 29CM 실제 결과 수동 적재 및 PostgreSQL 행 검증
 10. [완료] 수집 요청 검색어와 적용 filters를 별도 검색 문맥에 저장하고 상품 조회에 연결
 

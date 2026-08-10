@@ -4,8 +4,8 @@
 
 ## 최신 기록
 
-- 2026-08-10 / [`QUEUE-002` 실제 판매처 Queue E2E](2026-08-10-QUEUE-002-실제_판매처_Queue_E2E.md) / `3ff397c` / 빈 가격 필터 직렬화 계약을 고치고 ABC마트 실제 수집부터 PostgreSQL 저장까지 검증
-- 2026-08-10 / [`QUEUE-001` 계약 위반 작업 실패 연결](2026-08-10-QUEUE-001-계약_위반_작업_실패_연결.md) / `ca58f3b` / 식별 가능한 계약 위반 원본은 DLQ에 보존하면서 Spring 작업 상태를 FAILED로 종결
+- 2026-08-10 / [`QUEUE-002` 실제 판매처 Queue E2E와 RUNNING 상태](2026-08-10-QUEUE-002-실제_판매처_Queue_E2E.md) / `3ff397c`, `523ba3f` / ABC마트 수집 저장과 Spring의 RUNNING 시작 상태 및 실행 작업 수 검증
+- 2026-08-10 / [`QUEUE-001` 계약 위반 복구와 RUNNING 시작 상태](2026-08-10-QUEUE-001-계약_위반_작업_실패_연결.md) / `ca58f3b`, `523ba3f` / 계약 위반 실패 연결과 Python Worker의 시작 이벤트 발행 구현
 - 2026-08-10 / [`OPS-002` Python Swagger 단계 테스트](2026-08-10-OPS-002-Python_Swagger_단계_테스트.md) / `7852165`, `fdd16f3` / Python Queue 수집 준비부터 PostgreSQL 결과 조회까지 번호가 붙은 Swagger 흐름과 세 필드 작업 등록 입력 추가
 - 2026-08-09 / [`MERCHANT-001` Python 접근 안전성](2026-08-09-MERCHANT-001-Python_접근_안전성.md) / `6ecc6c8` / TLS 검증과 redirect 차단 및 401/403/429/5xx 안전 분류를 Python 수집 경로에 적용
 - 2026-08-09 / [`QUEUE-001` Python Collection Queue Worker](2026-08-09-QUEUE-001-Python_Collection_Queue_Worker.md) / `32d6446` / Python runtime을 Queue v1에 연결하고 confirm 뒤 ACK, retry, DLQ를 실제 broker로 검증
