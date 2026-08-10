@@ -70,7 +70,7 @@ async function main(): Promise<void> {
     process.env.PRODUCT_BACKEND_BASE_URL ?? "http://127.0.0.1:8080",
   );
   const server = new McpServer({ name: "purchase-research", version: "0.1.0" }, {
-    instructions: "구매 조건은 먼저 create_research_session으로 DRAFT 저장한다. 사용자가 명시적으로 확인한 뒤 confirm_purchase_conditions를 호출하고, 그 다음에만 search_product_candidates를 호출한다. 판매처 사실을 추측하지 않는다.",
+    instructions: "구매 조건은 먼저 create_research_session으로 DRAFT 저장한다. 사용자가 명시적으로 확인한 뒤 confirm_purchase_conditions와 search_product_candidates를 순서대로 호출한다. 후보 사실은 get_product/get_evidence/compare_products로 확인한다. DB 결과가 없거나 오래된 경우에만 request_collection을 사용하고 구매 직전에는 verify_offer 뒤 get_verification_status를 조회한다. 판매처 사실을 추측하지 않는다.",
   });
 
   server.registerTool(
@@ -135,6 +135,40 @@ async function main(): Promise<void> {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async ({ productIds }) => toToolResult(await client.compareProducts(productIds)),
+  );
+
+  server.registerTool(
+    "request_collection",
+    {
+      description: "판매처와 검색어의 DB 상품이 없거나 오래됐을 때만 Python 수집 작업을 요청한다.",
+      inputSchema: {
+        merchant: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(64),
+        query: z.string().min(1).max(200),
+        force: z.boolean().default(false),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ merchant, query, force }) => toToolResult(await client.requestCollection(merchant, query, force)),
+  );
+
+  server.registerTool(
+    "verify_offer",
+    {
+      description: "구매 직전 선택 상품명을 높은 우선순위로 다시 수집해 가격과 재고 재검증을 시작한다.",
+      inputSchema: { productId: z.number().int().positive() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    async ({ productId }) => toToolResult(await client.verifyOffer(productId)),
+  );
+
+  server.registerTool(
+    "get_verification_status",
+    {
+      description: "재검증 요청의 Queue 상태와 기준 대비 최신 가격/재고 변경 여부를 조회한다.",
+      inputSchema: { verificationId: z.string().uuid() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ verificationId }) => toToolResult(await client.getVerificationStatus(verificationId)),
   );
 
   await server.connect(new StdioServerTransport());

@@ -58,6 +58,9 @@ test("상품 조사 도구 요청을 Product Backend REST API에 전달한다", 
   await client.getProduct(11);
   await client.getEvidence(11);
   await client.compareProducts([11, 12]);
+  await client.requestCollection("abcmart", "구두");
+  await client.verifyOffer(11);
+  await client.getVerificationStatus("00000000-0000-4000-8000-000000000001");
 
   assert.deepEqual(requests, [
     { url: "http://backend/internal/v1/products/11", method: "GET", body: undefined },
@@ -66,6 +69,17 @@ test("상품 조사 도구 요청을 Product Backend REST API에 전달한다", 
       url: "http://backend/internal/v1/product-comparisons",
       method: "POST",
       body: JSON.stringify({ productIds: [11, 12] }),
+    },
+    {
+      url: "http://backend/internal/v1/collection-requests",
+      method: "POST",
+      body: JSON.stringify({ merchant: "abcmart", query: "구두", force: false }),
+    },
+    { url: "http://backend/internal/v1/offer-verifications/products/11", method: "POST", body: undefined },
+    {
+      url: "http://backend/internal/v1/offer-verifications/00000000-0000-4000-8000-000000000001",
+      method: "GET",
+      body: undefined,
     },
   ]);
 });

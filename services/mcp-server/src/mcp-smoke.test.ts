@@ -23,7 +23,10 @@ test("stdio MCP 서버가 조사 세션 도구를 공개한다", async () => {
         "create_research_session",
         "get_evidence",
         "get_product",
+        "get_verification_status",
+        "request_collection",
         "search_product_candidates",
+        "verify_offer",
       ],
     );
   } finally {

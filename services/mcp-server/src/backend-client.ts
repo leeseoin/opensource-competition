@@ -121,6 +121,24 @@ export class ProductBackendClient {
     });
   }
 
+  /** DB 결과가 없거나 만료됐을 때 판매처 검색 수집을 조건부 요청한다. */
+  requestCollection(merchant: string, query: string, force = false): Promise<Record<string, unknown>> {
+    return this.call("/internal/v1/collection-requests", {
+      method: "POST",
+      body: JSON.stringify({ merchant, query, force }),
+    });
+  }
+
+  /** 선택 상품의 가격과 재고를 높은 우선순위로 다시 수집하도록 요청한다. */
+  verifyOffer(productId: number): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/offer-verifications/products/${productId}`, { method: "POST" });
+  }
+
+  /** 재검증 ID로 Queue 진행과 최신 snapshot 비교 결과를 조회한다. */
+  getVerificationStatus(verificationId: string): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/offer-verifications/${encodeURIComponent(verificationId)}`, { method: "GET" });
+  }
+
   /**
    * Product Backend JSON API를 호출하고 오류를 MCP가 처리할 수 있는 예외로 변환한다.
    *
