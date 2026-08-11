@@ -34,6 +34,25 @@ const priorityOptions: AppSelectOption[] = [
 ];
 
 type FlowState = "idle" | "structuring" | "draft" | "searching" | "success" | "error";
+type ListConditionField = "usage" | "colors" | "sizes" | "requirements";
+type ListConditionPriorities = Record<ListConditionField, ConditionPriority>;
+
+const defaultListPriorities: ListConditionPriorities = {
+  usage: "preferred",
+  colors: "preferred",
+  sizes: "required",
+  requirements: "preferred",
+};
+
+/** 목록 조건별 현재 강도를 AI 초안에서 읽어 빈 입력 중에도 보존할 상태로 만든다. */
+function listPrioritiesFromConditions(conditions: PurchaseCondition): ListConditionPriorities {
+  return {
+    usage: conditions.usage[0]?.priority ?? defaultListPriorities.usage,
+    colors: conditions.colors[0]?.priority ?? defaultListPriorities.colors,
+    sizes: conditions.sizes[0]?.priority ?? defaultListPriorities.sizes,
+    requirements: conditions.requirements[0]?.priority ?? defaultListPriorities.requirements,
+  };
+}
 
 /** 조건 배열을 사람이 수정하기 쉬운 한 줄 문자열로 변환한다. */
 function formatList(value: PrioritizedText[]): string {
@@ -133,6 +152,7 @@ export default function ChatExperience() {
   const [flowState, setFlowState] = useState<FlowState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedListings, setSelectedListings] = useState<Record<string, number>>({});
+  const [listPriorities, setListPriorities] = useState<ListConditionPriorities>(defaultListPriorities);
 
   /** 자연어 질문을 Codex에 전달하고 검색하지 않은 DRAFT 조건만 표시한다. */
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -146,10 +166,12 @@ export default function ChatExperience() {
     setSession(null);
     setConditions(null);
     setSelectedListings({});
+    setListPriorities(defaultListPriorities);
     try {
       const draft = await createResearchDraft(nextQuestion);
       setSession(draft);
       setConditions(draft.conditions);
+      setListPriorities(listPrioritiesFromConditions(draft.conditions));
       setFlowState("draft");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "AI가 구매 조건을 정리하지 못했습니다.");
@@ -193,14 +215,13 @@ export default function ChatExperience() {
 
   /** 쉼표 구분 구매 조건 배열을 수정하고 화면 상태에 반영한다. */
   function updateListCondition(
-    field: "usage" | "colors" | "sizes" | "requirements",
+    field: ListConditionField,
     value: string,
   ): void {
     if (conditions) {
-      const fallbackPriority = field === "sizes" ? "required" : "preferred";
       setConditions({
         ...conditions,
-        [field]: parsePrioritizedList(value, conditions[field], fallbackPriority),
+        [field]: parsePrioritizedList(value, conditions[field], listPriorities[field]),
       });
     }
   }
@@ -221,6 +242,7 @@ export default function ChatExperience() {
       setConditions({ ...conditions, price: { ...conditions.price, priority } });
       return;
     }
+    setListPriorities((current) => ({ ...current, [field]: priority }));
     setConditions({
       ...conditions,
       [field]: conditions[field].map((item) => ({ ...item, priority })),
@@ -327,11 +349,11 @@ export default function ChatExperience() {
               )}
               <div className={styles.conditionGrid}>
                 <label>상품 종류<input value={conditions.productType.value} onChange={(event) => updateTextCondition("productType", event.target.value)} /><AppSelect ariaLabel="상품 종류 강도" value={conditions.productType.priority} options={priorityOptions} onValueChange={(value) => updatePriority("productType", value as ConditionPriority)} /></label>
-                <label>용도<input value={formatList(conditions.usage)} onChange={(event) => updateListCondition("usage", event.target.value)} /><AppSelect ariaLabel="용도 강도" value={conditions.usage[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("usage", value as ConditionPriority)} /></label>
+                <label>용도<input value={formatList(conditions.usage)} onChange={(event) => updateListCondition("usage", event.target.value)} /><AppSelect ariaLabel="용도 강도" value={listPriorities.usage} options={priorityOptions} onValueChange={(value) => updatePriority("usage", value as ConditionPriority)} /></label>
                 <label>최대 가격<input type="number" min="0" value={conditions.price.max ?? ""} onChange={(event) => updateMaxPrice(event.target.value)} /><AppSelect ariaLabel="가격 강도" value={conditions.price.priority} options={priorityOptions} onValueChange={(value) => updatePriority("price", value as ConditionPriority)} /></label>
-                <label>색상<input value={formatList(conditions.colors)} onChange={(event) => updateListCondition("colors", event.target.value)} /><AppSelect ariaLabel="색상 강도" value={conditions.colors[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("colors", value as ConditionPriority)} /></label>
-                <label>사이즈<input value={formatList(conditions.sizes)} onChange={(event) => updateListCondition("sizes", event.target.value)} /><AppSelect ariaLabel="사이즈 강도" value={conditions.sizes[0]?.priority ?? "required"} options={priorityOptions} onValueChange={(value) => updatePriority("sizes", value as ConditionPriority)} /></label>
-                <label>중요 조건<input value={formatList(conditions.requirements)} onChange={(event) => updateListCondition("requirements", event.target.value)} /><AppSelect ariaLabel="중요 조건 강도" value={conditions.requirements[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("requirements", value as ConditionPriority)} /></label>
+                <label>색상<input value={formatList(conditions.colors)} onChange={(event) => updateListCondition("colors", event.target.value)} /><AppSelect ariaLabel="색상 강도" value={listPriorities.colors} options={priorityOptions} onValueChange={(value) => updatePriority("colors", value as ConditionPriority)} /></label>
+                <label>사이즈<input value={formatList(conditions.sizes)} onChange={(event) => updateListCondition("sizes", event.target.value)} /><AppSelect ariaLabel="사이즈 강도" value={listPriorities.sizes} options={priorityOptions} onValueChange={(value) => updatePriority("sizes", value as ConditionPriority)} /></label>
+                <label>중요 조건<input value={formatList(conditions.requirements)} onChange={(event) => updateListCondition("requirements", event.target.value)} /><AppSelect ariaLabel="중요 조건 강도" value={listPriorities.requirements} options={priorityOptions} onValueChange={(value) => updatePriority("requirements", value as ConditionPriority)} /></label>
                 <label>판매처<input value={conditions.merchant ?? ""} placeholder="전체" onChange={(event) => updateTextCondition("merchant", event.target.value)} /></label>
               </div>
               {conditions.assumptions.length > 0 && <p className={styles.assumptions}>AI 추론: {conditions.assumptions.join(" / ")}</p>}
