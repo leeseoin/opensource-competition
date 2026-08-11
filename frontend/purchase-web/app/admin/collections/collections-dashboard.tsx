@@ -22,7 +22,8 @@ export default function CollectionsDashboard() {
   }, []);
 
   useEffect(() => {
-    reload();
+    const reloadTimer = window.setTimeout(reload, 0);
+    return () => window.clearTimeout(reloadTimer);
   }, [reload]);
 
   return (

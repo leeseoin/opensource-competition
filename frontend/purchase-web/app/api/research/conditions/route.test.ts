@@ -40,6 +40,10 @@ export function mcpStub(overrides: Partial<ResearchMcpOperations> = {}): Researc
     createSession: async (_question, conditions) => sessionResponse(conditions),
     confirmSession: async () => { throw new Error("unexpected confirm"); },
     searchCandidates: async () => { throw new Error("unexpected search"); },
+    startAgentRun: async () => { throw new Error("unexpected run start"); },
+    getAgentRun: async () => { throw new Error("unexpected run get"); },
+    advanceAgentRun: async () => { throw new Error("unexpected run advance"); },
+    verifyAgentRunOffer: async () => { throw new Error("unexpected verify"); },
     ...overrides,
   };
 }

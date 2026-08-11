@@ -61,6 +61,10 @@ test("상품 조사 도구 요청을 Product Backend REST API에 전달한다", 
   await client.requestCollection("abcmart", "구두");
   await client.verifyOffer(11);
   await client.getVerificationStatus("00000000-0000-4000-8000-000000000001");
+  await client.startAgentRun("00000000-0000-4000-8000-000000000002", ["abcmart"]);
+  await client.getAgentRun("00000000-0000-4000-8000-000000000003");
+  await client.advanceAgentRun("00000000-0000-4000-8000-000000000003");
+  await client.verifyAgentRunOffer("00000000-0000-4000-8000-000000000003", 11);
 
   assert.deepEqual(requests, [
     { url: "http://backend/internal/v1/products/11", method: "GET", body: undefined },
@@ -80,6 +84,29 @@ test("상품 조사 도구 요청을 Product Backend REST API에 전달한다", 
       url: "http://backend/internal/v1/offer-verifications/00000000-0000-4000-8000-000000000001",
       method: "GET",
       body: undefined,
+    },
+    {
+      url: "http://backend/internal/v1/agent-runs",
+      method: "POST",
+      body: JSON.stringify({
+        sessionId: "00000000-0000-4000-8000-000000000002",
+        merchants: ["abcmart"],
+      }),
+    },
+    {
+      url: "http://backend/internal/v1/agent-runs/00000000-0000-4000-8000-000000000003",
+      method: "GET",
+      body: undefined,
+    },
+    {
+      url: "http://backend/internal/v1/agent-runs/00000000-0000-4000-8000-000000000003/advance",
+      method: "POST",
+      body: undefined,
+    },
+    {
+      url: "http://backend/internal/v1/agent-runs/00000000-0000-4000-8000-000000000003/verify",
+      method: "POST",
+      body: JSON.stringify({ productId: 11 }),
     },
   ]);
 });

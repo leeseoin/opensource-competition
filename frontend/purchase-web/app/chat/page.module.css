@@ -266,3 +266,52 @@
   .shopResultsActions { align-items: flex-start; }
   .shopGrid { grid-template-columns: 1fr; }
 }
+.verifyButton {
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid currentColor;
+  background: var(--lime, #d9ff43);
+  color: #111;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.verifyButton:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.agentTimeline {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agentTimeline li {
+  display: grid;
+  grid-template-columns: minmax(9rem, auto) 1fr;
+  gap: 0.75rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid currentColor;
+}
+
+.agentTimeline b {
+  font-size: 0.72rem;
+}
+
+.agentTimeline span,
+.verificationResult {
+  font-size: 0.82rem;
+}
+
+.verificationResult {
+  margin-top: 0.85rem;
+  padding: 0.7rem;
+  background: #d9ff43;
+  color: #111;
+  font-weight: 700;
+}
