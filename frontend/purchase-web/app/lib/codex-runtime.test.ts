@@ -109,7 +109,22 @@ test("상품 종류에서 구조화된 색상 중복을 제거한다", async () 
   }));
 
   assert.equal(result.productType.value, "구두");
-  assert.deepEqual(result.colors, [{ value: "검정", priority: "preferred" }]);
+  assert.deepEqual(result.colors, [{ value: "검정", priority: "required" }]);
+});
+
+/** 단정해 요청한 색상은 필수로, 완화 표현이 있는 색상은 선호로 보정하는지 검증한다. */
+test("사용자 색상 표현의 필수와 선호 강도를 구분한다", async () => {
+  const explicit = await structurePurchaseQuestion(
+    "갈색 구두 찾아줘",
+    async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "preferred" }] }),
+  );
+  const preferred = await structurePurchaseQuestion(
+    "갈색이면 좋겠지만 다른 색도 괜찮은 구두 찾아줘",
+    async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "required" }] }),
+  );
+
+  assert.equal(explicit.colors[0]?.priority, "required");
+  assert.equal(preferred.colors[0]?.priority, "preferred");
 });
 
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */

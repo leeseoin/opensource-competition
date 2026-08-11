@@ -93,3 +93,4 @@
 | 2026-08-11 | Codex를 사용해 데이터 최신성 기반 수집 요청과 선택 상품 가격/재고 재검증 Backend API 및 MCP 도구를 구현 | 기존 검색 Queue 계약만 사용하고 MCP의 RabbitMQ 직접 접근을 금지했으며 Spring Boot unit/integration test와 MCP stdio 계약 테스트로 검증 |
 | 2026-08-11 | Codex를 사용해 범용 조건 정규화와 MCP 도구 9개의 설계/기능 목록/TODO/코드트래커 상태를 실제 코드에 맞게 동기화 | 자동 test와 실제 Queue 재검증 결과를 대조했으며 DRAFT Wiki의 PUBLISHED 전환과 최종 diff는 사람의 후속 검토 대상으로 유지 |
 | 2026-08-11 | Codex CLI 구조화 출력용 엄격 Schema를 하위 호환 공용 PurchaseCondition 계약과 분리하고 안전한 실패 로그를 추가 | Codex CLI 0.146.1 실제 호출과 Web API에서 조건 생성 및 MCP DRAFT 저장 성공을 검증하고 원본 stderr 비노출을 유지 |
+| 2026-08-11 | Codex 조건 구조화 뒤 사용자 색상 표현의 필수/선호 강도를 결정적으로 보정 | `갈색 찾아줘`는 필수로 처리해 검정 후보를 제외하고 `갈색이면 좋겠어`만 선호로 유지하는 단위 테스트와 실제 Web 검색 0건을 검증 |

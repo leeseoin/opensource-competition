@@ -151,8 +151,22 @@ export function runCodexCommand(
   });
 }
 
-/** productType에 중복 포함된 구조화 색상을 제거해 DB 검색어가 상품 종류에 집중되게 한다. */
-function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondition {
+/** 사용자 질문에서 특정 색상을 선호로 완화한 표현인지 해당 색상 주변 문맥으로 판정한다. */
+function isSoftColorPreference(question: string, color: string): boolean {
+  const normalizedQuestion = question.replace(/\s+/g, " ");
+  const colorIndex = normalizedQuestion.toLowerCase().indexOf(color.trim().toLowerCase());
+  if (colorIndex < 0) {
+    return true;
+  }
+  const context = normalizedQuestion.slice(
+    Math.max(0, colorIndex - 12),
+    Math.min(normalizedQuestion.length, colorIndex + color.length + 30),
+  );
+  return /(이면|이었으면|였으면)\s*(좋|괜찮)|선호|가능하면|가급적|되도록|우선|상관없|아니어도/.test(context);
+}
+
+/** 명시 색상의 강도와 productType의 색상 중복을 검색 정책에 맞게 보정한다. */
+function normalizePurchaseCondition(condition: PurchaseCondition, question: string): PurchaseCondition {
   let productType = condition.productType.value.trim();
   for (const color of condition.colors) {
     const token = color.value.trim();
@@ -164,6 +178,10 @@ function normalizePurchaseCondition(condition: PurchaseCondition): PurchaseCondi
   productType = productType.replace(/\s+/g, " ").trim();
   return {
     ...condition,
+    colors: condition.colors.map((color) => ({
+      ...color,
+      priority: isSoftColorPreference(question, color.value) ? "preferred" : "required",
+    })),
     productType: {
       ...condition.productType,
       value: productType || condition.productType.value.trim(),
@@ -187,7 +205,8 @@ export async function structurePurchaseQuestion(
     "productType에는 구두, 운동화처럼 상품 종류만 기록한다.",
     "색상, 사이즈, 가격, 판매처와 용도는 각각의 전용 필드에만 기록하고 productType에 중복하지 않는다.",
     "각 조건의 priority는 구매 불가능 조건이면 required, 가능하면 만족할 선호이면 preferred로 기록한다.",
-    "productType은 required, 용도와 색상은 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
+    "productType은 required, 용도는 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
+    "사용자가 색상을 단정해 요청하면 required로 기록하고, '이면 좋겠어', '선호', '가능하면'처럼 완화를 표현한 경우에만 preferred로 기록한다.",
     "사용자 질문에 명시되지 않았지만 결과를 크게 바꾸는 조건은 missingConditions에 기록한다.",
     "assumptions에는 추론한 내용만 기록하고 requiresConfirmation은 반드시 true로 둔다.",
     "normalizedValue, canonicalId, confidence, derivedBy를 직접 확정할 근거가 없으면 null로 기록한다.",
@@ -224,5 +243,5 @@ export async function structurePurchaseQuestion(
   if (!isPurchaseCondition(parsed)) {
     throw new CodexRuntimeError("AI_OUTPUT_INVALID", "Codex 응답이 PurchaseCondition 계약과 일치하지 않습니다.");
   }
-  return normalizePurchaseCondition(parsed);
+  return normalizePurchaseCondition(parsed, question);
 }
