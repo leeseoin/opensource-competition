@@ -17,6 +17,9 @@ import { parsePrioritizedList } from "../lib/condition-editing";
 import {
   confirmResearchDraft,
   createResearchDraft,
+  advanceAgentRun,
+  verifyAgentRunOffer,
+  type AgentRunResponse,
   type ConditionPriority,
   type PrioritizedText,
   type PurchaseCondition,
@@ -33,7 +36,7 @@ const priorityOptions: AppSelectOption[] = [
   { value: "preferred", label: "선호" },
 ];
 
-type FlowState = "idle" | "structuring" | "draft" | "searching" | "success" | "error";
+type FlowState = "idle" | "structuring" | "draft" | "searching" | "collecting" | "success" | "error";
 type ListConditionField = "usage" | "colors" | "sizes" | "requirements";
 type ListConditionPriorities = Record<ListConditionField, ConditionPriority>;
 
@@ -64,6 +67,8 @@ interface ShoppingProductCardProps {
   rank: number;
   selectedListingId?: number;
   onSelect(listingId: number): void;
+  onVerify(productId: number): void;
+  verifying: boolean;
 }
 
 /** ShoppingProductCard는 상품군 하나를 이미지/가격/컬러/재고 중심의 쇼핑 카드로 표시한다. */
@@ -72,6 +77,8 @@ function ShoppingProductCard({
   rank,
   selectedListingId,
   onSelect,
+  onVerify,
+  verifying,
 }: ShoppingProductCardProps) {
   const listing = selectedCandidateListing(group, selectedListingId);
   const candidate = listing.product;
@@ -130,6 +137,14 @@ function ShoppingProductCard({
         <a className={styles.shopLink} href={candidate.productUrl} target="_blank" rel="noreferrer">
           이 컬러 판매처에서 보기
         </a>
+        <button
+          type="button"
+          className={styles.verifyButton}
+          disabled={verifying}
+          onClick={() => onVerify(candidate.id)}
+        >
+          {verifying ? "최신 가격/재고 확인 중" : "구매 전 가격/재고 재검증"}
+        </button>
         {assessment && (
           <details className={styles.reasonDetails}>
             <summary>추천 근거와 주의사항</summary>
@@ -148,11 +163,13 @@ export default function ChatExperience() {
   const [question, setQuestion] = useState(defaultQuestion);
   const [runtime, setRuntime] = useState<"codex">("codex");
   const [session, setSession] = useState<ResearchSessionResponse | null>(null);
+  const [agentRun, setAgentRun] = useState<AgentRunResponse | null>(null);
   const [conditions, setConditions] = useState<PurchaseCondition | null>(null);
   const [flowState, setFlowState] = useState<FlowState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedListings, setSelectedListings] = useState<Record<string, number>>({});
   const [listPriorities, setListPriorities] = useState<ListConditionPriorities>(defaultListPriorities);
+  const [verifyingProductId, setVerifyingProductId] = useState<number | null>(null);
 
   /** 자연어 질문을 Codex에 전달하고 검색하지 않은 DRAFT 조건만 표시한다. */
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -164,6 +181,7 @@ export default function ChatExperience() {
     setFlowState("structuring");
     setErrorMessage("");
     setSession(null);
+    setAgentRun(null);
     setConditions(null);
     setSelectedListings({});
     setListPriorities(defaultListPriorities);
@@ -179,6 +197,35 @@ export default function ChatExperience() {
     }
   }
 
+  /** 짧은 polling 간격을 만들되 실행 상태는 Product Backend에만 보존한다. */
+  async function wait(milliseconds: number): Promise<void> {
+    await new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  /** Agent Run 응답의 후보와 조건을 현재 화면 상태에 반영한다. */
+  function applyAgentRun(run: AgentRunResponse): void {
+    setAgentRun(run);
+    if (run.research) {
+      setSession(run.research);
+      setConditions(run.research.conditions);
+    }
+  }
+
+  /** 수집 또는 재검증 실행을 최대 60초 동안 제한적으로 진행한다. */
+  async function pollAgentRun(initial: AgentRunResponse): Promise<AgentRunResponse> {
+    let current = initial;
+    for (let attempt = 0; attempt < 40 && current.nextAction === "POLL_ADVANCE"; attempt += 1) {
+      setFlowState(current.status === "COLLECTING" ? "collecting" : current.status === "VERIFYING" ? "success" : "searching");
+      await wait(1500);
+      current = await advanceAgentRun(current.runId);
+      applyAgentRun(current);
+    }
+    if (current.nextAction === "POLL_ADVANCE") {
+      throw new Error("조사는 계속 진행 중입니다. 잠시 뒤 같은 조건으로 다시 확인해 주세요.");
+    }
+    return current;
+  }
+
   /** 사용자가 수정한 조건을 MCP로 확인한 뒤에만 PostgreSQL 후보를 검색한다. */
   async function handleConfirm(): Promise<void> {
     if (!session || !conditions) {
@@ -187,17 +234,43 @@ export default function ChatExperience() {
     setFlowState("searching");
     setErrorMessage("");
     try {
-      const confirmed = await confirmResearchDraft(session.sessionId, {
+      let run = await confirmResearchDraft(session.sessionId, {
         ...conditions,
         missingConditions: [],
         requiresConfirmation: true,
       });
-      setSession(confirmed);
-      setConditions(confirmed.conditions);
+      applyAgentRun(run);
+      run = await pollAgentRun(run);
+      if (run.status === "FAILED") {
+        throw new Error(run.error?.message ?? "상품 조사 실행이 실패했습니다.");
+      }
       setFlowState("success");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "상품 후보를 검색하지 못했습니다.");
       setFlowState("error");
+    }
+  }
+
+  /** 선택한 판매처 상품을 Agent Run에 연결해 가격과 재고를 재검증한다. */
+  async function handleVerify(productId: number): Promise<void> {
+    if (!agentRun || agentRun.status !== "READY") {
+      return;
+    }
+    setVerifyingProductId(productId);
+    setErrorMessage("");
+    try {
+      let run = await verifyAgentRunOffer(agentRun.runId, productId);
+      applyAgentRun(run);
+      run = await pollAgentRun(run);
+      if (run.status === "FAILED") {
+        throw new Error(run.error?.message ?? "선택 상품 재검증이 실패했습니다.");
+      }
+      setFlowState("success");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "선택 상품을 재검증하지 못했습니다.");
+      setFlowState("success");
+    } finally {
+      setVerifyingProductId(null);
     }
   }
 
@@ -284,8 +357,8 @@ export default function ChatExperience() {
 
       <section className={styles.flowBar} aria-label="구매 조사 진행 단계">
         <span className={flowState !== "idle" ? styles.activeStep : ""}>01 질문</span>
-        <span className={["draft", "searching", "success"].includes(flowState) ? styles.activeStep : ""}>02 AI 조건 정리</span>
-        <span className={["searching", "success"].includes(flowState) ? styles.activeStep : ""}>03 사용자 확인</span>
+        <span className={["draft", "searching", "collecting", "success"].includes(flowState) ? styles.activeStep : ""}>02 AI 조건 정리</span>
+        <span className={["searching", "collecting", "success"].includes(flowState) ? styles.activeStep : ""}>03 사용자 확인</span>
         <span className={flowState === "success" ? styles.activeStep : ""}>04 DB 후보</span>
       </section>
 
@@ -328,8 +401,26 @@ export default function ChatExperience() {
             {flowState === "idle" && <p>질문을 보내면 Codex가 조건만 정리합니다. 아직 상품 검색은 시작하지 않습니다.</p>}
             {flowState === "structuring" && <p>Codex CLI가 Plugin 규칙과 공통 Schema에 맞춰 질문을 분석하고 있습니다.</p>}
             {flowState === "searching" && <p>확인한 조건을 MCP Server가 Product Backend에 전달하고 있습니다.</p>}
+            {flowState === "collecting" && <p>DB 후보가 부족해 Agent가 필요한 판매처 수집 작업을 확인하고 있습니다.</p>}
             {flowState === "error" && <p className={styles.errorMessage}>{errorMessage}</p>}
             {flowState === "success" && result && <p>PostgreSQL에서 “{result.query}” 상품 {result.totalCount}개를 확인했습니다.</p>}
+            {flowState === "success" && errorMessage && <p className={styles.errorMessage}>{errorMessage}</p>}
+            {agentRun && (
+              <ol className={styles.agentTimeline} aria-label="Agent 실행 기록">
+                {agentRun.events.map((event) => (
+                  <li key={`${event.sequence}-${event.type}`}>
+                    <b>{String(event.sequence).padStart(2, "0")} / {event.type}</b>
+                    <span>{event.message}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {agentRun?.verification && (
+              <p className={styles.verificationResult}>
+                구매 전 재검증 / {agentRun.verification.status}
+                {agentRun.verification.changes?.length ? ` / 변경: ${agentRun.verification.changes.join("/")}` : " / 변경 없음 또는 확인 필요"}
+              </p>
+            )}
           </div>
 
           {conditions && (flowState === "draft" || flowState === "error") && (
@@ -384,6 +475,8 @@ export default function ChatExperience() {
                       ...current,
                       [group.groupId]: listingId,
                     }))}
+                    onVerify={(productId) => void handleVerify(productId)}
+                    verifying={verifyingProductId === selectedCandidateListing(group, selectedListings[group.groupId]).product.id}
                   />
                 ))}
               </div>
@@ -418,7 +511,7 @@ export default function ChatExperience() {
             </>
           ) : (
             <div className={styles.shortlistEmpty}>
-              <span>{flowState === "searching" ? "MCP SEARCHING" : "WAITING FOR CONFIRMATION"}</span>
+              <span>{["searching", "collecting"].includes(flowState) ? "AGENT RUNNING" : "WAITING FOR CONFIRMATION"}</span>
               <p>AI가 정리한 조건을 사용자가 확인한 뒤에만 상품 후보가 이곳에 표시됩니다.</p>
             </div>
           )}

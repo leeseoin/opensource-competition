@@ -22,7 +22,7 @@ function validateRequest(body: ConfirmRequestBody): string | null {
   return null;
 }
 
-/** 사용자 확인을 MCP에 저장한 뒤 같은 세션의 후보 검색만 허용한다. */
+/** 사용자 확인을 MCP에 저장한 뒤 같은 세션의 상태 기반 Agent Run을 시작한다. */
 export async function handleConfirmRequest(
   request: Request,
   mcp: ResearchMcpOperations = new StdioResearchMcpClient(),
@@ -43,11 +43,11 @@ export async function handleConfirmRequest(
     const sessionId = body.sessionId as string;
     const conditions = body.conditions as PurchaseCondition;
     await mcp.confirmSession(sessionId, conditions);
-    return Response.json(await mcp.searchCandidates(sessionId));
+    return Response.json(await mcp.startAgentRun(sessionId));
   } catch (error) {
     if (error instanceof ResearchMcpError) {
       return Response.json({ code: "MCP_UNAVAILABLE", message: "구매 조사 MCP 서버가 요청을 처리하지 못했습니다." }, { status: 503 });
     }
-    return Response.json({ code: "AGENT_GATEWAY_ERROR", message: "확정 조건 검색 중 오류가 발생했습니다." }, { status: 500 });
+    return Response.json({ code: "AGENT_GATEWAY_ERROR", message: "구매 조사 실행 시작 중 오류가 발생했습니다." }, { status: 500 });
   }
 }
