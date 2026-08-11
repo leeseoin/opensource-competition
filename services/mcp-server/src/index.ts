@@ -64,7 +64,7 @@ function toToolResult(value: unknown) {
   };
 }
 
-/** main은 stdio MCP 서버를 시작하고 구매 조사 도구 아홉 개를 등록한다. */
+/** main은 stdio MCP 서버를 시작하고 조사 세션 도구 세 개를 등록한다. */
 async function main(): Promise<void> {
   const client = new ProductBackendClient(
     process.env.PRODUCT_BACKEND_BASE_URL ?? "http://127.0.0.1:8080",
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   server.registerTool(
     "search_product_candidates",
     {
-      description: "CONFIRMED 조사 세션의 조건으로 PostgreSQL 상품 후보 최대 5개와 근거를 검색한다.",
+      description: "CONFIRMED 조사 세션의 조건으로 PostgreSQL 상품 후보 최대 3개와 근거를 검색한다.",
       inputSchema: { sessionId: z.string().uuid() },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },

@@ -2256,7 +2256,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
     흐름에 강도 보존 적용
   - `frontend/purchase-web/app/components/ui/app-select.module.css:1` `.trigger, .content`:
     Portal 렌더링용 색상 fallback과 hover/checked 대비
-  - `frontend/purchase-web/app/lib/condition-editing.test.ts:7`
+  - `frontend/purchase-web/app/lib/product-candidates.test.ts:114`
     `목록 값을 교체할 때 기존 조건 강도를 유지한다`: 갈색/필수에서 검정/필수 교체 검증
 - 발생 문제: `갈색/필수`를 `검정`으로 바꾸면 `검정/선호`가 됐고 Select 목록에 hover하면
   글자가 흰 배경에서 보이지 않았다.
@@ -2266,7 +2266,6 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   유효한 자체 색상 fallback을 사용한다.
 - 검증:
   - Web test 32개, lint와 production build 통과
-  - MCP test 4개와 TypeScript build 통과
   - `git diff --check`: 통과
 - 남은 위험: 자동화 browser가 제공되지 않아 실제 hover/focus/open 화면은 사용자 browser에서
   최종 확인해야 한다.
