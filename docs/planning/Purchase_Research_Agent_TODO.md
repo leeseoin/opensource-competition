@@ -238,17 +238,18 @@
 
 ### 5.3 상태 기반 구매 조사 Agent Run
 
-- [ ] `agent_runs`와 순서가 보장되는 `agent_run_events` Flyway schema
-- [ ] SEARCHING/COLLECTING/READY/VERIFYING/COMPLETED/NO_RESULTS/FAILED 상태 전이
-- [ ] 확정된 조사 세션의 PostgreSQL 우선 후보 검색
-- [ ] 후보가 없을 때 판매처별 freshness 정책을 재사용한 조건부 수집 요청
-- [ ] 수집 job 종료 뒤 한 번 재검색하고 결과 없음과 수집 실패를 구분
-- [ ] 같은 조사 세션의 실행 시작과 진행 요청 idempotency
-- [ ] 선택 상품 재검증 요청과 결과 상태 연결
-- [ ] Product Backend Agent Run REST API와 상태 전이 단위/통합 테스트
-- [ ] MCP Agent Run 시작/진행/조회/재검증 도구와 계약 테스트
-- [ ] `/chat` Agent Run 진행 사건, 후보 준비와 재검증 상태 표시
-- [ ] 제한된 polling 상한, 오류 안내와 사용자 재시도 경로
+- [x] `agent_runs`와 순서가 보장되는 `agent_run_events` Flyway schema
+- [x] SEARCHING/COLLECTING/READY/VERIFYING/COMPLETED/NO_RESULTS/FAILED 상태 전이
+- [x] 확정된 조사 세션의 PostgreSQL 우선 후보 검색
+- [x] 후보가 없을 때 판매처별 freshness 정책을 재사용한 조건부 수집 요청
+- [x] 수집 job 종료 뒤 한 번 재검색하고 결과 없음과 수집 실패를 구분
+- [x] 같은 조사 세션의 실행 시작과 진행 요청 idempotency
+- [x] 선택 상품 재검증 요청과 결과 상태 연결
+- [x] Product Backend Agent Run REST API와 상태 전이 단위/통합 테스트
+- [x] MCP Agent Run 시작/진행/조회/재검증 도구와 계약 테스트
+- [x] `/chat` Agent Run 진행 사건, 후보 준비와 재검증 상태 표시
+- [x] 제한된 polling 상한, 오류 안내와 사용자 재시도 경로
+- [ ] 실제 Python Worker 포함 Web `COLLECTING → READY`와 `VERIFYING → COMPLETED` E2E
 
 완료 기준: 사용자가 확인한 조건이 DB 검색부터 필요한 수집과 재검색 및 선택 상품
 재검증까지 하나의 복구 가능한 실행 ID로 이어지고, 같은 요청을 반복해도 중복 수집을
