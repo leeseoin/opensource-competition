@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -35,8 +37,34 @@ test("Codex를 읽기 전용 구조화 모드로 실행한다", async () => {
   assert.equal(result.productType.value, "구두");
   assert.ok(receivedArgs.includes("read-only"));
   assert.ok(receivedArgs.includes("--output-schema"));
+  assert.ok(receivedArgs.some((arg) => arg.endsWith("purchase-condition.codex-output.schema.json")));
   assert.match(receivedPrompt, /Purchase Research/);
   assert.match(receivedPrompt, /검정 구두를 찾아줘/);
+});
+
+/** Codex 전용 Schema의 모든 객체가 구조화 출력의 required 제약을 지키는지 검증한다. */
+test("Codex 출력 Schema는 모든 객체 속성을 required로 선언한다", () => {
+  const schemaPath = path.resolve(
+    process.cwd(),
+    "../../contracts/research/v1/purchase-condition.codex-output.schema.json",
+  );
+  const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as Record<string, unknown>;
+  const pending: unknown[] = [schema];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      continue;
+    }
+    const object = current as Record<string, unknown>;
+    if (object.type === "object" && object.properties && typeof object.properties === "object") {
+      const properties = Object.keys(object.properties as Record<string, unknown>).sort();
+      const required = Array.isArray(object.required) ? [...object.required].sort() : [];
+      assert.deepEqual(required, properties);
+      assert.equal(object.additionalProperties, false);
+    }
+    pending.push(...Object.values(object));
+  }
 });
 
 /** 비어 있는 Codex 실행 경로는 PATH에서 찾는 기본 명령으로 복구하는지 검증한다. */
@@ -65,6 +93,14 @@ test("Codex 일반 실행 실패에서 stderr를 노출하지 않는다", () => 
   assert.doesNotMatch(error.message, /민감할 수 있는/);
 });
 
+/** 지원하지 않는 출력 Schema 오류를 일반 장애가 아닌 계약 오류로 안전하게 분류하는지 검증한다. */
+test("Codex 출력 Schema 오류를 안전한 계약 오류로 변환한다", () => {
+  const error = classifyCodexProcessFailure("invalid_json_schema: private schema details");
+
+  assert.equal(error.code, "AI_OUTPUT_INVALID");
+  assert.doesNotMatch(error.message, /private schema details/);
+});
+
 /** Codex가 productType에 색상을 중복해도 DB 검색어에서는 상품 종류만 남기는지 검증한다. */
 test("상품 종류에서 구조화된 색상 중복을 제거한다", async () => {
   const result = await structurePurchaseQuestion("검정 구두를 찾아줘", async () => JSON.stringify({
@@ -73,7 +109,22 @@ test("상품 종류에서 구조화된 색상 중복을 제거한다", async () 
   }));
 
   assert.equal(result.productType.value, "구두");
-  assert.deepEqual(result.colors, [{ value: "검정", priority: "preferred" }]);
+  assert.deepEqual(result.colors, [{ value: "검정", priority: "required" }]);
+});
+
+/** 단정해 요청한 색상은 필수로, 완화 표현이 있는 색상은 선호로 보정하는지 검증한다. */
+test("사용자 색상 표현의 필수와 선호 강도를 구분한다", async () => {
+  const explicit = await structurePurchaseQuestion(
+    "갈색 구두 찾아줘",
+    async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "preferred" }] }),
+  );
+  const preferred = await structurePurchaseQuestion(
+    "갈색이면 좋겠지만 다른 색도 괜찮은 구두 찾아줘",
+    async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "required" }] }),
+  );
+
+  assert.equal(explicit.colors[0]?.priority, "required");
+  assert.equal(preferred.colors[0]?.priority, "preferred");
 });
 
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */

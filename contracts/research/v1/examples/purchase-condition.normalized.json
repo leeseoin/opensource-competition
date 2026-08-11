@@ -1,0 +1,78 @@
+{
+  "productType": {
+    "value": "구두",
+    "priority": "required",
+    "normalizedValue": "구두",
+    "canonicalId": "category:dress-shoes",
+    "confidence": 1.0,
+    "derivedBy": "dictionary",
+    "requiresConfirmation": false
+  },
+  "usage": [
+    {
+      "value": "출근용",
+      "priority": "preferred",
+      "normalizedValue": "출근",
+      "canonicalId": "usage:commute",
+      "confidence": 1.0,
+      "derivedBy": "dictionary",
+      "requiresConfirmation": false
+    }
+  ],
+  "price": {
+    "min": null,
+    "max": 100000,
+    "currency": "KRW",
+    "priority": "required"
+  },
+  "colors": [
+    {
+      "value": "갈색",
+      "priority": "preferred",
+      "normalizedValue": "brown",
+      "canonicalId": "color:brown",
+      "confidence": 1.0,
+      "derivedBy": "dictionary",
+      "requiresConfirmation": false
+    }
+  ],
+  "sizes": [
+    {
+      "value": "270mm",
+      "priority": "required",
+      "normalizedValue": "270",
+      "canonicalId": "size:270mm",
+      "confidence": 1.0,
+      "derivedBy": "rule",
+      "requiresConfirmation": false
+    }
+  ],
+  "requirements": [],
+  "attributes": [
+    {
+      "key": "color",
+      "value": "갈색",
+      "priority": "preferred",
+      "normalizedValue": "brown",
+      "canonicalId": "color:brown",
+      "confidence": 1.0,
+      "derivedBy": "dictionary",
+      "requiresConfirmation": false
+    },
+    {
+      "key": "size",
+      "value": "270mm",
+      "priority": "required",
+      "normalizedValue": "270",
+      "canonicalId": "size:270mm",
+      "confidence": 1.0,
+      "derivedBy": "rule",
+      "requiresConfirmation": false
+    }
+  ],
+  "merchant": null,
+  "missingConditions": [],
+  "assumptions": [],
+  "confidence": 0.97,
+  "requiresConfirmation": true
+}

@@ -209,11 +209,12 @@
 - [x] stdio server 구성
 - [x] MCP 도구 공통 오류·응답·근거 계약 정의
 - [x] `search_products`: PostgreSQL 조건 검색 **(조사 세션 기반 `search_product_candidates`)**
-- [ ] `get_product`: 상품·판매처·최신 가격·옵션·근거 조회
-- [ ] `compare_products`: 후보 상품 공통 비교 데이터 반환
-- [ ] `verify_offer`: RabbitMQ에 우선순위 재검증 작업 등록
-- [ ] `get_verification_status`: 재검증 진행 상태 조회
-- [ ] `get_evidence`: 가격·재고·상품 사실의 출처 조회
+- [x] `get_product`: 상품/판매처/최신 가격/옵션/근거 조회
+- [x] `compare_products`: 후보 상품 공통 비교 데이터 반환
+- [x] `request_collection`: DB 결과 없음/오래됨 기준 조건부 수집 작업 등록
+- [x] `verify_offer`: RabbitMQ에 우선순위 재검증 작업 등록
+- [x] `get_verification_status`: 재검증 진행 상태 조회
+- [x] `get_evidence`: 가격/재고/상품 사실의 출처 조회
 - [x] LLM이 SQL을 직접 생성하지 않고 정해진 MCP 입력만 사용하도록 제한
 - [x] FAISS/pgvector 없이 PostgreSQL 가격/재고/사이즈/색상 조건 검색으로 PoC 검증
 
@@ -222,6 +223,7 @@
 - [x] browser와 Client Component가 CLI를 실행하지 않고 Next.js server Agent Gateway만 실행하도록 경계 구현
 - [x] 공통 `AI Runtime Adapter` 계약 정의 **(Codex 구현, 다음 runtime이 같은 경계 사용)**
 - [x] AI 구조화 출력용 `PurchaseCondition` JSON Schema 정의
+- [x] 하위 호환 공용 계약과 Codex CLI 엄격 출력 Schema 분리 및 실제 호출 검증
 - [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
 - [ ] Codex CLI adapter와 stream 중계 구현 **(부분 구현: 읽기 전용 JSON 구조화와 timeout 완료, stream/취소/동시성 상한 남음)**
 - [ ] Claude Code CLI adapter와 stream 중계 구현
@@ -245,6 +247,7 @@
 - [ ] Astryx 초기화와 theme provider 적용
 - [x] 기본 생성 화면을 Figma Editorial Commerce Landing V2 기반 화면으로 교체
 - [ ] 사용자 화면과 관리자 화면의 공통 navigation 구성
+- [x] Radix UI 기반 공통 select/dropdown과 focus/open/disabled 상태 구성
 - [ ] 데스크톱/모바일 반응형 동작 확인 **(CSS 구현 완료, 브라우저 수동 확인 필요)**
 
 ### 6.2 사용자 구매 채팅 화면 `/chat`
@@ -295,7 +298,11 @@
 - [x] 도입 전 strict AND와 현재 required/FTS 질문별 A/B 자동 지표/Top 3/사람 검토표 생성
 - [ ] 60개 질문의 필수/선호 조건과 relevance 사람 검토
 - [x] `PurchaseCondition`의 `required`/`preferred` 계약 작성
+- [x] 사용자 원문/정규화 값/canonical ID/confidence/확인 필요 상태의 additive 계약 작성
+- [x] 색상/상품 종류/용도/밀리미터 사이즈와 제한된 오타의 Backend 정규화
+- [x] PUBLISHED Wiki 동의어를 조건 정규화와 운영 후보 검색에 연결
 - [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정 규칙 작성
+- [x] 단정한 명시 색상은 필수, 완화 표현이 있는 색상만 선호로 구조화
 - [x] PostgreSQL 전문 검색/trigram index와 상품명/브랜드 검색 문서 구현
 - [ ] 전문 검색 실패와 빈 검색 문서 fallback 구현
 - [x] embedding provider port와 전송 data/timeout/실패 계약 작성
@@ -348,12 +355,13 @@
 - [x] `/chat` 최대 5개 쇼핑 카드/이미지 swatch/판매처 이동 UI
 - [x] `/compare` 최대 5개 상품군과 이미지 swatch 비교 UI
 - [ ] 판매처 상위 상품 ID/모델 코드 기반 확정 묶음
-- [ ] `size/color` 외 용량/소재/규격/저장 용량 범용 옵션 Contract
+- [x] `size/color` 외 용량/소재/규격/저장 용량을 표현하는 범용 조건 `attributes` Contract
+- [ ] 범용 조건 `attributes`와 Collector 상세 옵션의 실제 필터 연결
 - [ ] 29CM/ABC마트 상세 옵션 Adapter와 옵션별 provenance
 - [ ] 의류/가방/가구/전자제품 저장 fixture와 상품군 오병합 회귀 테스트
 - [ ] 상품군 오병합률/후보 카드 중복률/옵션 출처 누락률 평가
 
-완료 기준: 고정된 상품 snapshot과 평가 질문으로 후보 검색 단계를 재현하고, 후보 3개를
+완료 기준: 고정된 상품 snapshot과 평가 질문으로 후보 검색 단계를 재현하고, 후보 상품군 최대 5개를
 필수 조건, 검색/비교 점수 구성, 근거, 완화 조건과 주의사항과 함께 반환한다. Wiki는
 검토된 출처 기반 지식만 사용하며 실패해도 전문 검색 기반 후보 조회가 동작해야 한다.
 

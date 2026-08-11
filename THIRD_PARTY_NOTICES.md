@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-08-09
+최종 갱신일: 2026-08-11
 
 ## 이 문서를 공개하는 이유
 
@@ -89,6 +89,7 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 | Next.js | 16.2.12 | 사용자 화면과 server 기능 | [vercel/next.js](https://github.com/vercel/next.js) | MIT |
 | React | 19.2.4 | UI component | [facebook/react](https://github.com/facebook/react) | MIT |
 | React DOM | 19.2.4 | browser rendering | [facebook/react](https://github.com/facebook/react) | MIT |
+| Radix UI Select | 2.3.7 | 접근 가능한 공통 select/dropdown UI | [radix-ui/primitives](https://github.com/radix-ui/primitives) | MIT |
 | Tailwind CSS | 4.3.3 | UI style | [tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss) | MIT |
 | TypeScript | 5.9.3 | 정적 type 검사 | [microsoft/TypeScript](https://github.com/microsoft/TypeScript) | Apache-2.0 |
 | Model Context Protocol TypeScript SDK | 1.30.0 | Purchase Research stdio MCP Server와 Next.js Agent Gateway client | [modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
@@ -100,8 +101,8 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 | React DOM type definitions | 19.2.3 | TypeScript 개발 type | [DefinitelyTyped](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 
 정확한 Node package 해석 결과는 `frontend/purchase-web/package.json`과 `frontend/purchase-web/package-lock.json`에서 확인한다.
-이번 변경은 새 Node package를 추가하지 않았으며 Node.js 내장 `node:test`를 Next.js server route와
-상품군 선택 단위 테스트에 사용한다. `next.config.ts`에는 DB 상품 이미지를 화면에 표시하기 위해 ABC마트의
+Node.js 내장 `node:test`를 Next.js server route와 상품군 선택 단위 테스트에 사용한다.
+`next.config.ts`에는 DB 상품 이미지를 화면에 표시하기 위해 ABC마트의
 `image.a-rt.com`과 29CM의 `img.29cm.co.kr` HTTPS host만 허용했다.
 
 ### 공개 상품 이미지

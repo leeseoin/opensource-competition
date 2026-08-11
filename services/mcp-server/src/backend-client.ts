@@ -1,10 +1,23 @@
 /** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
 export type ConditionPriority = "required" | "preferred";
 
+/** ConditionDerivation은 정규화 값의 생성 근거를 구분한다. */
+export type ConditionDerivation = "original" | "rule" | "dictionary" | "wiki" | "fuzzy" | "llm";
+
 /** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
 export interface PrioritizedText {
   value: string;
   priority: ConditionPriority;
+  normalizedValue?: string | null;
+  canonicalId?: string | null;
+  confidence?: number | null;
+  derivedBy?: ConditionDerivation | null;
+  requiresConfirmation?: boolean;
+}
+
+/** AttributeCondition은 상품군별 속성을 공통 key/value 계약으로 전달한다. */
+export interface AttributeCondition extends PrioritizedText {
+  key: string;
 }
 
 /** PurchaseCondition은 MCP가 Product Backend에 전달할 사용자 확인 대상 구매 조건이다. */
@@ -15,6 +28,7 @@ export interface PurchaseCondition {
   colors: PrioritizedText[];
   sizes: PrioritizedText[];
   requirements: PrioritizedText[];
+  attributes?: AttributeCondition[];
   merchant: string | null;
   missingConditions: string[];
   assumptions: string[];
@@ -89,6 +103,42 @@ export class ProductBackendClient {
     });
   }
 
+  /** 판매처 상품 하나의 최신 사실, 최신성, 근거와 검증을 조회한다. */
+  getProduct(productId: number): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/products/${productId}`, { method: "GET" });
+  }
+
+  /** 판매처 상품 하나에 연결된 공개 근거만 조회한다. */
+  getEvidence(productId: number): Promise<unknown[]> {
+    return this.call(`/internal/v1/products/${productId}/evidence`, { method: "GET" });
+  }
+
+  /** 선택한 판매처 상품 2개 이상 5개 이하를 주요 사실별로 비교한다. */
+  compareProducts(productIds: number[]): Promise<Record<string, unknown>> {
+    return this.call("/internal/v1/product-comparisons", {
+      method: "POST",
+      body: JSON.stringify({ productIds }),
+    });
+  }
+
+  /** DB 결과가 없거나 만료됐을 때 판매처 검색 수집을 조건부 요청한다. */
+  requestCollection(merchant: string, query: string, force = false): Promise<Record<string, unknown>> {
+    return this.call("/internal/v1/collection-requests", {
+      method: "POST",
+      body: JSON.stringify({ merchant, query, force }),
+    });
+  }
+
+  /** 선택 상품의 가격과 재고를 높은 우선순위로 다시 수집하도록 요청한다. */
+  verifyOffer(productId: number): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/offer-verifications/products/${productId}`, { method: "POST" });
+  }
+
+  /** 재검증 ID로 Queue 진행과 최신 snapshot 비교 결과를 조회한다. */
+  getVerificationStatus(verificationId: string): Promise<Record<string, unknown>> {
+    return this.call(`/internal/v1/offer-verifications/${encodeURIComponent(verificationId)}`, { method: "GET" });
+  }
+
   /**
    * Product Backend JSON API를 호출하고 오류를 MCP가 처리할 수 있는 예외로 변환한다.
    *
@@ -97,7 +147,7 @@ export class ProductBackendClient {
    * @return 조사 세션 응답
    * @throws BackendRequestError timeout, 연결 실패 또는 비정상 HTTP 응답
    */
-  private async call(path: string, init: RequestInit): Promise<ResearchSessionResponse> {
+  private async call<T>(path: string, init: RequestInit): Promise<T> {
     let response: Response;
     try {
       response = await this.request(`${this.baseUrl}${path}`, {
@@ -112,6 +162,6 @@ export class ProductBackendClient {
     if (!response.ok) {
       throw new BackendRequestError(response.status, body.slice(0, 1000));
     }
-    return JSON.parse(body) as ResearchSessionResponse;
+    return JSON.parse(body) as T;
   }
 }

@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-06
+최종 갱신일: 2026-08-11
 
 ## 이 문서를 공개하는 이유
 
@@ -32,8 +32,12 @@
 ## 실행 시 사용하는 AI의 현재 상태
 
 - Codex Plugin은 `purchase-research-agent` workflow와 로컬 stdio MCP 설정을 포함한다.
-- Purchase Research MCP Server는 조사 세션 생성/조건 확인/확정 조건 상품 검색 도구를
-  Product Backend REST API에 연결한다. PostgreSQL과 판매처에는 직접 접근하지 않는다.
+- Purchase Research MCP Server는 조사 세션 생성/조건 확인/확정 조건 상품 검색과
+  상품 상세/공개 근거/후보 비교 도구를 Product Backend REST API에 연결한다.
+  PostgreSQL과 판매처에는 직접 접근하지 않는다.
+- MCP의 `request_collection`과 `verify_offer`는 Product Backend에 작업을 요청하고
+  `get_verification_status`는 저장된 job 및 snapshot 비교 결과만 조회한다. MCP가
+  RabbitMQ와 Python 크롤러를 직접 호출하지 않는다.
 - Next.js Agent Gateway는 server에서 Codex CLI를 읽기 전용/비대화형으로 실행해
   `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
 - Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
@@ -85,3 +89,8 @@
 | 2026-08-06 | Codex를 사용해 Agent Gateway의 빈 실행 설정 fallback과 Codex OAuth 인증 만료 오류 비노출 처리를 구현 | 실제 폐기된 token 401 응답을 재현하고 Next.js unit test/lint/production build로 안전한 사용자 메시지와 stderr 비노출을 검증 |
 | 2026-08-06 | Codex를 사용해 필수/선호 구매 조건 계약과 PostgreSQL 전문 검색/pg_trgm 후보 검색을 구현 | 공통 JSON Schema, Java/MCP/Web 계약 대조와 PostgreSQL Testcontainers 통합 테스트 및 Next.js/MCP build/test로 검증 / runtime AI model과 embedding은 추가하지 않음 |
 | 2026-08-06 | Codex를 사용해 pgvector 0.8.2와 선택적 로컬 BGE-M3/Ollama embedding adapter 및 전문 검색 fallback을 구현 | provider port, 1024차원/schema validation/content hash와 pgvector cosine 검색을 unit/integration test로 검증 / model weight 미포함 및 품질 평가 전 기본 비활성화 |
+| 2026-08-11 | Codex를 사용해 상품 상세/공개 근거/후보 비교 Backend API와 읽기 전용 MCP 도구를 구현 | MCP가 PostgreSQL이나 판매처에 직접 접근하지 않는 REST 경계, Spring Boot 통합 테스트와 MCP stdio 도구 계약 테스트로 검증 |
+| 2026-08-11 | Codex를 사용해 데이터 최신성 기반 수집 요청과 선택 상품 가격/재고 재검증 Backend API 및 MCP 도구를 구현 | 기존 검색 Queue 계약만 사용하고 MCP의 RabbitMQ 직접 접근을 금지했으며 Spring Boot unit/integration test와 MCP stdio 계약 테스트로 검증 |
+| 2026-08-11 | Codex를 사용해 범용 조건 정규화와 MCP 도구 9개의 설계/기능 목록/TODO/코드트래커 상태를 실제 코드에 맞게 동기화 | 자동 test와 실제 Queue 재검증 결과를 대조했으며 DRAFT Wiki의 PUBLISHED 전환과 최종 diff는 사람의 후속 검토 대상으로 유지 |
+| 2026-08-11 | Codex CLI 구조화 출력용 엄격 Schema를 하위 호환 공용 PurchaseCondition 계약과 분리하고 안전한 실패 로그를 추가 | Codex CLI 0.146.1 실제 호출과 Web API에서 조건 생성 및 MCP DRAFT 저장 성공을 검증하고 원본 stderr 비노출을 유지 |
+| 2026-08-11 | Codex 조건 구조화 뒤 사용자 색상 표현의 필수/선호 강도를 결정적으로 보정 | `갈색 찾아줘`는 필수로 처리해 검정 후보를 제외하고 `갈색이면 좋겠어`만 선호로 유지하는 단위 테스트와 실제 Web 검색 0건을 검증 |

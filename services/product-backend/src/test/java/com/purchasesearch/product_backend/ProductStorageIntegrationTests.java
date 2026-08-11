@@ -279,6 +279,58 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 상품 상세/근거와 두 후보 비교 API가 최신 snapshot provenance를 같은 상품 ID로 반환하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void returnsProductDetailEvidenceAndComparison() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		CollectorResult second = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-detail-002")
+						.replace("1010110882", "detail-test-002")
+						.replace("\"name\": \"페니 로퍼\"", "\"name\": \"클래식 더비\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(second);
+		long firstId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "1010110882")
+				.orElseThrow().getId();
+		long secondId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "detail-test-002")
+				.orElseThrow().getId();
+
+		mockMvc.perform(get("/internal/v1/products/{productId}", firstId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.product.externalId").value("1010110882"))
+				.andExpect(jsonPath("$.freshness.status").value("STALE"))
+				.andExpect(jsonPath("$.evidence[0].sourceUrl").exists())
+				.andExpect(jsonPath("$.verifications[0].status").value("MATCHED"));
+
+		mockMvc.perform(get("/internal/v1/products/{productId}/evidence", firstId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].collectorVersion").value("abcmart-search-v2"));
+
+		mockMvc.perform(post("/internal/v1/product-comparisons")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"productIds\":[%d,%d]}".formatted(firstId, secondId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products.length()").value(2))
+				.andExpect(jsonPath("$.fields[?(@.key == 'price')]").exists())
+				.andExpect(jsonPath("$.fields[?(@.key == 'freshness')]").exists());
+	}
+
+	/** 비교 API가 같은 상품 ID를 중복 비교하지 않도록 400으로 거절하는지 검증한다. */
+	@Test
+	void rejectsDuplicateProductComparisonIds() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		long productId = merchantProductRepository.findAll().getFirst().getId();
+
+		mockMvc.perform(post("/internal/v1/product-comparisons")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"productIds\":[%d,%d]}".formatted(productId, productId)))
+				.andExpect(status().isBadRequest());
+	}
+
+	/**
 	 * 후보 검색 결과가 없을 때 성공 응답과 빈 후보 목록을 반환하는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청에 실패한 경우
@@ -331,6 +383,24 @@ class ProductStorageIntegrationTests {
 								"검토 Wiki: 운동화 → 워킹화 (narrower)")));
 	}
 
+	/** PUBLISHED synonym이 사용자 상품 표현을 표준 상품 종류로 바꿔 검색에 사용하는지 검증한다. */
+	@Test
+	void resolvesProductTypeWithPublishedWikiSynonym() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		wikiConceptIndexService.indexReviewedPage(publishedDressShoeSynonymPage());
+		String synonymCondition = purchaseCondition("[]").replace(
+				"\"value\": \"구두\"",
+				"\"value\": \"정장신발\"");
+		String sessionId = createConfirmedResearchSession("정장신발을 찾아줘", synonymCondition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.conditions.productType.normalizedValue").value("구두"))
+				.andExpect(jsonPath("$.conditions.productType.derivedBy").value("wiki"))
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].name").value("페니 로퍼"));
+	}
+
 	/**
 	 * PUBLISHED Wiki가 없으면 의미를 추측하지 않고 기존 FTS/vector 검색으로 fallback해
 	 * exact 관계가 없는 운동화 질문을 빈 결과로 유지하는지 검증한다.
@@ -350,6 +420,24 @@ class ProductStorageIntegrationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.result.totalCount").value(0))
 				.andExpect(jsonPath("$.result.candidates").isEmpty());
+	}
+
+	/**
+	 * 구두 검색으로 수집됐더라도 실제 상품명과 카테고리가 워킹화면 필수 상품 종류 후보에서
+	 * 제외해 수집 문맥이 상품 사실을 덮어쓰지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void excludesUnrelatedCategoryCollectedUnderRequiredProductTypeQuery() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		collectorResultStoreService.store(loadWalkingShoeCollectedAsDressShoes());
+		String sessionId = createConfirmedResearchSession("10만 원 이하 270 구두", purchaseCondition("[]"));
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.totalCount").value(1))
+				.andExpect(jsonPath("$.result.candidates[0].name").value("페니 로퍼"));
 	}
 
 	/** 사람 검토가 없는 DRAFT Wiki는 운영 index 적재를 거절하는지 검증한다. */
@@ -929,6 +1017,22 @@ class ProductStorageIntegrationTests {
 		return objectMapper.readValue(fixture, CollectorResult.class);
 	}
 
+	/**
+	 * 검색어는 구두지만 실제 상품 분류는 워킹화인 false-positive fixture를 만든다.
+	 *
+	 * @return 필수 상품 종류 fail-closed 회귀 테스트용 결과
+	 * @throws Exception fixture JSON 변환에 실패한 경우
+	 */
+	private CollectorResult loadWalkingShoeCollectedAsDressShoes() throws Exception {
+		String fixture = Files.readString(abcmartFixturePath())
+				.replace("backend-test-001", "backend-test-unrelated-001")
+				.replace("1010110882", "unrelated-test-001")
+				.replace("\"name\": \"페니 로퍼\"", "\"name\": \"테스트 워킹 밸런스\"")
+				.replace("[\"신발\", \"구두\", \"로퍼\"]", "[\"신발\", \"스포츠\", \"워킹화\"]")
+				.replace("\"color\": null", "\"color\": \"BLACK\"");
+		return objectMapper.readValue(fixture, CollectorResult.class);
+	}
+
 	/** 검토자와 출처가 연결된 테스트용 PUBLISHED 운동화 분류 page를 만든다. */
 	private WikiPageDocument publishedRunningShoeWikiPage() {
 		return new WikiPageDocument(
@@ -958,6 +1062,27 @@ class ProductStorageIntegrationTests {
 								0.85,
 								List.of("test-source"),
 								List.of("test.category=워킹화"))));
+	}
+
+	/** 테스트에서만 사용하는 사람 검토 완료 구두 synonym page를 만든다. */
+	private WikiPageDocument publishedDressShoeSynonymPage() {
+		return new WikiPageDocument(
+				"dress-shoes-synonym",
+				1,
+				"PUBLISHED",
+				"구두 동의어",
+				"integration-test-reviewer",
+				OffsetDateTime.parse("2026-08-10T23:00:00+09:00"),
+				null,
+				List.of(new WikiClaimDocument(
+						"dress-shoes-formal",
+						"구두",
+						"synonym",
+						"정장신발",
+						true,
+						0.95,
+						List.of("test-source"),
+						List.of("test.category=구두"))));
 	}
 
 	/**
