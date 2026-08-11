@@ -13,6 +13,7 @@ import {
   selectedCandidateListing,
   type CandidateGroup,
 } from "../lib/product-candidates";
+import { parsePrioritizedList } from "../lib/condition-editing";
 import {
   confirmResearchDraft,
   createResearchDraft,
@@ -33,19 +34,6 @@ const priorityOptions: AppSelectOption[] = [
 ];
 
 type FlowState = "idle" | "structuring" | "draft" | "searching" | "success" | "error";
-
-/** 쉼표 입력을 기존 강도 또는 기본 강도를 보존한 조건 배열로 변환한다. */
-function parseList(
-  value: string,
-  current: PrioritizedText[],
-  defaultPriority: ConditionPriority,
-): PrioritizedText[] {
-  const priorityByValue = new Map(current.map((item) => [item.value, item.priority]));
-  return value.split(",").map((item) => item.trim()).filter(Boolean).map((item) => ({
-    value: item,
-    priority: priorityByValue.get(item) ?? defaultPriority,
-  }));
-}
 
 /** 조건 배열을 사람이 수정하기 쉬운 한 줄 문자열로 변환한다. */
 function formatList(value: PrioritizedText[]): string {
@@ -209,8 +197,11 @@ export default function ChatExperience() {
     value: string,
   ): void {
     if (conditions) {
-      const defaultPriority = field === "sizes" ? "required" : "preferred";
-      setConditions({ ...conditions, [field]: parseList(value, conditions[field], defaultPriority) });
+      const fallbackPriority = field === "sizes" ? "required" : "preferred";
+      setConditions({
+        ...conditions,
+        [field]: parsePrioritizedList(value, conditions[field], fallbackPriority),
+      });
     }
   }
 
