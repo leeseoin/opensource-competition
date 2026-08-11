@@ -15,6 +15,7 @@ from app.messaging.rabbitmq import (
     RabbitCollectionWorker,
     decide_message,
 )
+from app.services.rate_limiter import RateLimitTimeoutError
 
 
 def _task_body(
@@ -86,6 +87,19 @@ class FakeCrawler:
         if self.delay:
             await asyncio.sleep(self.delay)
         return self.products, self.warnings
+
+
+class FakeRateLimiter:
+    """항상 허용하거나 항상 timeout을 던지도록 고정된 rate limiter 대역이다."""
+
+    def __init__(self, *, timeout: bool = False) -> None:
+        self.calls: list[str] = []
+        self._timeout = timeout
+
+    async def acquire(self, merchant: str) -> None:
+        self.calls.append(merchant)
+        if self._timeout:
+            raise RateLimitTimeoutError(f"{merchant} 전역 rate limit 대기 시간을 초과했습니다")
 
 
 class FixedProcessor:
@@ -268,6 +282,32 @@ class CollectionTaskProcessorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["error"]["code"], "COLLECTOR_TIMEOUT")
         self.assertTrue(result["error"]["retryable"])
+
+    async def test_acquires_global_rate_limit_before_crawling(self) -> None:
+        """rate_limiter가 있으면 판매처 검색 전에 전역 토큰을 확보하는지 검증한다."""
+
+        crawler = FakeCrawler(products=[_raw_product("p1")])
+        rate_limiter = FakeRateLimiter()
+        processor = CollectionTaskProcessor(crawler, timeout_seconds=1, rate_limiter=rate_limiter)
+
+        result = await processor.process(decode_collection_task(_task_body()))
+
+        self.assertEqual(rate_limiter.calls, ["abcmart"])
+        self.assertEqual(result["status"], "success")
+
+    async def test_rate_limit_timeout_returns_retryable_failure(self) -> None:
+        """전역 rate limit 대기가 초과되면 재시도 가능한 실패로 안전하게 끝나는지 검증한다."""
+
+        crawler = FakeCrawler(products=[_raw_product("p1")])
+        rate_limiter = FakeRateLimiter(timeout=True)
+        processor = CollectionTaskProcessor(crawler, timeout_seconds=1, rate_limiter=rate_limiter)
+
+        result = await processor.process(decode_collection_task(_task_body()))
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"]["code"], "RATE_LIMIT_TIMEOUT")
+        self.assertTrue(result["error"]["retryable"])
+        self.assertEqual(crawler.calls, [], "rate limit이 막았으면 판매처 요청을 시작하면 안 된다")
 
 
 class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):

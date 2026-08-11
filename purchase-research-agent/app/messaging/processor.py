@@ -18,6 +18,7 @@ from app.messaging.contracts import (
 from app.services.collector_result_adapter import build_collector_result
 from app.services.collector_result_adapter import parse_won
 from app.services.crawler_service import CrawlerService
+from app.services.rate_limiter import MerchantRateLimiter, RateLimitTimeoutError
 
 
 class CrawlerSearch(Protocol):
@@ -38,12 +39,20 @@ class CrawlerSearch(Protocol):
 class CollectionTaskProcessor:
     """CollectionTask를 제한 시간 안에 실행하고 결과 봉투로 변환한다."""
 
-    def __init__(self, crawler: CrawlerSearch | None = None, timeout_seconds: float = 30.0):
-        """검색 service와 양수 작업 timeout을 설정한다.
+    def __init__(
+        self,
+        crawler: CrawlerSearch | None = None,
+        timeout_seconds: float = 30.0,
+        rate_limiter: MerchantRateLimiter | None = None,
+    ):
+        """검색 service, 양수 작업 timeout과 선택적 전역 rate limiter를 설정한다.
 
         Args:
             crawler: fixture에서 교체할 수 있는 검색 service다.
             timeout_seconds: 작업 하나의 최대 실행 초다.
+            rate_limiter: 여러 Worker instance가 같은 판매처를 동시에 처리할 때
+                process 경계를 넘어 요청 속도를 나눠 쓸 MerchantRateLimiter다.
+                없으면 이 Worker 안의 prefetch=1만으로 속도를 제어한다(기존 동작과 동일).
 
         Raises:
             ValueError: timeout이 0 이하인 경우다.
@@ -53,6 +62,7 @@ class CollectionTaskProcessor:
             raise ValueError("timeout_seconds는 0보다 커야 합니다")
         self._crawler = crawler or CrawlerService()
         self._timeout_seconds = timeout_seconds
+        self._rate_limiter = rate_limiter
 
     async def process(self, task: CollectionTask) -> dict[str, Any]:
         """검색 작업을 실행하고 success/partial/failed Queue 결과를 반환한다.
@@ -69,6 +79,18 @@ class CollectionTaskProcessor:
         payload = task.payload
         try:
             _validate_supported_search(payload)
+            if self._rate_limiter is not None:
+                try:
+                    await self._rate_limiter.acquire(task.merchant)
+                except RateLimitTimeoutError:
+                    return self._failed(
+                        task,
+                        started_at,
+                        started_clock,
+                        "RATE_LIMIT_TIMEOUT",
+                        f"{task.merchant} 전역 rate limit 대기 시간을 초과했습니다",
+                        True,
+                    )
             products, warnings = await asyncio.wait_for(
                 self._crawler.search_items(
                     payload["query"],

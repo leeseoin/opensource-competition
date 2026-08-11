@@ -14,6 +14,7 @@ export POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
 export REDIS_PORT REDIS_PASSWORD
 export RABBITMQ_AMQP_PORT RABBITMQ_MANAGEMENT_PORT RABBITMQ_USER RABBITMQ_PASSWORD RABBITMQ_VHOST
 export PURCHASE_RESEARCH_RABBITMQ_URL
+export PURCHASE_RESEARCH_REDIS_URL
 export COLLECTOR_HTTP_ADDRESS COLLECTOR_READ_TIMEOUT COLLECTOR_WRITE_TIMEOUT
 export COLLECTOR_IDLE_TIMEOUT COLLECTOR_SHUTDOWN_TIMEOUT COLLECTOR_WORKER_TIMEOUT COLLECTOR_CHROME_BIN
 export PRODUCT_BACKEND_BASE_URL PRODUCT_BACKEND_REQUEST_TIMEOUT_MS
@@ -33,6 +34,10 @@ LIMIT ?= 3
 WEB_PORT ?= 3000
 PYTHON_CRAWLER_PORT ?= 8012
 RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBITMQ_URL),amqp://purchase_research:purchase_research@127.0.0.1:35672/purchase_research)
+# 판매처 전역 rate limit은 선택 기능이라 RABBITMQ_URL과 달리 기본값을 채우지 않는다.
+# 비워두면 Worker가 Redis 없이 기존처럼 prefetch=1만으로 속도를 제어한다. 켜려면
+# 루트 .env에 PURCHASE_RESEARCH_REDIS_URL=redis://:purchase_research@127.0.0.1:36379/0 을 추가한다.
+REDIS_URL ?= $(PURCHASE_RESEARCH_REDIS_URL)
 
 .PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
 	collector-run collector-worker collector-worker-once collector-test \
@@ -131,13 +136,13 @@ python-crawler-run: python-crawler-env python-crawler-sync ## 정우님 Python �
 
 python-crawler-swagger: python-crawler-env python-crawler-sync ## 인프라, Backend와 Python API/Worker를 Swagger 단계 테스트용으로 실행한다.
 	docker compose up -d --wait postgres redis rabbitmq
-	PYTHON_CRAWLER_PORT="$(PYTHON_CRAWLER_PORT)" PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" ./scripts/run-python-crawler-swagger.sh
+	PYTHON_CRAWLER_PORT="$(PYTHON_CRAWLER_PORT)" PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" ./scripts/run-python-crawler-swagger.sh
 
 python-crawler-worker: python-crawler-sync ## Python RabbitMQ 검색 작업 Worker를 계속 실행한다.
-	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" uv run --frozen python -m scripts.collection_worker
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" uv run --frozen python -m scripts.collection_worker
 
 python-crawler-worker-once: python-crawler-sync ## Python RabbitMQ 검색 작업 하나를 처리하고 종료한다.
-	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" uv run --frozen python -m scripts.collection_worker --once
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" uv run --frozen python -m scripts.collection_worker --once
 
 python-crawler-test: python-crawler-sync ## 정우님 Python 결과의 CollectorResult 변환 단위 테스트를 실행한다.
 	cd $(PYTHON_CRAWLER_DIR) && PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache uv run --frozen python -m unittest discover -s tests -v
