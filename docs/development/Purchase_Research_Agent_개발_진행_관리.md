@@ -2246,9 +2246,9 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-11 WEB-002 조건 강도와 Select 대비 수정
 
-- 진행상황: **부분 구현**. commit `b392bd2`에서 조건값 교체 시 기존 필수/선호 강도를
-  보존하고 Radix Portal 목록의 hover 글자 대비를 보정했다. WEB-002 전체의 stream과
-  재검증 UI 및 실제 browser E2E는 남아 있다.
+- 진행상황: **부분 구현**. commit `b392bd2`, `3524655`에서 조건값을 비우고 교체해도
+  기존 필수/선호 강도를 보존하고 Radix Portal 목록의 hover 글자 대비를 보정했다.
+  WEB-002 전체의 stream과 재검증 UI 및 실제 browser E2E는 남아 있다.
 - 구현 위치:
   - `frontend/purchase-web/app/lib/condition-editing.ts:4` `parsePrioritizedList`: 새 값이
     기존 조건 묶음의 강도를 상속
@@ -2265,7 +2265,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 해결: 새 문자열은 기존 조건 묶음의 첫 강도를 상속한다. Select 컴포넌트는 Portal에서도
   유효한 자체 색상 fallback을 사용한다.
 - 검증:
-  - Web test 31개, lint와 production build 통과
+  - Web test 32개, lint와 production build 통과
   - MCP test 4개와 TypeScript build 통과
   - `git diff --check`: 통과
 - 남은 위험: 자동화 browser가 제공되지 않아 실제 hover/focus/open 화면은 사용자 browser에서
