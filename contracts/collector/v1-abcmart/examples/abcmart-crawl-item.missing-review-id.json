@@ -1,0 +1,23 @@
+{
+  "source_product_id": "10098765",
+  "title": "이지 워커 남성 캐주얼 구두",
+  "brand": "ABC MART",
+  "price": "89,000원",
+  "price_original": "109,000원",
+  "discount_percent": 18,
+  "image_url": "https://image.abc-mart.co.kr/goods/10098765/main.jpg",
+  "color": "블랙",
+  "style_code": "AB1234",
+  "link": "https://abcmart.a-rt.com/product?prdtNo=10098765",
+  "site": "abcmart",
+  "review_count": 12,
+  "reviews": [
+    {
+      "review_source_id": null,
+      "content": "prdtRvwSeq가 없는 실제 사례 — DB product_review.review_source_id NOT NULL 위반",
+      "score": 4.5,
+      "date": "2026-07-20",
+      "size": "270"
+    }
+  ]
+}

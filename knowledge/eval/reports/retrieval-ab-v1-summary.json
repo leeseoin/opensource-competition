@@ -1,0 +1,36 @@
+{
+  "datasetVersion" : "v1",
+  "datasetReviewStatus" : "DRAFT",
+  "humanReviewRequired" : true,
+  "snapshot" : "contracts/collector/unified/examples/unified_구두_top20_20260803_002024.json",
+  "caseCount" : 60,
+  "hardConstraintFields" : [ "merchant", "priceMin", "priceMax", "size", "color", "stock" ],
+  "before" : {
+    "recallAt20" : 0.6466666666666666,
+    "ndcgAt3" : 0.6290176090411087,
+    "falseZeroRate" : 0.28,
+    "noResultAccuracy" : 1.0,
+    "usefulCandidateRateAt3" : 0.72,
+    "hardConstraintViolationRateAt3" : 0.0
+  },
+  "after" : {
+    "recallAt20" : 0.7533333333333333,
+    "ndcgAt3" : 0.6870938966946496,
+    "falseZeroRate" : 0.14,
+    "noResultAccuracy" : 1.0,
+    "usefulCandidateRateAt3" : 0.82,
+    "hardConstraintViolationRateAt3" : 0.0
+  },
+  "delta" : {
+    "recallAt20" : 0.10666666666666669,
+    "ndcgAt3" : 0.05807628765354089,
+    "falseZeroRate" : -0.14,
+    "noResultAccuracy" : 0.0,
+    "usefulCandidateRateAt3" : 0.09999999999999998,
+    "hardConstraintViolationRateAt3" : 0.0
+  },
+  "changedTopThreeQueries" : 19,
+  "recoveredZeroQueries" : 7,
+  "becameZeroQueries" : 0,
+  "initialHumanReviewCaseIds" : [ "exact-001", "exact-007", "exact-012", "exact-013", "reverification-002", "semantic-001", "semantic-007", "relaxation-002", "relaxation-008", "noresult-001" ]
+}

@@ -1,0 +1,211 @@
+.DEFAULT_GOAL := help
+
+-include .env
+
+# .env가 없을 때도 빈 환경변수가 Spring의 disabled 기본값을 덮어쓰지 않게 한다.
+EMBEDDING_PROVIDER ?= disabled
+EMBEDDING_BASE_URL ?= http://127.0.0.1:11434
+EMBEDDING_MODEL ?= bge-m3:567m
+EMBEDDING_MODEL_VERSION ?= ollama-bge-m3-567m-q4_0
+EMBEDDING_TIMEOUT_MS ?= 3000
+
+# .env에서 읽은 인프라 설정을 Gradle, Go와 Python 하위 프로세스에도 전달한다.
+export POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
+export REDIS_PORT REDIS_PASSWORD
+export RABBITMQ_AMQP_PORT RABBITMQ_MANAGEMENT_PORT RABBITMQ_USER RABBITMQ_PASSWORD RABBITMQ_VHOST
+export PURCHASE_RESEARCH_RABBITMQ_URL
+export PURCHASE_RESEARCH_REDIS_URL
+export COLLECTOR_HTTP_ADDRESS COLLECTOR_READ_TIMEOUT COLLECTOR_WRITE_TIMEOUT
+export COLLECTOR_IDLE_TIMEOUT COLLECTOR_SHUTDOWN_TIMEOUT COLLECTOR_WORKER_TIMEOUT COLLECTOR_CHROME_BIN
+export PRODUCT_BACKEND_BASE_URL PRODUCT_BACKEND_REQUEST_TIMEOUT_MS
+export EMBEDDING_PROVIDER EMBEDDING_BASE_URL EMBEDDING_MODEL EMBEDDING_MODEL_VERSION EMBEDDING_TIMEOUT_MS
+export CODEX_CLI_PATH CODEX_GATEWAY_TIMEOUT_MS PURCHASE_RESEARCH_REPO_ROOT PURCHASE_RESEARCH_MCP_ENTRY
+
+COLLECTOR_DIR := services/collector
+PRODUCT_BACKEND_DIR := services/product-backend
+MCP_SERVER_DIR := services/mcp-server
+PYTHON_COLLECTOR_DIR := services/python-collector
+PYTHON_CRAWLER_DIR := purchase-research-agent
+WEB_DIR := frontend/purchase-web
+
+MERCHANT ?= abcmart
+QUERY ?= 구두
+LIMIT ?= 3
+WEB_PORT ?= 3000
+PYTHON_CRAWLER_PORT ?= 8012
+RABBITMQ_URL ?= $(if $(PURCHASE_RESEARCH_RABBITMQ_URL),$(PURCHASE_RESEARCH_RABBITMQ_URL),amqp://purchase_research:purchase_research@127.0.0.1:35672/purchase_research)
+# 판매처 전역 rate limit은 선택 기능이라 RABBITMQ_URL과 달리 기본값을 채우지 않는다.
+# 비워두면 Worker가 Redis 없이 기존처럼 prefetch=1만으로 속도를 제어한다. 켜려면
+# 루트 .env에 PURCHASE_RESEARCH_REDIS_URL=redis://:purchase_research@127.0.0.1:36379/0 을 추가한다.
+REDIS_URL ?= $(PURCHASE_RESEARCH_REDIS_URL)
+
+.PHONY: help env infra-up infra-down infra-status infra-logs db-shell \
+	collector-run collector-worker collector-worker-once collector-test \
+	python-collector-sync python-collector-test \
+	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-swagger python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test python-crawler-safety-check \
+	product-backend-run product-backend-test \
+	mcp-server-install mcp-server-build mcp-server-test \
+	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
+
+help: ## 사용할 수 있는 명령을 보여준다.
+	@printf '%s\n' \
+		'Purchase Research Agent 개발 명령' \
+		'' \
+		'  make env             루트 .env가 없으면 .env.example을 복사' \
+		'  make infra-up        PostgreSQL, Redis, RabbitMQ 실행' \
+		'  make infra-down      컨테이너 중지(데이터 볼륨 보존)' \
+		'  make infra-status    로컬 인프라 상태 확인' \
+		'  make infra-logs      로컬 인프라 로그 확인' \
+		'  make db-shell        PostgreSQL 터미널 접속' \
+		'  make collector-run   Go Collector 서버 실행' \
+		'  make collector-worker  RabbitMQ 검색 작업 처리 Worker 실행' \
+		'  make python-collector-test Python 비교 Collector 테스트 실행' \
+		'  make python-crawler-sync 정우님 Python 크롤러 uv.lock 환경 준비' \
+		'  make python-crawler-setup 정우님 Python 크롤러 환경과 Chromium 준비' \
+		'  make python-crawler-run 정우님 Python 크롤러와 DB 적재 API 실행' \
+		'  make python-crawler-swagger Python 단계 테스트 전체 환경 실행' \
+		'  make python-crawler-worker Python RabbitMQ 검색 Worker 실행' \
+		'  make python-crawler-test 정우님 Python 변환 Adapter 테스트 실행' \
+		'  make python-crawler-rabbitmq-test 격리 RabbitMQ vhost에서 Python Worker 검증' \
+		'  make python-crawler-safety-check Python TLS/redirect 금지 설정 검사' \
+		'  make product-backend-run  Spring Boot 상품 서버 실행' \
+		'  make product-backend-test Spring Boot 테스트 실행' \
+		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
+		'  make web-dev         Next.js 개발 서버 실행' \
+		'  make retrieval-eval-check 60개 검색 평가 data 검사' \
+		'  make retrieval-ab-report 기존 AND와 현재 FTS 질문별 A/B 검토표 생성' \
+		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
+		'  make test            Go, Spring Boot, Next.js lint 일괄 검증' \
+		'  make check           Compose 설정과 전체 코드 검증' \
+		'' \
+		'실행 예시:' \
+		'  make collector-run' \
+		'  make product-backend-run' \
+		'  make python-crawler-run' \
+		'  make web-dev WEB_PORT=2500'
+
+env: ## 루트 .env가 없을 때만 예제 설정을 복사한다.
+	@test -f .env || cp .env.example .env
+	@printf '%s\n' '.env 준비 완료'
+
+infra-up: ## PostgreSQL, Redis, RabbitMQ를 백그라운드로 실행한다.
+	docker compose up -d postgres redis rabbitmq
+
+infra-down: ## 컨테이너를 중지하되 데이터 볼륨은 보존한다.
+	docker compose down
+
+infra-status: ## 로컬 인프라 컨테이너 상태를 확인한다.
+	docker compose ps
+
+infra-logs: ## 로컬 인프라의 최근 로그를 계속 출력한다.
+	docker compose logs --tail=100 -f postgres redis rabbitmq
+
+db-shell: ## 실행 중인 PostgreSQL의 psql에 접속한다.
+	docker compose exec postgres sh -lc 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+collector-run: ## Go Collector HTTP 서버를 실행한다.
+	cd $(COLLECTOR_DIR) && go run ./cmd/server
+
+collector-worker: ## RabbitMQ 검색 작업을 계속 처리하는 Go Worker를 실행한다.
+	@cd $(COLLECTOR_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" go run ./cmd/worker
+
+collector-worker-once: ## RabbitMQ 검색 작업 하나를 처리한 뒤 Go Worker를 종료한다.
+	@cd $(COLLECTOR_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" go run ./cmd/worker --once
+
+collector-test: ## Go Collector 전체 테스트를 실행한다.
+	cd $(COLLECTOR_DIR) && go test ./...
+
+python-collector-sync: ## uv.lock 기준으로 Python 비교 Collector 환경을 준비한다.
+	cd $(PYTHON_COLLECTOR_DIR) && uv sync --frozen
+
+python-collector-test: python-collector-sync ## Python Adapter, Contract와 checkpoint 테스트를 실행한다.
+	cd $(PYTHON_COLLECTOR_DIR) && uv run --frozen python -m unittest discover -s tests -v
+
+python-crawler-env: ## 정우님 Python 크롤러의 로컬 .env를 없을 때만 생성한다.
+	@test -f $(PYTHON_CRAWLER_DIR)/.env || cp $(PYTHON_CRAWLER_DIR)/.env.example $(PYTHON_CRAWLER_DIR)/.env
+	@printf '%s\n' 'Python 크롤러 .env 준비 완료'
+
+python-crawler-sync: ## uv.lock 기준으로 정우님 Python 크롤러 환경을 준비한다.
+	cd $(PYTHON_CRAWLER_DIR) && uv sync --frozen --python 3.12
+
+python-crawler-setup: python-crawler-env python-crawler-sync ## 정우님 Python 크롤러 환경과 Chromium을 준비한다.
+	cd $(PYTHON_CRAWLER_DIR) && uv run --frozen playwright install chromium
+
+python-crawler-run: python-crawler-env python-crawler-sync ## 정우님 Python 크롤러와 Spring Boot DB 적재 연결 API를 실행한다.
+	cd $(PYTHON_CRAWLER_DIR) && uv run --frozen uvicorn app.main:app --host 0.0.0.0 --port $(PYTHON_CRAWLER_PORT) --env-file .env
+
+python-crawler-swagger: python-crawler-env python-crawler-sync ## 인프라, Backend와 Python API/Worker를 Swagger 단계 테스트용으로 실행한다.
+	docker compose up -d --wait postgres redis rabbitmq
+	PYTHON_CRAWLER_PORT="$(PYTHON_CRAWLER_PORT)" PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" ./scripts/run-python-crawler-swagger.sh
+
+python-crawler-worker: python-crawler-sync ## Python RabbitMQ 검색 작업 Worker를 계속 실행한다.
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" uv run --frozen python -m scripts.collection_worker
+
+python-crawler-worker-once: python-crawler-sync ## Python RabbitMQ 검색 작업 하나를 처리하고 종료한다.
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(RABBITMQ_URL)" PURCHASE_RESEARCH_REDIS_URL="$(REDIS_URL)" uv run --frozen python -m scripts.collection_worker --once
+
+python-crawler-test: python-crawler-sync ## 정우님 Python 결과의 CollectorResult 변환 단위 테스트를 실행한다.
+	cd $(PYTHON_CRAWLER_DIR) && PYTHONPYCACHEPREFIX=/private/tmp/purchase-research-python-cache uv run --frozen python -m unittest discover -s tests -v
+
+python-crawler-rabbitmq-test: python-crawler-sync ## TEST_RABBITMQ_URL의 격리 vhost에서 Python Worker를 검증한다.
+	@test -n "$(TEST_RABBITMQ_URL)" || (printf '%s\n' 'TEST_RABBITMQ_URL이 필요합니다.'; exit 1)
+	cd $(PYTHON_CRAWLER_DIR) && PURCHASE_RESEARCH_RABBITMQ_URL="$(TEST_RABBITMQ_URL)" uv run --frozen python -m scripts.check_collection_worker_rabbitmq
+
+python-crawler-safety-check: ## Python Collector의 TLS 검증 비활성화와 자동 redirect를 차단한다.
+	./scripts/check-python-crawler-safety.sh
+
+product-backend-run: ## Spring Boot 상품 서버를 로컬에서 실행한다.
+	cd $(PRODUCT_BACKEND_DIR) && ./gradlew bootRun
+
+product-backend-test: ## Spring Boot와 Testcontainers 테스트를 실행한다.
+	cd $(PRODUCT_BACKEND_DIR) && ./gradlew test
+
+
+mcp-server-install: ## package-lock.json 기준으로 MCP Server 의존성을 설치한다.
+	cd $(MCP_SERVER_DIR) && npm ci
+
+mcp-server-build: ## Next.js Agent Gateway가 실행할 MCP Server를 빌드한다.
+	cd $(MCP_SERVER_DIR) && npm run build
+
+mcp-server-test: ## MCP REST client와 실제 stdio 도구 목록을 검증한다.
+	cd $(MCP_SERVER_DIR) && npm test
+
+web-install: mcp-server-install ## package-lock.json 기준으로 MCP Server와 Next.js 의존성을 설치한다.
+	cd $(WEB_DIR) && npm ci
+
+web-dev: mcp-server-build ## MCP Server를 빌드한 뒤 Next.js 개발 서버를 실행한다.
+	cd $(WEB_DIR) && npm run dev -- --port $(WEB_PORT)
+
+web-test: ## Codex Adapter와 Next.js server route 단위 테스트를 실행한다.
+	cd $(WEB_DIR) && npm test
+
+web-lint: ## Next.js ESLint 검사를 실행한다.
+	cd $(WEB_DIR) && npm run lint
+
+web-build: mcp-server-build ## MCP Server와 Next.js production bundle을 빌드한다.
+	cd $(WEB_DIR) && npm run build
+
+retrieval-eval-check: ## 60개 검색 평가 질문, 유형과 snapshot 참조를 검증한다.
+	./scripts/check-retrieval-evaluation.sh
+
+retrieval-ab-report: ## 기존 AND와 현재 FTS의 질문별 Top 3 A/B 검토표를 생성한다.
+	cd $(PRODUCT_BACKEND_DIR) && RETRIEVAL_AB_REPORT_ENABLED=true ./gradlew test --tests com.purchasesearch.product_backend.RetrievalEvaluationIntegrationTests --info
+
+retrieval-perf-test: ## 10,000개 PostgreSQL FTS/trigram 검색 p95를 opt-in 측정한다.
+	cd $(PRODUCT_BACKEND_DIR) && RETRIEVAL_PERFORMANCE_ENABLED=true ./gradlew test --tests com.purchasesearch.product_backend.RetrievalPerformanceIntegrationTests --info
+
+wiki-check: ## Wiki source 해시, claim 출처와 사람 검토 계약을 검증한다.
+	./scripts/check-wiki.sh
+
+branch-common-check: ## 두 Collector 브랜치의 공통 runtime 파일 동일성을 검사한다.
+	./scripts/check-common-branch-files.sh
+
+docs-check: ## 의존성/AI 설정 변경에 공개 문서 갱신이 포함됐는지 확인한다.
+	./scripts/check-document-sync.sh
+
+test: collector-test python-collector-test python-crawler-test python-crawler-safety-check product-backend-test mcp-server-test web-test web-lint ## Go, Python, Spring Boot, MCP, Next.js를 검증한다.
+
+check: docs-check retrieval-eval-check wiki-check ## 문서 동기화, 검색 평가/Wiki data, Compose 설정과 전체 코드를 검증한다.
+	docker compose config --quiet
+	$(MAKE) test
+	$(MAKE) web-build

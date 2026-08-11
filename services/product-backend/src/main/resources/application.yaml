@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: product-backend
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:35432}/${POSTGRES_DB:purchase_research}
+    username: ${POSTGRES_USER:purchase_research}
+    password: ${POSTGRES_PASSWORD:purchase_research}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    port: ${RABBITMQ_AMQP_PORT:35672}
+    username: ${RABBITMQ_USER:purchase_research}
+    password: ${RABBITMQ_PASSWORD:purchase_research}
+    virtual-host: ${RABBITMQ_VHOST:purchase_research}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+        default-requeue-rejected: false
+  output:
+    ansi:
+      enabled: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    document-title: Purchase Research Product Backend API
+
+purchase:
+  wiki:
+    enabled: ${WIKI_ENABLED:true}
+    directory: ${WIKI_DIRECTORY:../../knowledge/wiki}
+  embedding:
+    provider: ${EMBEDDING_PROVIDER:disabled}
+    base-url: ${EMBEDDING_BASE_URL:http://127.0.0.1:11434}
+    model: ${EMBEDDING_MODEL:bge-m3:567m}
+    model-version: ${EMBEDDING_MODEL_VERSION:ollama-bge-m3-567m-q4_0}
+    timeout-ms: ${EMBEDDING_TIMEOUT_MS:3000}

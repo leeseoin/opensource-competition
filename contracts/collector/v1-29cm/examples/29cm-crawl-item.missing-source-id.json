@@ -1,0 +1,13 @@
+{
+  "_comment": "source_product_id 누락 케이스 — required 위반",
+  "title": "상품명 예시",
+  "brand": "브랜드명",
+  "price": "89,000원",
+  "price_original": "",
+  "discount_percent": null,
+  "image_url": "",
+  "color": "",
+  "style_code": "",
+  "link": "https://www.29cm.co.kr/product/detail?itemId=1234567",
+  "site": "29cm"
+}

@@ -1,0 +1,70 @@
+{
+  "SEARCH": [
+    {
+      "PRDT_NO": "1010110882",
+      "PRDT_NAME": "페니 로퍼",
+      "BRAND_NAME": "호킨스",
+      "PRDT_IMAGE_URL": "https://image.a-rt.com/art/product/example-1010110882.jpg",
+      "PRDT_DC_PRICE": "69000",
+      "CTGR_NAME_ALL": "신발 > 구두 > 로퍼",
+      "PRDT_OPTION": "250,255,260,265,270,275,280",
+      "COLOR_ID": "BLACK",
+      "SOLD_OUT": "n",
+      "RVW_COUNT": "4",
+      "SIZE_LIST": {
+        "250": "0",
+        "255": "27",
+        "260": "27",
+        "265": "42",
+        "270": "10",
+        "275": "7",
+        "280": "0"
+      }
+    },
+    {
+      "PRDT_NO": "7000030342",
+      "PRDT_NAME": "JC1301 베니스 4홀 더비슈즈 블랙",
+      "BRAND_NAME": "파스코로젠",
+      "PRDT_IMAGE_URL": "https://image.a-rt.com/art/product/example-7000030342.jpg",
+      "PRDT_DC_PRICE": "53900",
+      "CTGR_NAME_ALL": "신발 > 구두 > 더비/레이스업",
+      "PRDT_OPTION": "250,255,260,265,270,275,280,285,290",
+      "COLOR_ID": "BLACK",
+      "SOLD_OUT": "n",
+      "RVW_COUNT": "1",
+      "SIZE_LIST": {
+        "250": "974",
+        "255": "971",
+        "260": "973",
+        "265": "948",
+        "270": "0",
+        "275": "965",
+        "280": "957",
+        "285": "0",
+        "290": "0"
+      }
+    },
+    {
+      "PRDT_NO": "sold-out-001",
+      "PRDT_NAME": "품절 상품",
+      "BRAND_NAME": "테스트 브랜드",
+      "PRDT_IMAGE_URL": "",
+      "PRDT_DC_PRICE": "49000",
+      "CTGR_NAME_ALL": "신발 > 구두",
+      "PRDT_OPTION": "270",
+      "COLOR_ID": "BROWN",
+      "SOLD_OUT": "y",
+      "RVW_COUNT": "0",
+      "SIZE_LIST": {
+        "270": "0"
+      }
+    }
+  ],
+  "SEARCH_COUNT": 1650,
+  "PAGE": {
+    "endPageNo": 10,
+    "finalPageNo": 55,
+    "nextPageNo": 2,
+    "startPageNo": 1
+  }
+}

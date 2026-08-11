@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1",
+  "taskId": "task-20260726-001",
+  "jobId": "job-20260726-001",
+  "status": "failed",
+  "startedAt": "2026-07-26T16:00:01+09:00",
+  "completedAt": "2026-07-26T16:00:02+09:00",
+  "durationMs": 1000,
+  "collectorResult": null,
+  "error": {
+    "code": "COLLECTOR_TIMEOUT",
+    "message": "판매처 검색 제한 시간을 초과했습니다.",
+    "retryable": true
+  }
+}

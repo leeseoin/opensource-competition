@@ -1,0 +1,19 @@
+{
+  "name": "purchase-research-agent",
+  "version": "0.1.0",
+  "description": "Grounded product discovery, review evidence, and live offer verification for Codex",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Purchase Research Agent",
+    "shortDescription": "Research products with sources and verify offers.",
+    "longDescription": "Clarifies purchase requirements, calls local MCP crawling tools, and presents product comparisons with traceable evidence and live verification status.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": ["Product discovery", "Review evidence", "Offer verification"],
+    "defaultPrompt": "Help me clarify what I want to buy, research matching products, cite every important claim, and verify the selected offer before purchase."
+  },
+  "mcpServers": "./.mcp.json"
+}

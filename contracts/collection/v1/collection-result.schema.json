@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collection/v1/collection-result.schema.json",
+  "title": "Collection Result Envelope v1",
+  "description": "Collector Worker가 RabbitMQ를 통해 Spring Boot Product Backend에 전달하는 작업 시작 또는 실행 결과다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "jobId",
+    "status",
+    "startedAt",
+    "completedAt",
+    "durationMs",
+    "collectorResult",
+    "error"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1"
+    },
+    "taskId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "jobId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "success", "partial", "failed"]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "durationMs": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "collectorResult": {
+      "oneOf": [
+        {
+          "$ref": "../../collector/v1/collector-result.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "error": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/taskError"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "running"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "completedAt": {
+            "type": "null"
+          },
+          "durationMs": {
+            "type": "null"
+          },
+          "collectorResult": {
+            "type": "null"
+          },
+          "error": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["success", "partial"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "collectorResult": {
+            "$ref": "../../collector/v1/collector-result.schema.json"
+          },
+          "error": {
+            "type": "null"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "collectorResult": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/$defs/taskError"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "taskError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

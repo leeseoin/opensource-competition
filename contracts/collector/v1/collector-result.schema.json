@@ -1,0 +1,516 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/v1/collector-result.schema.json",
+  "title": "Collector Result v1",
+  "description": "Go Collector가 Spring Boot Product Backend에 반환하는 판매처 수집 결과다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "operation",
+    "status",
+    "merchant",
+    "collectedAt",
+    "collectorVersion",
+    "products",
+    "warnings",
+    "errors"
+  ],
+  "properties": {
+    "requestId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "operation": {
+      "type": "string",
+      "enum": ["search", "product", "reviews"]
+    },
+    "status": {
+      "$ref": "#/$defs/collectorStatus"
+    },
+    "merchant": {
+      "$ref": "#/$defs/merchant"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "검색 작업에 사용한 원본 검색어다. search operation에서는 필수다."
+    },
+    "filters": {
+      "$ref": "#/$defs/searchFilters",
+      "description": "Collector가 검색 작업에 적용한 필터다. search operation에서는 필수다."
+    },
+    "totalCount": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "판매처가 반환한 검색 조건 기준 전체 상품 수다. 판매처가 제공하지 않으면 null이다."
+    },
+    "hasNext": {
+      "type": ["boolean", "null"],
+      "description": "판매처 검색 결과에 다음 페이지가 있는지 나타낸다. 판매처가 제공하지 않으면 null이다."
+    },
+    "collectedAt": {
+      "$ref": "#/$defs/dateTime"
+    },
+    "collectorVersion": {
+      "$ref": "#/$defs/version"
+    },
+    "verificationSummary": {
+      "$ref": "#/$defs/verificationSummary",
+      "description": "상품별 JSON/HTML 검증 상태를 응답 최상위에서 집계한 값이다."
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/product"
+      },
+      "maxItems": 50
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"operation": {"const": "search"}},
+        "required": ["operation"]
+      },
+      "then": {
+        "required": ["query", "filters"]
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "merchant": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nullableDateTime": {
+      "oneOf": [
+        { "$ref": "#/$defs/dateTime" },
+        { "type": "null" }
+      ]
+    },
+    "nullableString": {
+      "type": ["string", "null"],
+      "maxLength": 2000
+    },
+    "nullableUrl": {
+      "oneOf": [
+        { "type": "string", "format": "uri", "maxLength": 2048 },
+        { "type": "null" }
+      ]
+    },
+    "collectorStatus": {
+      "type": "string",
+      "enum": [
+        "success",
+        "partial",
+        "blocked",
+        "unsupported",
+        "temporarily_unavailable"
+      ]
+    },
+    "nonEmptyStringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "uniqueItems": true,
+      "maxItems": 50
+    },
+    "attributeValue": {
+      "oneOf": [
+        {"type": "string", "maxLength": 200},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"$ref": "#/$defs/nonEmptyStringList"}
+      ]
+    },
+    "searchFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priceMin": {"type": "integer", "minimum": 0},
+        "priceMax": {"type": "integer", "minimum": 0},
+        "categories": {"$ref": "#/$defs/nonEmptyStringList"},
+        "sizes": {"$ref": "#/$defs/nonEmptyStringList"},
+        "colors": {"$ref": "#/$defs/nonEmptyStringList"},
+        "inStockOnly": {"type": "boolean", "default": false},
+        "attributes": {
+          "type": "object",
+          "propertyNames": {"minLength": 1, "maxLength": 100},
+          "additionalProperties": {"$ref": "#/$defs/attributeValue"},
+          "maxProperties": 30
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceUrl", "collectedAt", "collectorVersion"],
+      "properties": {
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "collectedAt": {
+          "$ref": "#/$defs/dateTime"
+        },
+        "collectorVersion": {
+          "$ref": "#/$defs/version"
+        }
+      }
+    },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "nullableMoney": {
+      "oneOf": [
+        { "$ref": "#/$defs/money" },
+        { "type": "null" }
+      ]
+    },
+    "stockStatus": {
+      "type": "string",
+      "enum": ["available", "low_stock", "out_of_stock", "unknown"]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "sourceUrl": {
+          "$ref": "#/$defs/nullableUrl"
+        }
+      }
+    },
+    "shipping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fee", "summary", "provenance"],
+      "properties": {
+        "fee": {
+          "$ref": "#/$defs/nullableMoney"
+        },
+        "summary": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalId",
+        "label",
+        "size",
+        "color",
+        "stockStatus",
+        "price",
+        "provenance"
+      ],
+      "properties": {
+        "externalId": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "size": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "color": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "stockStatus": {
+          "$ref": "#/$defs/stockStatus"
+        },
+        "price": {
+          "$ref": "#/$defs/nullableMoney"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "measurementValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "provenance"],
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalId",
+        "rating",
+        "text",
+        "hasImage",
+        "purchasedOption",
+        "createdAt",
+        "provenance"
+      ],
+      "properties": {
+        "externalId": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
+        "rating": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "text": {
+          "type": ["string", "null"],
+          "maxLength": 10000
+        },
+        "hasImage": {
+          "type": "boolean"
+        },
+        "purchasedOption": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/nullableDateTime"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "externalId",
+        "name",
+        "brand",
+        "categoryPath",
+        "productUrl",
+        "imageUrls",
+        "price",
+        "shipping",
+        "stockStatus",
+        "rating",
+        "reviewCount",
+        "options",
+        "measurements",
+        "reviews",
+        "provenance"
+      ],
+      "properties": {
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "brand": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "categoryPath": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "maxItems": 20
+        },
+        "productUrl": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "imageUrls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "uniqueItems": true,
+          "maxItems": 20
+        },
+        "price": {
+          "$ref": "#/$defs/nullableMoney"
+        },
+        "shipping": {
+          "$ref": "#/$defs/shipping"
+        },
+        "stockStatus": {
+          "$ref": "#/$defs/stockStatus"
+        },
+        "rating": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "reviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "maxItems": 500
+        },
+        "measurements": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/measurementValue"
+          },
+          "maxProperties": 100
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review"
+          },
+          "maxItems": 1000
+        },
+        "verification": {
+          "$ref": "#/$defs/verification"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      }
+    },
+    "verificationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "matched", "mismatched", "failed", "missingInHtml", "missingInJson", "pending"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "matched": {"type": "integer", "minimum": 0},
+        "mismatched": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "missingInHtml": {"type": "integer", "minimum": 0},
+        "missingInJson": {"type": "integer", "minimum": 0},
+        "pending": {"type": "integer", "minimum": 0}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "comparedFields", "differences", "jsonSourceUrl", "htmlSourceUrl", "verifiedAt"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "MATCHED", "MISMATCH", "MISSING_IN_HTML", "MISSING_IN_JSON", "FAILED"]
+        },
+        "comparedFields": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 100},
+          "uniqueItems": true,
+          "maxItems": 50
+        },
+        "differences": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/verificationDifference"},
+          "maxItems": 50
+        },
+        "jsonSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "htmlSourceUrl": {"type": "string", "format": "uri", "maxLength": 2048},
+        "verifiedAt": {"$ref": "#/$defs/dateTime"}
+      }
+    },
+    "verificationDifference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "jsonValue", "htmlValue"],
+      "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "jsonValue": {"type": ["string", "null"], "maxLength": 2000},
+        "htmlValue": {"type": ["string", "null"], "maxLength": 2000}
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "requestId": "backend-test-001",
+  "operation": "search",
+  "status": "success",
+  "merchant": "abcmart",
+  "query": "구두",
+  "filters": {
+    "sizes": ["270"],
+    "inStockOnly": true
+  },
+  "totalCount": 1650,
+  "hasNext": true,
+  "collectedAt": "2026-07-30T15:00:00+09:00",
+  "collectorVersion": "abcmart-search-v2",
+  "verificationSummary": {
+    "total": 1,
+    "matched": 1,
+    "mismatched": 0,
+    "failed": 0,
+    "missingInHtml": 0,
+    "missingInJson": 0,
+    "pending": 0
+  },
+  "products": [
+    {
+      "externalId": "1010110882",
+      "name": "페니 로퍼",
+      "brand": "호킨스",
+      "categoryPath": ["신발", "구두", "로퍼"],
+      "productUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
+      "imageUrls": [
+        "https://image.a-rt.com/art/product/2025/03/19202_1741139901763.jpg"
+      ],
+      "price": {
+        "amount": 69000,
+        "currency": "KRW"
+      },
+      "shipping": {
+        "fee": null,
+        "summary": "아트배송",
+        "provenance": {
+          "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
+          "collectedAt": "2026-07-30T15:00:00+09:00",
+          "collectorVersion": "abcmart-search-v2"
+        }
+      },
+      "stockStatus": "available",
+      "rating": null,
+      "reviewCount": 4,
+      "options": [
+        {
+          "externalId": "1010110882-270",
+          "label": "270",
+          "size": "270",
+          "color": null,
+          "stockStatus": "available",
+          "price": {
+            "amount": 69000,
+            "currency": "KRW"
+          },
+          "provenance": {
+            "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
+            "collectedAt": "2026-07-30T15:00:00+09:00",
+            "collectorVersion": "abcmart-search-v2"
+          }
+        }
+      ],
+      "measurements": {},
+      "reviews": [],
+      "verification": {
+        "status": "MATCHED",
+        "comparedFields": [
+          "title",
+          "brand",
+          "price",
+          "image_url",
+          "link"
+        ],
+        "differences": [],
+        "jsonSourceUrl": "https://abcmart.a-rt.com/display/search-word/result-total/list?searchWord=%EA%B5%AC%EB%91%90&page=1",
+        "htmlSourceUrl": "https://abcmart.a-rt.com/display/search-word/result?searchWord=%EA%B5%AC%EB%91%90&page=1",
+        "verifiedAt": "2026-07-30T15:00:01+09:00"
+      },
+      "provenance": {
+        "sourceUrl": "https://abcmart.a-rt.com/product?prdtNo=1010110882",
+        "collectedAt": "2026-07-30T15:00:00+09:00",
+        "collectorVersion": "abcmart-search-v2"
+      }
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/unified/unified-product.schema.json",
+  "title": "통일 상품 스키마 v1-unified",
+  "description": "abcmart / 29cm 크롤러 출력을 app/normalizer.py가 변환한 공통 구조. 두 사이트의 데이터를 단일 배열로 처리할 때 사용한다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_product_id", "title", "brand",
+    "price", "price_original", "discount_percent",
+    "image_url", "images", "color", "style_code",
+    "link", "site",
+    "rating", "review_count",
+    "category", "category_path", "in_stock",
+    "options", "reviews"
+  ],
+  "properties": {
+    "source_product_id": {
+      "type": "string", "minLength": 1, "maxLength": 50
+    },
+    "title": {
+      "type": "string", "minLength": 1, "maxLength": 300
+    },
+    "brand": {
+      "type": "string", "maxLength": 100
+    },
+    "price": {
+      "$ref": "#/$defs/priceString"
+    },
+    "price_original": {
+      "$ref": "#/$defs/priceString"
+    },
+    "discount_percent": {
+      "type": ["integer", "null"], "minimum": 0, "maximum": 100
+    },
+    "image_url": {
+      "type": "string", "maxLength": 500
+    },
+    "images": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "description": "다중 상품 이미지 URL 목록."
+    },
+    "color": {
+      "type": "string", "maxLength": 200,
+      "description": "대표 색상(들). 콤마 구분 문자열."
+    },
+    "style_code": {
+      "type": "string", "maxLength": 50
+    },
+    "link": {
+      "type": "string", "minLength": 1, "maxLength": 500
+    },
+    "site": {
+      "enum": ["abcmart", "29cm"]
+    },
+    "rating": {
+      "type": ["number", "null"], "minimum": 0, "maximum": 5
+    },
+    "review_count": {
+      "type": ["integer", "null"], "minimum": 0
+    },
+    "category": {
+      "type": "string", "maxLength": 100
+    },
+    "category_path": {
+      "type": "string", "maxLength": 200
+    },
+    "in_stock": {
+      "type": ["boolean", "null"]
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["colors", "sizes"],
+      "properties": {
+        "colors": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 100 },
+          "description": "색상 목록. abcmart: options API, 29cm: product.color 분리."
+        },
+        "sizes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 50 },
+          "description": "사이즈 목록. abcmart: options API, 29cm: options[].value에서 KR 사이즈 추출."
+        }
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/review" }
+    }
+  },
+  "$defs": {
+    "priceString": {
+      "type": "string",
+      "pattern": "^$|^[0-9,]+원$"
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_source_id", "content", "score", "date", "size", "helpful_count", "images"],
+      "properties": {
+        "review_source_id": { "type": ["string", "null"], "maxLength": 50 },
+        "content":          { "type": "string", "maxLength": 500 },
+        "score":            { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "date":             { "type": "string", "maxLength": 10 },
+        "size":             { "type": "string", "maxLength": 200 },
+        "helpful_count":    { "type": "integer", "minimum": 0 },
+        "images":           { "type": "array", "items": { "type": "string", "maxLength": 500 } },
+        "detail_scores":    {
+          "type": ["object", "null"],
+          "additionalProperties": { "type": "number" },
+          "description": "ABC마트 전용. 착화감/가격/디자인/내구성/경량성 항목별 점수."
+        },
+        "review_color":     { "type": ["string", "null"], "maxLength": 100, "description": "ABC마트 전용. prdtColorCodeName." },
+        "is_best":          { "type": ["boolean", "null"], "description": "ABC마트 전용. bestYn == Y." },
+        "user_size":        { "type": ["array", "null"], "items": { "type": "string", "maxLength": 20 }, "description": "29CM 전용. 사용자 실제 신발 사이즈." },
+        "partner_comment":  { "type": ["string", "null"], "maxLength": 1000, "description": "29CM 전용. 브랜드 답변." },
+        "size_survey":      { "type": ["string", "null"], "enum": ["작음", "맞음", "큼", null], "description": "29CM 전용. 사이즈 설문 결과." },
+        "is_blind":         { "type": ["boolean", "null"], "description": "29CM 전용. 블라인드 처리 여부." }
+      }
+    }
+  }
+}

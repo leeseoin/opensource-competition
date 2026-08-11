@@ -1,0 +1,8 @@
+[mcp_servers.purchase_research]
+command = "node"
+args = ["services/mcp-server/dist/index.js"]
+cwd = "."
+required = true
+startup_timeout_sec = 10
+tool_timeout_sec = 20
+default_tools_approval_mode = "approve"
