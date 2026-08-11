@@ -8,7 +8,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types app/lib/codex-runtime.test.ts app/lib/product-candidates.test.ts app/lib/research-mcp-client.test.ts app/api/product-candidates/route.test.ts app/api/research/conditions/route.test.ts app/api/research/confirm/route.test.ts"
+    "test": "node --test --experimental-strip-types app/lib/codex-runtime.test.ts app/lib/product-candidates.test.ts app/lib/research-mcp-client.test.ts app/api/product-candidates/route.test.ts app/api/research/conditions/route.test.ts app/api/research/confirm/route.test.ts app/api/dashboard/summary/route.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

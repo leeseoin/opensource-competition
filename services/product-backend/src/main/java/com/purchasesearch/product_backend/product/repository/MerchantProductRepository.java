@@ -1,5 +1,6 @@
 package com.purchasesearch.product_backend.product.repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,31 @@ import com.purchasesearch.product_backend.product.entity.MerchantProduct;
  * MerchantProductRepository는 판매처 상품의 중복 식별과 사용자 검색을 담당한다.
  */
 public interface MerchantProductRepository extends JpaRepository<MerchantProduct, Long> {
+
+	/** MerchantCount는 판매처 하나와 그 판매처가 창 안에서 수집한 상품 개수다. */
+	interface MerchantCount {
+
+		/** @return 판매처 식별자 */
+		String getMerchant();
+
+		/** @return 해당 판매처가 창 안에서 수집한 상품 개수 */
+		long getCount();
+	}
+
+	/**
+	 * 마지막 수집 시각이 창 안에 있는 판매처 상품을 판매처별로 센다.
+	 *
+	 * @param since 창 시작 시각(포함)
+	 * @param until 창 끝 시각(미포함)
+	 * @return 판매처별 수집 상품 개수
+	 */
+	@Query("""
+			SELECT merchantProduct.merchant AS merchant, COUNT(merchantProduct) AS count
+			FROM MerchantProduct merchantProduct
+			WHERE merchantProduct.lastCollectedAt >= :since AND merchantProduct.lastCollectedAt < :until
+			GROUP BY merchantProduct.merchant
+			""")
+	List<MerchantCount> countByMerchantInWindow(@Param("since") OffsetDateTime since, @Param("until") OffsetDateTime until);
 
 	/** CandidateRetrievalSignalProjection은 후보별 keyword/vector 원시 검색 점수를 읽는다. */
 	interface CandidateRetrievalSignalProjection {
