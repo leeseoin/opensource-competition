@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
+import { AppSelect, type AppSelectOption } from "../components/ui/app-select";
 import {
   candidateAvailability,
   candidateGroups,
@@ -23,6 +24,13 @@ import {
 import styles from "./page.module.css";
 
 const defaultQuestion = "출근할 때 신을 검정 구두가 필요해. 10만 원 이하이고 270 사이즈였으면 좋겠어.";
+const runtimeOptions: AppSelectOption[] = [
+  { value: "codex", label: "Codex CLI + Purchase Research Plugin" },
+];
+const priorityOptions: AppSelectOption[] = [
+  { value: "required", label: "필수" },
+  { value: "preferred", label: "선호" },
+];
 
 type FlowState = "idle" | "structuring" | "draft" | "searching" | "success" | "error";
 
@@ -276,9 +284,13 @@ export default function ChatExperience() {
                 <p className={styles.orangeLabel}>AGENT RUNTIME / SELECT</p>
                 <label>
                   <span>실행 환경</span>
-                  <select value={runtime} onChange={() => setRuntime("codex")}>
-                    <option value="codex">Codex CLI + Purchase Research Plugin</option>
-                  </select>
+                  <AppSelect
+                    ariaLabel="실행 환경"
+                    value={runtime}
+                    options={runtimeOptions}
+                    onValueChange={() => setRuntime("codex")}
+                    tone="lime"
+                  />
                 </label>
               </div>
 
@@ -323,12 +335,12 @@ export default function ChatExperience() {
                 </div>
               )}
               <div className={styles.conditionGrid}>
-                <label>상품 종류<input value={conditions.productType.value} onChange={(event) => updateTextCondition("productType", event.target.value)} /><select aria-label="상품 종류 강도" value={conditions.productType.priority} onChange={(event) => updatePriority("productType", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
-                <label>용도<input value={formatList(conditions.usage)} onChange={(event) => updateListCondition("usage", event.target.value)} /><select aria-label="용도 강도" value={conditions.usage[0]?.priority ?? "preferred"} onChange={(event) => updatePriority("usage", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
-                <label>최대 가격<input type="number" min="0" value={conditions.price.max ?? ""} onChange={(event) => updateMaxPrice(event.target.value)} /><select aria-label="가격 강도" value={conditions.price.priority} onChange={(event) => updatePriority("price", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
-                <label>색상<input value={formatList(conditions.colors)} onChange={(event) => updateListCondition("colors", event.target.value)} /><select aria-label="색상 강도" value={conditions.colors[0]?.priority ?? "preferred"} onChange={(event) => updatePriority("colors", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
-                <label>사이즈<input value={formatList(conditions.sizes)} onChange={(event) => updateListCondition("sizes", event.target.value)} /><select aria-label="사이즈 강도" value={conditions.sizes[0]?.priority ?? "required"} onChange={(event) => updatePriority("sizes", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
-                <label>중요 조건<input value={formatList(conditions.requirements)} onChange={(event) => updateListCondition("requirements", event.target.value)} /><select aria-label="중요 조건 강도" value={conditions.requirements[0]?.priority ?? "preferred"} onChange={(event) => updatePriority("requirements", event.target.value as ConditionPriority)}><option value="required">필수</option><option value="preferred">선호</option></select></label>
+                <label>상품 종류<input value={conditions.productType.value} onChange={(event) => updateTextCondition("productType", event.target.value)} /><AppSelect ariaLabel="상품 종류 강도" value={conditions.productType.priority} options={priorityOptions} onValueChange={(value) => updatePriority("productType", value as ConditionPriority)} /></label>
+                <label>용도<input value={formatList(conditions.usage)} onChange={(event) => updateListCondition("usage", event.target.value)} /><AppSelect ariaLabel="용도 강도" value={conditions.usage[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("usage", value as ConditionPriority)} /></label>
+                <label>최대 가격<input type="number" min="0" value={conditions.price.max ?? ""} onChange={(event) => updateMaxPrice(event.target.value)} /><AppSelect ariaLabel="가격 강도" value={conditions.price.priority} options={priorityOptions} onValueChange={(value) => updatePriority("price", value as ConditionPriority)} /></label>
+                <label>색상<input value={formatList(conditions.colors)} onChange={(event) => updateListCondition("colors", event.target.value)} /><AppSelect ariaLabel="색상 강도" value={conditions.colors[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("colors", value as ConditionPriority)} /></label>
+                <label>사이즈<input value={formatList(conditions.sizes)} onChange={(event) => updateListCondition("sizes", event.target.value)} /><AppSelect ariaLabel="사이즈 강도" value={conditions.sizes[0]?.priority ?? "required"} options={priorityOptions} onValueChange={(value) => updatePriority("sizes", value as ConditionPriority)} /></label>
+                <label>중요 조건<input value={formatList(conditions.requirements)} onChange={(event) => updateListCondition("requirements", event.target.value)} /><AppSelect ariaLabel="중요 조건 강도" value={conditions.requirements[0]?.priority ?? "preferred"} options={priorityOptions} onValueChange={(value) => updatePriority("requirements", value as ConditionPriority)} /></label>
                 <label>판매처<input value={conditions.merchant ?? ""} placeholder="전체" onChange={(event) => updateTextCondition("merchant", event.target.value)} /></label>
               </div>
               {conditions.assumptions.length > 0 && <p className={styles.assumptions}>AI 추론: {conditions.assumptions.join(" / ")}</p>}
