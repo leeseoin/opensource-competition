@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.purchasesearch.product_backend.collection.dto.CollectorResult;
+import com.purchasesearch.product_backend.agentrun.repository.AgentRunRepository;
 import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
@@ -81,6 +82,9 @@ class ProductStorageIntegrationTests {
 
 	@Autowired
 	private ResearchSessionRepository researchSessionRepository;
+
+	@Autowired
+	private AgentRunRepository agentRunRepository;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -599,6 +603,45 @@ class ProductStorageIntegrationTests {
 				.andExpect(jsonPath("$.result.assessments[0].wikiConceptScore").doesNotExist())
 				.andExpect(jsonPath("$.result.assessments[0].evidenceCompletenessScore").value(1.0))
 				.andExpect(jsonPath("$.result.assessments[0].matchReasons[0]").value("사이즈 270 재고 확인"));
+	}
+
+	/**
+	 * 확정 세션의 Agent Run이 실제 PostgreSQL 후보를 READY로 반환하고 같은 세션 재요청에서
+	 * 실행을 중복 생성하지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void startsIdempotentReadyAgentRunThroughHttpEndpoint() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		String draft = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]")))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(draft).get("sessionId").asText();
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + purchaseCondition("[]") + "}"))
+				.andExpect(status().isOk());
+
+		String first = mockMvc.perform(post("/internal/v1/agent-runs")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"sessionId\":\"" + sessionId + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("READY"))
+				.andExpect(jsonPath("$.research.result.candidates.length()").value(1))
+				.andExpect(jsonPath("$.events.length()").value(3))
+				.andExpect(jsonPath("$.nextAction").value("SELECT_AND_VERIFY"))
+				.andReturn().getResponse().getContentAsString();
+		String runId = objectMapper.readTree(first).get("runId").asText();
+
+		mockMvc.perform(post("/internal/v1/agent-runs")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"sessionId\":\"" + sessionId + "\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.runId").value(runId));
+		assertThat(agentRunRepository.count()).isEqualTo(1);
 	}
 
 	/**
