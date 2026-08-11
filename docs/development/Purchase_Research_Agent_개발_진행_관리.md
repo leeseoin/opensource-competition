@@ -2220,6 +2220,30 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 실제 갈색/265 확정 검색에서 검정 페니 로퍼 제외와 후보 0건 확인
 - 남은 위험: 다른 범용 속성의 언어 강도 정책과 평가 자동화가 남아 있다.
 
+### 2026-08-11 WEB-001 공통 Radix Select UI
+
+- 진행상황: **구현 완료 및 검증 필요**. commit `62d50a2`에서 실행 환경과 조건 강도
+  native select를 Radix 기반 공통 컴포넌트로 통일했다. 실제 browser 시각 확인은 남아 있다.
+- 구현 위치:
+  - `frontend/purchase-web/app/components/ui/app-select.tsx:22` `AppSelect`: 접근 가능한
+    trigger/portal/item/indicator 공통 계약
+  - `frontend/purchase-web/app/components/ui/app-select.module.css:1` `.trigger`:
+    프로젝트 tone과 hover/focus/open/disabled/reduced-motion 상태
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:27` `runtimeOptions`: 실행 환경 및
+    필수/선호 선택 항목 공통화
+  - `THIRD_PARTY_NOTICES.md:92` `Radix UI Select`: 2.3.7/MIT 공개
+- 발생 문제: browser 기본 select가 운영체제별 모양을 사용해 화면의 직각 border와 색상 및
+  focus 표현이 통일되지 않았다.
+- 원인: 공통 form control 없이 각 위치에서 native select와 CSS selector를 직접 사용했다.
+- 해결: 키보드/focus 동작은 Radix에 맡기고 프로젝트 CSS Module에서 시각 상태를 한 곳에서
+  관리한다. `/chat`의 native select는 0건으로 정리했다.
+- 검증:
+  - Web test 29개, lint와 production build 통과
+  - `make docs-check`: 통과
+  - 자동화 browser 없음: 사용자 browser 최종 확인 필요
+- 남은 위험: npm production audit high 4건은 기존 Next.js의 nanoid/postcss/sharp 경로이며
+  강제 framework 업그레이드 전에 별도 회귀 검토가 필요하다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

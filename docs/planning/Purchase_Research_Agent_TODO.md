@@ -247,6 +247,7 @@
 - [ ] Astryx 초기화와 theme provider 적용
 - [x] 기본 생성 화면을 Figma Editorial Commerce Landing V2 기반 화면으로 교체
 - [ ] 사용자 화면과 관리자 화면의 공통 navigation 구성
+- [x] Radix UI 기반 공통 select/dropdown과 focus/open/disabled 상태 구성
 - [ ] 데스크톱/모바일 반응형 동작 확인 **(CSS 구현 완료, 브라우저 수동 확인 필요)**
 
 ### 6.2 사용자 구매 채팅 화면 `/chat`

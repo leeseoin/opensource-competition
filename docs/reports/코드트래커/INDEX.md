@@ -4,6 +4,7 @@
 
 ## 최신 기록
 
+- 2026-08-11 / [`WEB-001` 공통 Radix Select](2026-08-11-WEB-001-공통_Radix_Select.md) / `62d50a2` / 실행 환경과 구매 조건 강도 dropdown의 접근성 및 시각 상태 통일
 - 2026-08-11 / [`ANALYSIS-002` 명시 색상 필수 조건](2026-08-11-ANALYSIS-002-명시_색상_필수_조건.md) / `54ec6b2` / 단정한 색상 요청의 불일치 후보를 제외하고 완화 표현만 선호로 유지
 - 2026-08-11 / [`MCP-002` Codex 출력 Schema 호환성](2026-08-11-MCP-002-Codex_출력_Schema_호환성.md) / `a34787b` / 공용 계약과 Codex 엄격 출력 Schema를 분리하고 실제 Web DRAFT 저장 복구
 - 2026-08-11 / [`VERIFY-001` 우선순위 상품 재검증](2026-08-11-VERIFY-001-우선순위_상품_재검증.md) / `1538c03` / 추천 snapshot과 새 검색 snapshot의 가격/재고 비교 및 실제 Queue VERIFIED 전환
