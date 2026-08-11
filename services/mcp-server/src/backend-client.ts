@@ -48,6 +48,19 @@ export interface ResearchSessionResponse {
   result: unknown | null;
 }
 
+/** AgentRunResponse는 DB 검색부터 수집과 재검증까지 복구 가능한 실행 상태다. */
+export interface AgentRunResponse {
+  runId: string;
+  sessionId: string;
+  status: "SEARCHING" | "COLLECTING" | "READY" | "VERIFYING" | "COMPLETED" | "NO_RESULTS" | "FAILED";
+  research: ResearchSessionResponse | null;
+  collectionJobs: Array<Record<string, unknown>>;
+  verification: Record<string, unknown> | null;
+  events: Array<Record<string, unknown>>;
+  error: { code: string; message: string } | null;
+  nextAction: "POLL_ADVANCE" | "SELECT_AND_VERIFY" | "NONE";
+}
+
 /** BackendRequestError는 Product Backend의 상태 코드와 안전한 응답 본문을 보존한다. */
 export class BackendRequestError extends Error {
   /**
@@ -137,6 +150,32 @@ export class ProductBackendClient {
   /** 재검증 ID로 Queue 진행과 최신 snapshot 비교 결과를 조회한다. */
   getVerificationStatus(verificationId: string): Promise<Record<string, unknown>> {
     return this.call(`/internal/v1/offer-verifications/${encodeURIComponent(verificationId)}`, { method: "GET" });
+  }
+
+  /** 확정된 조사 세션을 DB 우선 상태 기반 구매 조사로 시작한다. */
+  startAgentRun(sessionId: string, merchants: string[] = []): Promise<AgentRunResponse> {
+    return this.call("/internal/v1/agent-runs", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, merchants }),
+    });
+  }
+
+  /** 실행의 현재 상태와 순서가 보장된 진행 사건을 조회한다. */
+  getAgentRun(runId: string): Promise<AgentRunResponse> {
+    return this.call(`/internal/v1/agent-runs/${encodeURIComponent(runId)}`, { method: "GET" });
+  }
+
+  /** 연결된 수집 또는 재검증 job을 확인하고 실행을 한 단계 전진시킨다. */
+  advanceAgentRun(runId: string): Promise<AgentRunResponse> {
+    return this.call(`/internal/v1/agent-runs/${encodeURIComponent(runId)}/advance`, { method: "POST" });
+  }
+
+  /** READY 실행에서 사용자가 선택한 판매처 상품을 구매 직전 재검증한다. */
+  verifyAgentRunOffer(runId: string, productId: number): Promise<AgentRunResponse> {
+    return this.call(`/internal/v1/agent-runs/${encodeURIComponent(runId)}/verify`, {
+      method: "POST",
+      body: JSON.stringify({ productId }),
+    });
   }
 
   /**
