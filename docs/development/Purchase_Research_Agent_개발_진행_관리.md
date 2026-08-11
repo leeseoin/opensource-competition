@@ -332,7 +332,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] 공통 navigation과 관리자 접근 정책
 - [x] Product Backend 후보 조회용 공통 API type과 client 구성
 - [x] 구매 조건 대화 UI
-- [x] 구조화 조건 profile panel
+- [x] 구조화 조건 profile panel **(조건값 교체 시 기존 필수/선호 강도 유지)**
 - [x] Spring Boot research session REST endpoint
 - [ ] SSE 진행 상태 endpoint와 client
 - [ ] 판매처별 진행·부분 실패 표시
@@ -341,7 +341,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [ ] 선택 상품 재검증 UI
 - [ ] 추천 snapshot과 최신 snapshot diff 표시
 - [ ] loading, empty, error, stale 상태 처리 **(loading/empty/error 완료, stale 남음)**
-- [x] component와 API integration test **(server route 정상/조건 부족/AI 오류/MCP 오류/미확정/빈 결과)**
+- [x] component와 API integration test **(조건 강도 편집 회귀 및 server route 정상/조건 부족/AI 오류/MCP 오류/미확정/빈 결과)**
 - [ ] 핵심 구매 흐름 E2E test **(HTTP E2E 통과, 실제 browser 자동화 연결 없음)**
 
 완료 조건: 브라우저에서 조건 입력부터 근거 비교와 구매 전 재검증까지 수행하고 실패·오래된 정보 상태를 명확히 확인할 수 있어야 한다.
@@ -2243,6 +2243,33 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 자동화 browser 없음: 사용자 browser 최종 확인 필요
 - 남은 위험: npm production audit high 4건은 기존 Next.js의 nanoid/postcss/sharp 경로이며
   강제 framework 업그레이드 전에 별도 회귀 검토가 필요하다.
+
+### 2026-08-11 WEB-002 조건 강도와 Select 대비 수정
+
+- 진행상황: **부분 구현**. commit `b392bd2`에서 조건값 교체 시 기존 필수/선호 강도를
+  보존하고 Radix Portal 목록의 hover 글자 대비를 보정했다. WEB-002 전체의 stream과
+  재검증 UI 및 실제 browser E2E는 남아 있다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/condition-editing.ts:4` `parsePrioritizedList`: 새 값이
+    기존 조건 묶음의 강도를 상속
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:195` `updateListCondition`: 조건 편집
+    흐름에 강도 보존 적용
+  - `frontend/purchase-web/app/components/ui/app-select.module.css:1` `.trigger, .content`:
+    Portal 렌더링용 색상 fallback과 hover/checked 대비
+  - `frontend/purchase-web/app/lib/condition-editing.test.ts:7`
+    `목록 값을 교체할 때 기존 조건 강도를 유지한다`: 갈색/필수에서 검정/필수 교체 검증
+- 발생 문제: `갈색/필수`를 `검정`으로 바꾸면 `검정/선호`가 됐고 Select 목록에 hover하면
+  글자가 흰 배경에서 보이지 않았다.
+- 원인: 새 문자열은 기존 값과 일치하지 않아 필드 fallback 강도를 사용했다. Select 목록은
+  `.page` 밖의 Portal에 렌더링되어 화면 안에 선언된 색상 변수를 상속하지 못했다.
+- 해결: 새 문자열은 기존 조건 묶음의 첫 강도를 상속한다. Select 컴포넌트는 Portal에서도
+  유효한 자체 색상 fallback을 사용한다.
+- 검증:
+  - Web test 31개, lint와 production build 통과
+  - MCP test 4개와 TypeScript build 통과
+  - `git diff --check`: 통과
+- 남은 위험: 자동화 browser가 제공되지 않아 실제 hover/focus/open 화면은 사용자 browser에서
+  최종 확인해야 한다.
 
 ## 작업 기록 템플릿
 
