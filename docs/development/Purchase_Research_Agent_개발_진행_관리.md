@@ -2174,6 +2174,30 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
     `available` 동일, 최신 수집 시각 갱신
 - 남은 위험: 상품 상세 operation과 옵션/배송 단위 직접 검증이 남아 있다.
 
+### 2026-08-11 MCP-002 Codex 구조화 출력 Schema 복구
+
+- 진행상황: **완료**. commit `a34787b`에서 하위 호환 공용 PurchaseCondition과 Codex CLI
+  구조화 출력용 엄격 Schema를 분리하고 실제 Web 조건 생성 경로를 복구했다.
+- 구현 위치:
+  - `contracts/research/v1/purchase-condition.codex-output.schema.json:1`
+    `PurchaseConditionCodexOutput`: 모든 객체 properties의 required 제약
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:36` `classifyCodexProcessFailure`:
+    Schema 계약 오류 분류와 원본 stderr 비노출
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:175` `structurePurchaseQuestion`:
+    Codex 전용 Schema와 null/빈 attributes 출력 규칙
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:46`
+    `Codex 출력 Schema는 모든 객체 속성을 required로 선언한다`: 회귀 검증
+- 발생 문제: Web에서 질문하면 Codex CLI가 실패했지만 일반 오류 메시지만 보이고 서버에는
+  안전한 원인 로그가 없었다.
+- 원인: 새 선택 정규화 필드가 Codex 구조화 출력의 모든 속성 required 제약과 충돌했다.
+- 해결: 공용 계약의 선택 필드는 유지하고 생성 전용 엄격 Schema를 사용한다. 실패 시
+  분류 코드와 exit code만 서버 로그에 남긴다.
+- 검증:
+  - Web test 28개와 lint 통과
+  - Codex CLI 0.146.1 실제 구조화 출력 통과
+  - 실제 Web API에서 조건 정규화와 MCP DRAFT 저장 성공
+- 남은 위험: CLI version 변경 시 실제 smoke test를 다시 수행해야 한다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.

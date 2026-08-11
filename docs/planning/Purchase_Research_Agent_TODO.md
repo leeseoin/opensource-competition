@@ -223,6 +223,7 @@
 - [x] browser와 Client Component가 CLI를 실행하지 않고 Next.js server Agent Gateway만 실행하도록 경계 구현
 - [x] 공통 `AI Runtime Adapter` 계약 정의 **(Codex 구현, 다음 runtime이 같은 경계 사용)**
 - [x] AI 구조화 출력용 `PurchaseCondition` JSON Schema 정의
+- [x] 하위 호환 공용 계약과 Codex CLI 엄격 출력 Schema 분리 및 실제 호출 검증
 - [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
 - [ ] Codex CLI adapter와 stream 중계 구현 **(부분 구현: 읽기 전용 JSON 구조화와 timeout 완료, stream/취소/동시성 상한 남음)**
 - [ ] Claude Code CLI adapter와 stream 중계 구현
