@@ -1,29 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { CollectionJobSummary, fetchCollectionJobs } from "../../lib/collection-jobs";
 import { DashboardSummary, fetchDashboardSummary, StatusCounts } from "../../lib/dashboard-summary";
 import styles from "./page.module.css";
 
-/** CollectionsDashboard는 최근 24시간(기본값) 수집/검증 현황을 카드로 보여준다. */
+/** CollectionsDashboard는 최근 24시간(기본값) 수집/검증 현황과 요청 이력을 함께 보여준다. */
 export default function CollectionsDashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [jobs, setJobs] = useState<CollectionJobSummary[] | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    setErrorMessage("");
-    void fetchDashboardSummary()
-      .then(setSummary)
-      .catch((error: unknown) => {
-        setErrorMessage(error instanceof Error ? error.message : "대시보드 집계를 불러오지 못했습니다.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const load = useCallback(() => Promise.all([fetchDashboardSummary(), fetchCollectionJobs()])
+    .then(([summaryResult, jobsResult]) => {
+      setSummary(summaryResult);
+      setJobs(jobsResult.items);
+      setErrorMessage("");
+    })
+    .catch((error: unknown) => {
+      setErrorMessage(error instanceof Error ? error.message : "대시보드 데이터를 불러오지 못했습니다.");
+    })
+    .finally(() => setLoading(false)), []);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    void load();
+  }, [load]);
+
+  const handleRefreshClick = useCallback(() => {
+    setLoading(true);
+    void load();
+  }, [load]);
 
   return (
     <main className={styles.page}>
@@ -32,7 +39,7 @@ export default function CollectionsDashboard() {
           <h1>COLLECTION DASHBOARD</h1>
           <p>{summary ? `${formatWindow(summary.window)} 기준 집계` : "최근 24시간 수집/검증 현황을 불러오고 있습니다."}</p>
         </div>
-        <button type="button" className={styles.refreshButton} onClick={reload} disabled={loading}>
+        <button type="button" className={styles.refreshButton} onClick={handleRefreshClick} disabled={loading}>
           {loading ? "새로고침 중..." : "새로고침"}
         </button>
       </header>
@@ -77,8 +84,52 @@ export default function CollectionsDashboard() {
           </article>
         </section>
       )}
+
+      {jobs && (
+        <section aria-label="요청 이력">
+          <h2 className={styles.tableHeading}>요청 이력</h2>
+          {jobs.length === 0 ? (
+            <p className={styles.muted}>아직 수집 요청이 없음</p>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>요청 시각</th>
+                    <th>판매처</th>
+                    <th>검색어</th>
+                    <th>상태</th>
+                    <th>성공률</th>
+                    <th>상품 수</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.jobId}>
+                      <td>{new Date(job.requestedAt).toLocaleString("ko-KR")}</td>
+                      <td>{job.merchant}</td>
+                      <td>{job.query}</td>
+                      <td>{job.status}</td>
+                      <td>{formatSuccessRate(job)}</td>
+                      <td>{job.productCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </main>
   );
+}
+
+/** formatSuccessRate는 성공률을 "성공/전체 (백분율)" 형태로 보여준다. */
+function formatSuccessRate(job: CollectionJobSummary): string {
+  if (job.successRate === null) {
+    return "N/A";
+  }
+  return `${job.succeededTaskCount}/${job.taskCount} (${(job.successRate * 100).toFixed(0)}%)`;
 }
 
 /** StatusCard는 상태별 개수 목록 하나를 총합과 함께 카드로 보여준다. */

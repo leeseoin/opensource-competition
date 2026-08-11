@@ -4,9 +4,14 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
+import com.purchasesearch.product_backend.collection.dto.CollectionJobListResponse;
+import com.purchasesearch.product_backend.collection.dto.CollectionJobListResponse.CollectionJobSummary;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionResultEnvelope;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
@@ -159,6 +164,57 @@ public class CollectionJobService {
 				.orElseThrow(() -> new CollectionJobNotFoundException(jobId));
 		List<CollectionTask> tasks = collectionTaskRepository.findAllByJobJobIdOrderByPageAsc(jobId);
 		return CollectionJobResponse.from(job, tasks);
+	}
+
+	/**
+	 * 판매처/상태로 거르거나 전체 job을 최신 요청순으로 페이지네이션해 조회한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param status 선택 job 상태
+	 * @param page 0부터 시작하는 페이지 번호
+	 * @param size 페이지당 최대 job 수
+	 * @return 요청 이력 화면이 쓸 성공률/상품 수 포함 job 목록
+	 */
+	@Transactional(readOnly = true)
+	public CollectionJobListResponse list(String merchant, String status, int page, int size) {
+		Page<CollectionJobRepository.JobSummaryProjection> result = collectionJobRepository.search(
+				normalize(merchant), normalize(status), PageRequest.of(page, size));
+		List<CollectionJobSummary> items = result.getContent().stream().map(this::toSummary).toList();
+		return new CollectionJobListResponse(result.getTotalElements(), result.hasNext(), items);
+	}
+
+	/**
+	 * job 요약 projection을 API 응답과 성공률로 변환한다.
+	 *
+	 * @param projection repository가 계산한 job과 페이지 작업 집계
+	 * @return succeededTaskCount / taskCount 성공률을 포함한 job 요약
+	 */
+	private CollectionJobSummary toSummary(CollectionJobRepository.JobSummaryProjection projection) {
+		Double successRate = projection.getTaskCount() == 0
+				? null
+				: projection.getSucceededTaskCount() / (double) projection.getTaskCount();
+		return new CollectionJobSummary(
+				projection.getJobId(),
+				projection.getMerchant(),
+				projection.getSearchQuery(),
+				projection.getStatus(),
+				projection.getTaskCount(),
+				projection.getSucceededTaskCount(),
+				projection.getFailedTaskCount(),
+				successRate,
+				projection.getProductCount(),
+				projection.getRequestedAt(),
+				projection.getCompletedAt());
+	}
+
+	/**
+	 * 빈 필터 조건을 repository가 처리할 수 있는 null로 변환한다.
+	 *
+	 * @param value 원본 필터 값
+	 * @return 공백을 제거한 값 또는 null
+	 */
+	private String normalize(String value) {
+		return StringUtils.hasText(value) ? value.trim() : null;
 	}
 
 	/**

@@ -1,13 +1,16 @@
 package com.purchasesearch.product_backend.collection.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.purchasesearch.product_backend.collection.dto.CollectionJobListResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse.ErrorResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionJobNotFoundException;
@@ -19,10 +22,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 /**
  * CollectionJobController는 RabbitMQ 수집 job의 전체 진행률과 결과 집계를 조회한다.
  */
+@Validated
 @RestController
 @RequestMapping("/internal/v1/collection-jobs")
 @Tag(name = "Collection Jobs", description = "수집 job 진행 상태와 상품 및 검증 결과 조회")
@@ -59,6 +67,37 @@ public class CollectionJobController {
 	})
 	public CollectionJobResponse get(@PathVariable String jobId) {
 		return collectionJobService.get(jobId);
+	}
+
+	/**
+	 * 판매처/상태로 거르거나 전체 job을 최신 요청순으로 성공률/상품 수와 함께 조회한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param status 선택 job 상태
+	 * @param page 0부터 시작하는 페이지 번호
+	 * @param size 페이지당 최대 job 수
+	 * @return 요청 이력 화면이 쓸 job 목록
+	 */
+	@GetMapping
+	@Operation(
+			summary = "수집 요청 이력 목록 조회",
+			description = "판매처/상태로 거르거나 전체 job을 최신 요청순으로 페이지네이션해 성공률과 상품 수를 함께 반환합니다.")
+	public CollectionJobListResponse list(
+			@RequestParam(required = false)
+			@Pattern(regexp = "^[a-z0-9][a-z0-9-]*$")
+			@Size(max = 64)
+			String merchant,
+			@RequestParam(required = false)
+			@Pattern(regexp = "^(QUEUED|RUNNING|PROCESSING|COMPLETED|PARTIAL|FAILED)$")
+			String status,
+			@RequestParam(defaultValue = "0")
+			@Min(0)
+			int page,
+			@RequestParam(defaultValue = "20")
+			@Min(1)
+			@Max(100)
+			int size) {
+		return collectionJobService.list(merchant, status, page, size);
 	}
 
 	/**
