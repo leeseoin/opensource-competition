@@ -2246,8 +2246,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-11 WEB-002 조건 강도와 Select 대비 수정
 
-- 진행상황: **부분 구현**. commit `b392bd2`, `3524655`에서 조건값을 비우고 교체해도
-  기존 필수/선호 강도를 보존하고 Radix Portal 목록의 hover 글자 대비를 보정했다.
+- 진행상황: **부분 구현**. commit `b392bd2`, `3524655`, `88c2304`에서 조건값을 비우고
+  교체해도 기존 필수/선호 강도를 보존하고 Radix Portal 목록의 hover 글자 대비를 보정했다.
   WEB-002 전체의 stream과 재검증 UI 및 실제 browser E2E는 남아 있다.
 - 구현 위치:
   - `frontend/purchase-web/app/lib/condition-editing.ts:4` `parsePrioritizedList`: 새 값이
