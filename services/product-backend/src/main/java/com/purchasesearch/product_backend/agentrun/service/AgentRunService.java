@@ -25,6 +25,7 @@ import com.purchasesearch.product_backend.agentrun.repository.AgentRunRepository
 import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionRefreshRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionRefreshResponse;
+import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
 import com.purchasesearch.product_backend.collection.service.CollectionJobService;
 import com.purchasesearch.product_backend.collection.service.CollectionRefreshService;
 import com.purchasesearch.product_backend.evidence.dto.OfferVerificationResponse;
@@ -105,7 +106,7 @@ public class AgentRunService {
 
 		try {
 			requestCollection(run, session.getConditions(), merchants);
-		} catch (RuntimeException exception) {
+		} catch (CollectionTaskPublishException exception) {
 			run.fail("COLLECTION_REQUEST_FAILED", "상품 수집 작업을 요청하지 못했습니다.");
 			append(run, "COLLECTION_FAILED", "상품 수집 작업을 시작하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
 		}
