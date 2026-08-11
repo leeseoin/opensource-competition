@@ -29,6 +29,27 @@ _FIELDS = (
 
 _DEFAULT_VERIFY_CONCURRENCY = 10
 
+_LEGACY_DETAIL_URL = re.compile(r"^https://product\.29cm\.co\.kr/catalog/(\d+)$")
+
+
+def _canonical_detail_url(url: str) -> str:
+    """29CM 검색 API가 아직 돌려주는 구 상세 URL을 리다이렉트 없이 요청 가능한 현재 URL로 바꾼다.
+
+    29CM은 상품 상세 URL을 product.29cm.co.kr/catalog/{id}에서 www.29cm.co.kr/products/{id}로
+    옮겼지만 검색 API의 webLink는 아직 구 형식을 돌려준다. 구 URL은 항상 307로 새 URL을
+    가리키고, ensure_success는 redirect를 자동 추적하지 않아 안전하게 차단하므로, 알려진
+    같은 회사 canonical 이전 하나만 요청 전에 미리 바꿔 불필요한 검증 실패를 없앤다.
+
+    Args:
+        url: 검색 JSON이 제공한 상품 상세 URL이다.
+
+    Returns:
+        구 형식이면 변환한 현재 URL이고, 아니면 입력을 그대로 반환한다.
+    """
+
+    match = _LEGACY_DETAIL_URL.match(url)
+    return f"https://www.29cm.co.kr/products/{match.group(1)}" if match else url
+
 
 async def verify_products(
     client: httpx.AsyncClient,
@@ -70,7 +91,7 @@ async def verify_products(
         html_source_url = str(product.get("link") or "")
         async with semaphore:
             try:
-                response = await client.get(html_source_url)
+                response = await client.get(_canonical_detail_url(html_source_url))
                 ensure_success(response, "29cm")
                 html_source_url = str(response.url)
                 (_HTML_DIR / f"29cm_{product_id}_{ts_file}.html").write_text(
