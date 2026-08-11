@@ -7,7 +7,8 @@ Figma V2 기반 랜딩, `/chat` 구매 질문과 `/compare` 상품 비교 화면
 질문을 구조화한다. 사용자가 조건을 확인하기 전에는 상품을 검색하지 않으며, 확인 후에는
 공식 MCP client가 stdio MCP Server를 거쳐 Spring Boot Product Backend의 PostgreSQL 후보를
 최대 5개 상품군으로 조회한다. browser에는 Codex 인증정보와 내부 server 주소를 노출하지 않는다.
-`/admin/collections`는 아직 구현 전이다.
+`/admin/collections`는 Product Backend의 `/internal/v1/dashboard/summary` 집계를 최근 24시간
+기준으로 job/작업 상태, 판매처별 수집 상품 수, JSON/HTML 검증 일치율 카드로 보여준다.
 
 ## Getting Started
 

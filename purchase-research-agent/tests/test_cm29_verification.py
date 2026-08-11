@@ -3,8 +3,58 @@
 import json
 import unittest
 
+import httpx
+
 from app.crawlers.cm29.crawler import Cm29Crawler
-from app.crawlers.cm29.verification import compare_product, parse_product_json_ld
+from app.crawlers.cm29.verification import (
+    _canonical_detail_url,
+    compare_product,
+    parse_product_json_ld,
+    verify_products,
+)
+
+
+class CanonicalDetailUrlTests(unittest.TestCase):
+    """검색 API가 돌려주는 구 상세 URL을 리다이렉트 없는 현재 URL로 바꾸는지 검증한다."""
+
+    def test_rewrites_legacy_catalog_url_to_current_products_url(self) -> None:
+        """product.29cm.co.kr/catalog/{id}를 www.29cm.co.kr/products/{id}로 바꾸는지 검증한다."""
+
+        rewritten = _canonical_detail_url("https://product.29cm.co.kr/catalog/2468262")
+
+        self.assertEqual(rewritten, "https://www.29cm.co.kr/products/2468262")
+
+    def test_leaves_already_current_url_unchanged(self) -> None:
+        """이미 현재 형식인 URL은 그대로 두는지 검증한다."""
+
+        url = "https://www.29cm.co.kr/products/2468262"
+
+        self.assertEqual(_canonical_detail_url(url), url)
+
+
+class VerifyProductsRedirectAvoidanceTests(unittest.IsolatedAsyncioTestCase):
+    """검증 요청이 구 URL의 307을 겪지 않고 현재 URL로 바로 나가는지 검증한다."""
+
+    async def test_requests_current_url_instead_of_legacy_redirecting_url(self) -> None:
+        """구 link로도 요청은 www.29cm.co.kr/products/{id}로만 나가는지 검증한다."""
+
+        requested_urls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requested_urls.append(str(request.url))
+            return httpx.Response(200, text=_html(_json_ld()))
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            products, warnings = await verify_products(
+                client,
+                [_listing_product()],
+                json_source_url="https://display-bff-api.29cm.co.kr/api/v1/listing/items",
+                ts_file="20260812",
+            )
+
+        self.assertEqual(requested_urls, ["https://www.29cm.co.kr/products/2468262"])
+        self.assertEqual(products[0]["verification"]["status"], "MATCHED")
+        self.assertEqual(warnings, [])
 
 
 class Cm29VerificationTests(unittest.TestCase):
