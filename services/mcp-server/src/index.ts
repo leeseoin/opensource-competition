@@ -64,13 +64,13 @@ function toToolResult(value: unknown) {
   };
 }
 
-/** main은 stdio MCP 서버를 시작하고 조사 세션 도구 세 개를 등록한다. */
+/** main은 stdio MCP 서버를 시작하고 조사 세션과 상태 기반 Agent Run 도구를 등록한다. */
 async function main(): Promise<void> {
   const client = new ProductBackendClient(
     process.env.PRODUCT_BACKEND_BASE_URL ?? "http://127.0.0.1:8080",
   );
   const server = new McpServer({ name: "purchase-research", version: "0.1.0" }, {
-    instructions: "구매 조건은 먼저 create_research_session으로 DRAFT 저장한다. 사용자가 명시적으로 확인한 뒤 confirm_purchase_conditions와 search_product_candidates를 순서대로 호출한다. 후보 사실은 get_product/get_evidence/compare_products로 확인한다. DB 결과가 없거나 오래된 경우에만 request_collection을 사용하고 구매 직전에는 verify_offer 뒤 get_verification_status를 조회한다. 판매처 사실을 추측하지 않는다.",
+    instructions: "구매 조건은 먼저 create_research_session으로 DRAFT 저장한다. 사용자가 명시적으로 확인한 뒤 confirm_purchase_conditions와 start_agent_run을 호출한다. Agent Run이 COLLECTING 또는 VERIFYING이면 advance_agent_run을 제한적으로 polling하고 READY 후보는 get_product/get_evidence/compare_products로 확인한다. 구매 직전에는 verify_agent_run_offer를 사용한다. 저수준 request_collection/verify_offer는 관리자 또는 호환 경로이며 판매처 사실을 추측하지 않는다.",
   });
 
   server.registerTool(
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   server.registerTool(
     "search_product_candidates",
     {
-      description: "CONFIRMED 조사 세션의 조건으로 PostgreSQL 상품 후보 최대 3개와 근거를 검색한다.",
+      description: "CONFIRMED 조사 세션의 조건으로 PostgreSQL 상품 후보 최대 5개와 근거를 검색한다.",
       inputSchema: { sessionId: z.string().uuid() },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -169,6 +169,49 @@ async function main(): Promise<void> {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async ({ verificationId }) => toToolResult(await client.getVerificationStatus(verificationId)),
+  );
+
+  server.registerTool(
+    "start_agent_run",
+    {
+      description: "확정 조사 세션을 DB 우선 검색으로 시작하고 필요할 때만 수집하는 복구 가능한 실행을 만든다.",
+      inputSchema: {
+        sessionId: z.string().uuid(),
+        merchants: z.array(z.enum(["abcmart", "29cm"])).max(4).default([]),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ sessionId, merchants }) => toToolResult(await client.startAgentRun(sessionId, merchants)),
+  );
+
+  server.registerTool(
+    "get_agent_run",
+    {
+      description: "구매 조사 실행의 현재 상태, 수집 작업, 후보, 재검증과 단계별 사건을 조회한다.",
+      inputSchema: { runId: z.string().uuid() },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ runId }) => toToolResult(await client.getAgentRun(runId)),
+  );
+
+  server.registerTool(
+    "advance_agent_run",
+    {
+      description: "COLLECTING 또는 VERIFYING 실행의 연결 작업을 확인해 다음 상태로 한 단계 전진시킨다.",
+      inputSchema: { runId: z.string().uuid() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ runId }) => toToolResult(await client.advanceAgentRun(runId)),
+  );
+
+  server.registerTool(
+    "verify_agent_run_offer",
+    {
+      description: "READY 실행에서 사용자가 선택한 판매처 상품의 최신 가격과 재고 재검증을 시작한다.",
+      inputSchema: { runId: z.string().uuid(), productId: z.number().int().positive() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ runId, productId }) => toToolResult(await client.verifyAgentRunOffer(runId, productId)),
   );
 
   await server.connect(new StdioServerTransport());
