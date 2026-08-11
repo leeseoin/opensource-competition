@@ -645,6 +645,37 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 실제 DB 후보가 없는 확정 세션은 RabbitMQ 수집 job과 Agent Run 연결을 저장하고
+	 * COLLECTING을 반환하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청, Queue 발행 또는 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void startsCollectingAgentRunForMissingDatabaseCandidates() throws Exception {
+		String productType = "격리미존재상품";
+		String draft = mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]").replace("구두", productType)))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getContentAsString();
+		String sessionId = objectMapper.readTree(draft).get("sessionId").asText();
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/confirm", sessionId)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"conditions\":" + purchaseCondition("[]").replace("구두", productType) + "}"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/internal/v1/agent-runs")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"sessionId\":\"" + sessionId + "\"}"))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.status").value("COLLECTING"))
+				.andExpect(jsonPath("$.collectionJobs.length()").value(1))
+				.andExpect(jsonPath("$.collectionJobs[0].dataStatus").value("MISSING"))
+				.andExpect(jsonPath("$.collectionJobs[0].status").value("QUEUED"))
+				.andExpect(jsonPath("$.nextAction").value("POLL_ADVANCE"));
+	}
+
+	/**
 	 * 사용자 확인 최대 가격보다 비싼 최신 상품은 조사 세션 후보에서 제외되는지 검증한다.
 	 *
 	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우

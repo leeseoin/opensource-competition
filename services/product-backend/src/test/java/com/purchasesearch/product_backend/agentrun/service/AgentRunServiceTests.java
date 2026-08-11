@@ -28,6 +28,7 @@ import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse.VerificationSummary;
 import com.purchasesearch.product_backend.collection.dto.CollectionRefreshResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionRefreshResponse.DataStatus;
+import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
 import com.purchasesearch.product_backend.collection.service.CollectionJobService;
 import com.purchasesearch.product_backend.collection.service.CollectionRefreshService;
 import com.purchasesearch.product_backend.evidence.service.OfferVerificationService;
@@ -132,7 +133,7 @@ class AgentRunServiceTests {
 	@Test
 	void preservesCollectionRequestFailureAsTerminalRun() {
 		when(sessionService.search(sessionId)).thenReturn(research(List.of()));
-		when(refreshService.request(any())).thenThrow(new IllegalStateException("broker secret detail"));
+		when(refreshService.request(any())).thenThrow(new CollectionTaskPublishException("broker secret detail"));
 
 		var response = service.start(new StartAgentRunRequest(sessionId, List.of()));
 

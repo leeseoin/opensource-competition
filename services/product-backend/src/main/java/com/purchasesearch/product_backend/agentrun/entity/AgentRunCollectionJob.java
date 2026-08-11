@@ -28,13 +28,10 @@ import lombok.NoArgsConstructor;
 public class AgentRunCollectionJob {
 
 	@Id
-	@Column(name = "run_id", insertable = false, updatable = false)
-	private UUID runId;
-
-	@Id
 	@Column(name = "job_id", length = 128)
 	private String jobId;
 
+	@Id
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "run_id", nullable = false)
 	private AgentRun run;
@@ -53,7 +50,6 @@ public class AgentRunCollectionJob {
 	public static AgentRunCollectionJob create(AgentRun run, String jobId, String merchant, String dataStatus) {
 		AgentRunCollectionJob job = new AgentRunCollectionJob();
 		job.run = run;
-		job.runId = run.getRunId();
 		job.jobId = jobId;
 		job.merchant = merchant;
 		job.dataStatus = dataStatus;
@@ -63,7 +59,7 @@ public class AgentRunCollectionJob {
 	/** AgentRunCollectionJob 복합 식별자다. */
 	@NoArgsConstructor
 	public static class Key implements Serializable {
-		private UUID runId;
+		private UUID run;
 		private String jobId;
 
 		/** 복합 식별자의 값 동등성을 비교한다. */
@@ -71,13 +67,13 @@ public class AgentRunCollectionJob {
 		public boolean equals(Object object) {
 			if (this == object) return true;
 			if (!(object instanceof Key key)) return false;
-			return Objects.equals(runId, key.runId) && Objects.equals(jobId, key.jobId);
+			return Objects.equals(run, key.run) && Objects.equals(jobId, key.jobId);
 		}
 
 		/** 복합 식별자를 안정적으로 hash한다. */
 		@Override
 		public int hashCode() {
-			return Objects.hash(runId, jobId);
+			return Objects.hash(run, jobId);
 		}
 	}
 }
