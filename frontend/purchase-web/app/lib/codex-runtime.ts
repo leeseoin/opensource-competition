@@ -35,6 +35,12 @@ export function resolveCodexCommand(configured = process.env.CODEX_CLI_PATH): st
 /** classifyCodexProcessFailure는 민감한 stderr를 노출하지 않고 인증 실패와 일반 실패를 구분한다. */
 export function classifyCodexProcessFailure(stderr: string): CodexRuntimeError {
   const normalized = stderr.toLowerCase();
+  if (normalized.includes("invalid_json_schema")) {
+    return new CodexRuntimeError(
+      "AI_OUTPUT_INVALID",
+      "Codex 구조화 출력 Schema가 현재 CLI 규격과 일치하지 않습니다.",
+    );
+  }
   const authenticationFailed = [
     "token_invalidated",
     "token_revoked",
@@ -136,7 +142,9 @@ export function runCodexCommand(
       if (code === 0) {
         finish();
       } else {
-        finish(classifyCodexProcessFailure(stderr));
+        const error = classifyCodexProcessFailure(stderr);
+        console.error(`[codex-runtime] process failed: code=${error.code}, exitCode=${code ?? "unknown"}`);
+        finish(error);
       }
     });
     child.stdin.end(input);
@@ -169,7 +177,7 @@ export async function structurePurchaseQuestion(
   runner: CodexCommandRunner = runCodexCommand,
 ): Promise<PurchaseCondition> {
   const root = findRepositoryRoot();
-  const schemaPath = path.join(root, "contracts/research/v1/purchase-condition.schema.json");
+  const schemaPath = path.join(root, "contracts/research/v1/purchase-condition.codex-output.schema.json");
   const skillPath = path.join(root, "plugins/purchase-research-agent/skills/purchase-research/SKILL.md");
   const pluginRules = readFileSync(skillPath, "utf8");
   const prompt = [
@@ -182,6 +190,9 @@ export async function structurePurchaseQuestion(
     "productType은 required, 용도와 색상은 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
     "사용자 질문에 명시되지 않았지만 결과를 크게 바꾸는 조건은 missingConditions에 기록한다.",
     "assumptions에는 추론한 내용만 기록하고 requiresConfirmation은 반드시 true로 둔다.",
+    "normalizedValue, canonicalId, confidence, derivedBy를 직접 확정할 근거가 없으면 null로 기록한다.",
+    "개별 조건의 requiresConfirmation은 불확실하면 true, 원문을 그대로 옮겼으면 false로 기록한다.",
+    "범용 attributes가 없으면 빈 배열로 기록한다.",
     "사용자 질문:",
     question,
   ].join("\n\n");
