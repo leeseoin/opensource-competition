@@ -301,6 +301,7 @@
 - [x] 색상/상품 종류/용도/밀리미터 사이즈와 제한된 오타의 Backend 정규화
 - [x] PUBLISHED Wiki 동의어를 조건 정규화와 운영 후보 검색에 연결
 - [x] 사이즈/색상 `MATCH`/`MISMATCH`/`UNKNOWN` 판정 규칙 작성
+- [x] 단정한 명시 색상은 필수, 완화 표현이 있는 색상만 선호로 구조화
 - [x] PostgreSQL 전문 검색/trigram index와 상품명/브랜드 검색 문서 구현
 - [ ] 전문 검색 실패와 빈 검색 문서 fallback 구현
 - [x] embedding provider port와 전송 data/timeout/실패 계약 작성

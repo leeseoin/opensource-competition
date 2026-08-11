@@ -2198,6 +2198,28 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - 실제 Web API에서 조건 정규화와 MCP DRAFT 저장 성공
 - 남은 위험: CLI version 변경 시 실제 smoke test를 다시 수행해야 한다.
 
+### 2026-08-11 ANALYSIS-002 명시 색상 필수 조건
+
+- 진행상황: **완료**. commit `54ec6b2`에서 단정한 색상 요청은 required, 완화 표현이 있는
+  색상만 preferred로 보정해 색상 불일치 상품을 후보에서 제외했다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:155` `isSoftColorPreference`:
+    해당 색상 주변의 선호/완화 표현 판정
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:169` `normalizePurchaseCondition`:
+    LLM 출력 뒤 색상 priority 결정적 보정
+  - `frontend/purchase-web/app/lib/codex-runtime.test.ts:116`
+    `사용자 색상 표현의 필수와 선호 강도를 구분한다`: 필수/선호 양방향 회귀 검증
+- 발생 문제: `갈색 구두 찾아줘`가 preferred로 구조화돼 검정 페니 로퍼가 완화 후보로
+  반환됐다.
+- 원인: Codex prompt가 모든 색상을 기본 preferred로 지정했다.
+- 해결: 명시 색상은 required로 바꾸고 `이면 좋겠어`/`가능하면` 같은 문맥만 preferred로
+  유지한다. 기존 Backend required 색상 필터는 그대로 사용한다.
+- 검증:
+  - Web test 29개와 lint 통과
+  - 실제 조건 생성에서 갈색 required 확인
+  - 실제 갈색/265 확정 검색에서 검정 페니 로퍼 제외와 후보 0건 확인
+- 남은 위험: 다른 범용 속성의 언어 강도 정책과 평가 자동화가 남아 있다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
