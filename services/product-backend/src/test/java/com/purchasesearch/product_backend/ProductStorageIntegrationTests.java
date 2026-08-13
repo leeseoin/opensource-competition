@@ -161,6 +161,38 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 조건부 수집 최신성 조회가 상품 이름이나 카테고리가 아닌 동일 판매처, 검색어와
+	 * 기본 필터의 실제 수집 문맥만 사용하는지 검증한다.
+	 *
+	 * @throws Exception fixture 읽기 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void findsLatestCollectionOnlyForExactDefaultSearchScope() throws Exception {
+		String collectorResultJson = Files.readString(abcmartFixturePath())
+				.replace("""
+					  "filters": {
+					    "sizes": ["270"],
+					    "inStockOnly": true
+					  },
+					""", "  \"filters\": {},\n");
+
+		mockMvc.perform(post("/internal/v1/collection-results")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(collectorResultJson))
+				.andExpect(status().isOk());
+
+		assertThat(collectionSearchContextRepository
+				.findLatestDefaultSearchCollectedAt("abcmart", " 구두 "))
+				.contains(OffsetDateTime.parse("2026-07-30T15:00:00+09:00").toInstant());
+		assertThat(collectionSearchContextRepository
+				.findLatestDefaultSearchCollectedAt("abcmart", "페니 로퍼"))
+				.isEmpty();
+		assertThat(collectionSearchContextRepository
+				.findLatestDefaultSearchCollectedAt("29cm", "구두"))
+				.isEmpty();
+	}
+
+	/**
 	 * 저장 대상이 아닌 차단 상태의 CollectorResult는 상품을 저장하지 않고 400 오류를
 	 * 반환하는지 검증한다.
 	 *
