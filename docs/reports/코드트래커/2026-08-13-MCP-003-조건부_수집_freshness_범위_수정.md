@@ -1,7 +1,7 @@
 # 2026-08-13 MCP-003 조건부 수집 freshness 범위 수정
 
 - 기능 ID: `MCP-003`
-- 구현 commit: `cc628e0`
+- 구현 commit: `cc628e0`, `7ff7910`
 - 기록 상태: 버그 수정 기록
 
 ## 배경과 범위
@@ -32,16 +32,21 @@
   현재 검색 범위 전체를 최신으로 만들었다.
 - 추가 확인: PostgreSQL native timestamp projection은 JDBC에서 `Instant`로 반환되므로
   `OffsetDateTime` projection은 실행 시 형변환 오류를 만들 수 있었다.
+- PR 리뷰 확인: `Duration.toHours()`가 부분 시간을 버려 24시간 59분 된 기록도 24시간으로
+  계산하고 FRESH로 유지할 수 있었다.
 
 ## 해결
 
 `collection_search_contexts`에서 동일 판매처, 정규화 검색어 및
 `{"inStockOnly": false}` 기본 필터가 모두 같은 마지막 완료 기록만 사용한다. DB 경계에서는
-`Instant`를 사용하고 API 응답 경계에서 UTC `OffsetDateTime`으로 변환한다.
+`Instant`를 사용하고 API 응답 경계에서 UTC `OffsetDateTime`으로 변환한다. TTL은 시간 수를
+절삭하지 않고 현재 `Instant`에서 정확히 24시간을 뺀 경계와 비교한다.
 
 ## 검증
 
 - `cd services/product-backend && ./gradlew --no-daemon test`: 전체 통과
+- `CollectionRefreshServiceTests.collectsDataOlderThanTtlByPartialHour`: 24시간 30분 경과
+  기록의 STALE 판정과 Queue 발행 통과
 - 단위/Agent Run/실제 PostgreSQL 범위 회귀 테스트: 통과
 - `git diff --check`: 통과
 - `make docs-check`: 통과

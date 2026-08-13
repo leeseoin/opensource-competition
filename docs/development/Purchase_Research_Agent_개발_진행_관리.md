@@ -2315,7 +2315,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-12 MCP-003 조건부 수집 freshness 범위 수정
 
-- 진행상황: **구현 완료 및 검증 필요**. commit `cc628e0`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
+- 진행상황: **구현 완료 및 검증 필요**. commit `cc628e0`, `7ff7910`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
   상품을 현재 검색 범위의 최신 데이터로 오인하던 문제를 수정했다. 실제 사용자 서버를
   재시작한 뒤 Python Worker 포함 browser E2E는 남아 있다.
 - 구현 위치:
@@ -2340,6 +2340,8 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 해결: `collection_search_contexts`에서 판매처, 앞뒤 공백과 대소문자를 정규화한 검색어 및
   `{\"inStockOnly\": false}` 기본 필터가 모두 같은 마지막 완료 기록만 사용한다. DB 경계는
   `Instant`로 받고 응답 경계에서 UTC `OffsetDateTime`으로 변환한다.
+- PR 리뷰에서 부분 시간이 절삭되어 24시간을 초과한 기록도 FRESH가 될 수 있음을 확인했다.
+  현재 시각에서 TTL을 뺀 `Instant` 경계와 직접 비교하고 24시간 30분 회귀 테스트를 추가했다.
 - 검증:
   - `cd services/product-backend && ./gradlew --no-daemon test`: 전체 통과
   - 단위/Agent Run/실제 PostgreSQL 범위 회귀 테스트: 통과
