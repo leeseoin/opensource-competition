@@ -3,8 +3,11 @@ package com.purchasesearch.product_backend.collection.entity;
 import java.time.OffsetDateTime;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
+import com.purchasesearch.product_backend.collection.dto.CollectionJobRequestSnapshot;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
 
 import jakarta.persistence.Column;
@@ -49,6 +52,10 @@ public class CollectionJob {
 	@Column(name = "end_page", nullable = false)
 	private int endPage;
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "request_snapshot", nullable = false, columnDefinition = "jsonb")
+	private CollectionJobRequestSnapshot requestSnapshot;
+
 	@Column(name = "requested_at", nullable = false)
 	private OffsetDateTime requestedAt;
 
@@ -86,6 +93,7 @@ public class CollectionJob {
 		job.totalTasks = totalTasks;
 		job.startPage = startPage;
 		job.endPage = endPage;
+		job.requestSnapshot = CollectionJobRequestSnapshot.from(firstTask);
 		job.requestedAt = firstTask.requestedAt();
 		return job;
 	}

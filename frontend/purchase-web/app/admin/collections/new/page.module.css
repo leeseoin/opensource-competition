@@ -1,0 +1,19 @@
+.page { --paper:#f2efe6; --ink:#101010; --lime:#d7ff3f; --blue:#3457ff; --orange:#ff4d00; min-height:100vh; padding:28px 34px 48px; background:var(--paper); color:var(--ink); }
+.heading { padding:0 0 22px; border-bottom:1px solid var(--ink); }
+.heading h1 { margin:0; font-family:var(--font-bodoni),serif; font-size:clamp(40px,5vw,64px); font-style:italic; font-weight:900; line-height:1; letter-spacing:-.05em; }
+.heading p { margin:8px 0 0; font-family:var(--font-geist-sans),sans-serif; font-size:13px; font-weight:600; }
+.form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; padding:28px 0 0; max-width:760px; }
+.field { display:flex; flex-direction:column; gap:6px; }
+.fieldWide { grid-column:1 / -1; }
+.field label { font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:#6d675f; }
+.field input[type="text"], .field input[type="number"] { padding:10px 12px; border:1px solid var(--ink); background:white; font-family:var(--font-geist-sans),sans-serif; font-size:13px; }
+.checkboxRow { display:flex; align-items:center; gap:8px; }
+.checkboxRow label { font-family:var(--font-geist-sans),sans-serif; font-size:12px; font-weight:700; text-transform:none; color:var(--ink); }
+.actions { grid-column:1 / -1; display:flex; align-items:center; gap:14px; padding:6px 0 0; }
+.submitButton { padding:12px 22px; border:1px solid var(--ink); background:var(--lime); font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; cursor:pointer; }
+.submitButton:disabled { cursor:progress; opacity:.6; }
+.errorMessage { margin:0; padding:14px 16px; border:1px solid var(--orange); background:white; color:#a52f00; font-family:var(--font-geist-sans),sans-serif; font-size:12px; }
+.successMessage { margin:0; padding:14px 16px; border:1px solid var(--ink); background:white; font-family:var(--font-geist-sans),sans-serif; font-size:12px; }
+.successMessage strong { display:block; margin:0 0 4px; font-size:13px; }
+@media (max-width:720px) { .form { grid-template-columns:1fr; } }
+@media (max-width:560px) { .page { padding:22px 16px 32px; } }

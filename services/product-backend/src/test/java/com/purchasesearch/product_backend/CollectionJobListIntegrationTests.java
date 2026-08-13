@@ -57,8 +57,8 @@ class CollectionJobListIntegrationTests {
 	void computesSuccessRateAndProductCountAcrossTasks() throws Exception {
 		OffsetDateTime requestedAt = OffsetDateTime.now();
 		CollectionJob job = saveJob("job-mixed", "abcmart", requestedAt, "PARTIAL", 3);
-		saveSucceededTask(job, "task-1", requestedAt, 1, 30);
-		saveSucceededTask(job, "task-2", requestedAt, 2, 20);
+		saveSucceededTask(job, "task-1", requestedAt, 1, 30, 30, 28);
+		saveSucceededTask(job, "task-2", requestedAt, 2, 20, 20, 20);
 		savePublishFailedTask(job, "task-3", requestedAt, 3);
 
 		CollectionJobListResponse response = collectionJobService.list("abcmart", null, 0, 20);
@@ -70,13 +70,17 @@ class CollectionJobListIntegrationTests {
 		assertThat(summary.taskCount()).isEqualTo(3);
 		assertThat(summary.succeededTaskCount()).isEqualTo(2);
 		assertThat(summary.failedTaskCount()).isEqualTo(1);
-		assertThat(summary.successRate()).isEqualTo(2.0 / 3.0);
+		assertThat(summary.taskSuccessRate()).isEqualTo(2.0 / 3.0);
 		assertThat(summary.productCount()).isEqualTo(50);
+		assertThat(summary.verificationTotal()).isEqualTo(50);
+		assertThat(summary.verificationMatched()).isEqualTo(48);
+		assertThat(summary.verificationMatchRate()).isEqualTo(48.0 / 50.0);
 
 		mockMvc.perform(get("/internal/v1/collection-jobs").param("merchant", "abcmart"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items[0].jobId").value("job-mixed"))
-				.andExpect(jsonPath("$.items[0].successRate").value(2.0 / 3.0))
+				.andExpect(jsonPath("$.items[0].taskSuccessRate").value(2.0 / 3.0))
+				.andExpect(jsonPath("$.items[0].verificationMatchRate").value(48.0 / 50.0))
 				.andExpect(jsonPath("$.items[0].productCount").value(50));
 	}
 
@@ -123,10 +127,13 @@ class CollectionJobListIntegrationTests {
 	}
 
 	private void saveSucceededTask(
-			CollectionJob job, String taskId, OffsetDateTime requestedAt, int page, int productCount) {
+			CollectionJob job, String taskId, OffsetDateTime requestedAt, int page, int productCount,
+			int verificationTotal, int verificationMatched) {
 		CollectionTaskMessage message = taskMessage(taskId, job.getJobId(), job.getMerchant(), requestedAt, page);
 		CollectionTask task = CollectionTask.queued(job, message);
-		task.complete(successEnvelope(taskId, job.getJobId(), requestedAt), productCount);
+		task.complete(
+				successEnvelope(taskId, job.getJobId(), requestedAt, verificationTotal, verificationMatched),
+				productCount);
 		collectionTaskRepository.save(task);
 	}
 
@@ -147,11 +154,13 @@ class CollectionJobListIntegrationTests {
 	}
 
 	/** complete()가 읽는 status/completedAt/durationMs/verificationSummary만 채운 최소 결과 봉투를 만든다. */
-	private CollectionResultEnvelope successEnvelope(String taskId, String jobId, OffsetDateTime completedAt) {
+	private CollectionResultEnvelope successEnvelope(
+			String taskId, String jobId, OffsetDateTime completedAt, int verificationTotal, int verificationMatched) {
 		CollectorResult collectorResult = new CollectorResult(
 				"req-" + taskId, "search", "success", "abcmart", "구두", null,
 				null, null, completedAt, "test",
-				new VerificationSummary(0, 0, 0, 0, 0, 0, 0),
+				new VerificationSummary(
+						verificationTotal, verificationMatched, verificationTotal - verificationMatched, 0, 0, 0, 0),
 				List.of(), List.of(), List.of());
 		return new CollectionResultEnvelope(
 				"1", taskId, jobId, "success", completedAt.minusSeconds(1), completedAt, 1000L,

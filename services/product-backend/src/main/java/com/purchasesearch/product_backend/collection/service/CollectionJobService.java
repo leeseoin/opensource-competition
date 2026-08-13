@@ -3,6 +3,7 @@ package com.purchasesearch.product_backend.collection.service;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -10,8 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobListResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobListResponse.CollectionJobSummary;
+import com.purchasesearch.product_backend.collection.dto.CollectionJobRequestSnapshot;
 import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionResultEnvelope;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage;
@@ -19,6 +22,7 @@ import com.purchasesearch.product_backend.collection.entity.CollectionJob;
 import com.purchasesearch.product_backend.collection.entity.CollectionTask;
 import com.purchasesearch.product_backend.collection.exception.CollectionJobNotFoundException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionResultMessageException;
+import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
 import com.purchasesearch.product_backend.collection.repository.CollectionJobRepository;
 import com.purchasesearch.product_backend.collection.repository.CollectionTaskRepository;
 
@@ -27,6 +31,8 @@ import com.purchasesearch.product_backend.collection.repository.CollectionTaskRe
  */
 @Service
 public class CollectionJobService {
+
+	private static final Set<String> RETRYABLE_STATUSES = Set.of("FAILED", "PARTIAL");
 
 	private final CollectionJobRepository collectionJobRepository;
 	private final CollectionTaskRepository collectionTaskRepository;
@@ -184,15 +190,50 @@ public class CollectionJobService {
 	}
 
 	/**
-	 * job 요약 projection을 API 응답과 성공률로 변환한다.
+	 * 실패하거나 일부만 성공한 job을 저장된 원본 조건 그대로 다시 발행할 수 있게 요청으로 되돌린다.
+	 *
+	 * @param jobId 재실행할 job 식별자
+	 * @return 등록 당시와 같은 merchant/query/페이지범위/limit/locale/currency/filters를 담은 재발행 요청
+	 * @throws CollectionJobNotFoundException job이 존재하지 않는 경우
+	 * @throws InvalidCollectionTaskException job이 FAILED 또는 PARTIAL 상태가 아닌 경우
+	 */
+	@Transactional(readOnly = true)
+	public BulkCollectionTaskRequest toRetryRequest(String jobId) {
+		CollectionJob job = collectionJobRepository.findById(jobId)
+				.orElseThrow(() -> new CollectionJobNotFoundException(jobId));
+		if (!RETRYABLE_STATUSES.contains(job.getStatus())) {
+			throw new InvalidCollectionTaskException(
+					"FAILED 또는 PARTIAL 상태의 job만 재실행할 수 있습니다. 현재 상태: " + job.getStatus());
+		}
+		CollectionJobRequestSnapshot snapshot = job.getRequestSnapshot() == null
+				? CollectionJobRequestSnapshot.empty()
+				: job.getRequestSnapshot();
+		return new BulkCollectionTaskRequest(
+				job.getMerchant(),
+				job.getSearchQuery(),
+				job.getStartPage(),
+				job.getEndPage() - job.getStartPage() + 1,
+				snapshot.limit(),
+				snapshot.locale(),
+				snapshot.currency(),
+				snapshot.priority(),
+				snapshot.maxAttempts(),
+				snapshot.toRequestFilters());
+	}
+
+	/**
+	 * job 요약 projection을 API 응답과 페이지/상품 단위 두 가지 성공률로 변환한다.
 	 *
 	 * @param projection repository가 계산한 job과 페이지 작업 집계
-	 * @return succeededTaskCount / taskCount 성공률을 포함한 job 요약
+	 * @return taskSuccessRate(페이지 단위)와 verificationMatchRate(상품 단위)를 포함한 job 요약
 	 */
 	private CollectionJobSummary toSummary(CollectionJobRepository.JobSummaryProjection projection) {
-		Double successRate = projection.getTaskCount() == 0
+		Double taskSuccessRate = projection.getTaskCount() == 0
 				? null
 				: projection.getSucceededTaskCount() / (double) projection.getTaskCount();
+		Double verificationMatchRate = projection.getVerificationTotal() == 0
+				? null
+				: projection.getVerificationMatched() / (double) projection.getVerificationTotal();
 		return new CollectionJobSummary(
 				projection.getJobId(),
 				projection.getMerchant(),
@@ -201,8 +242,11 @@ public class CollectionJobService {
 				projection.getTaskCount(),
 				projection.getSucceededTaskCount(),
 				projection.getFailedTaskCount(),
-				successRate,
+				taskSuccessRate,
 				projection.getProductCount(),
+				projection.getVerificationTotal(),
+				projection.getVerificationMatched(),
+				verificationMatchRate,
 				projection.getRequestedAt(),
 				projection.getCompletedAt());
 	}

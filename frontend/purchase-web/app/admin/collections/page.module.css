@@ -2,9 +2,10 @@
 .heading { display:flex; padding:0 0 22px; align-items:center; justify-content:space-between; border-bottom:1px solid var(--ink); gap:20px; }
 .heading h1 { margin:0; font-family:var(--font-bodoni),serif; font-size:clamp(40px,5vw,64px); font-style:italic; font-weight:900; line-height:1; letter-spacing:-.05em; }
 .heading p { margin:8px 0 0; font-family:var(--font-geist-sans),sans-serif; font-size:13px; font-weight:600; }
-.refreshButton { padding:12px 20px; border:1px solid var(--ink); background:var(--lime); font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; cursor:pointer; }
+.refreshButton { display:inline-block; padding:12px 20px; border:1px solid var(--ink); background:var(--lime); font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; text-decoration:none; color:var(--ink); cursor:pointer; }
 .refreshButton:disabled { cursor:progress; opacity:.6; }
 .errorMessage { margin:18px 0 0; padding:18px; border:1px solid var(--orange); background:white; color:#a52f00; }
+.successMessage { margin:18px 0 0; padding:18px; border:1px solid var(--ink); background:white; }
 .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:18px; padding:28px 0 0; }
 .card { padding:18px; border:1px solid var(--ink); background:white; }
 .card h2 { margin:0 0 10px; font-family:var(--font-geist-sans),sans-serif; font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
@@ -22,3 +23,5 @@
 .table th, .table td { padding:10px 14px; text-align:left; border-bottom:1px solid #ddd8cd; }
 .table th { font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:#6d675f; }
 .table tbody tr:last-child td { border-bottom:none; }
+.retryButton { padding:6px 12px; border:1px solid var(--ink); background:white; font-family:var(--font-geist-sans),sans-serif; font-size:11px; font-weight:800; cursor:pointer; }
+.retryButton:disabled { cursor:progress; opacity:.6; }

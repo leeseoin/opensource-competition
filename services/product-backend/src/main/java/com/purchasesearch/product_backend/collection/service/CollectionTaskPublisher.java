@@ -146,6 +146,21 @@ public class CollectionTaskPublisher {
 	}
 
 	/**
+	 * 실패하거나 일부만 성공한 job을 등록 당시와 같은 조건으로 새 jobId에 다시 발행한다.
+	 *
+	 * @param jobId 재실행할 job 식별자
+	 * @return 새로 발행된 job의 jobId와 페이지 범위
+	 * @throws com.purchasesearch.product_backend.collection.exception.CollectionJobNotFoundException
+	 *     job이 존재하지 않는 경우
+	 * @throws InvalidCollectionTaskException job이 FAILED 또는 PARTIAL 상태가 아닌 경우
+	 * @throws CollectionTaskPublishException 일부 또는 전체 작업의 broker 확인에 실패한 경우
+	 */
+	public BulkCollectionTaskResponse retryJob(String jobId) {
+		BulkCollectionTaskRequest retryRequest = collectionJobService.toRetryRequest(jobId);
+		return publishPages(retryRequest);
+	}
+
+	/**
 	 * 작업 한 건을 persistent 메시지로 발행하고 RabbitMQ broker ACK를 확인한다.
 	 *
 	 * @param task 발행할 단일 페이지 작업

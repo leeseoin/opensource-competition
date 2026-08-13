@@ -1,4 +1,10 @@
-/** CollectionJobSummary는 한 번의 수집 요청과 그 성공률/상품 수 요약이다. */
+/**
+ * CollectionJobSummary는 한 번의 수집 요청과 그 페이지/상품 단위 성공률, 상품 수 요약이다.
+ *
+ * 페이지(task)는 그 안 상품 하나라도 불일치하면 SUCCESS가 아닌 PARTIAL로 기록되므로
+ * taskSuccessRate(페이지 전체가 완전히 일치한 비율)와 verificationMatchRate(상품 단위로 실제
+ * 일치한 비율)는 서로 다른 걸 측정한다. 데이터 품질을 볼 때는 verificationMatchRate를 봐야 한다.
+ */
 export interface CollectionJobSummary {
   jobId: string;
   merchant: string;
@@ -7,8 +13,11 @@ export interface CollectionJobSummary {
   taskCount: number;
   succeededTaskCount: number;
   failedTaskCount: number;
-  successRate: number | null;
+  taskSuccessRate: number | null;
   productCount: number;
+  verificationTotal: number;
+  verificationMatched: number;
+  verificationMatchRate: number | null;
   requestedAt: string;
   completedAt: string | null;
 }

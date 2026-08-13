@@ -53,6 +53,12 @@ public interface CollectionJobRepository extends JpaRepository<CollectionJob, St
 		/** @return DB에 처리한 상품 수 합계 */
 		long getProductCount();
 
+		/** @return JSON/HTML 검증을 시도한 상품 수 합계 */
+		long getVerificationTotal();
+
+		/** @return JSON/HTML이 일치한 상품 수 합계 */
+		long getVerificationMatched();
+
 		/** @return job 요청 시각 */
 		OffsetDateTime getRequestedAt();
 
@@ -91,6 +97,8 @@ public interface CollectionJobRepository extends JpaRepository<CollectionJob, St
 					       COALESCE(SUM(CASE WHEN task.status = 'FAILED' OR task.status = 'PUBLISH_FAILED' THEN 1 ELSE 0 END), 0)
 					           AS failedTaskCount,
 					       COALESCE(SUM(task.productCount), 0) AS productCount,
+					       COALESCE(SUM(task.verificationTotal), 0) AS verificationTotal,
+					       COALESCE(SUM(task.verificationMatched), 0) AS verificationMatched,
 					       job.requestedAt AS requestedAt, job.completedAt AS completedAt
 					FROM CollectionJob job LEFT JOIN CollectionTask task ON task.job = job
 					WHERE (:merchant IS NULL OR job.merchant = :merchant)

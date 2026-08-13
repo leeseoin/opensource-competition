@@ -1,0 +1,4 @@
+.nav { --paper:#f2efe6; --ink:#101010; --lime:#d7ff3f; display:flex; gap:0; padding:16px 34px 0; background:var(--paper); border-bottom:1px solid var(--ink); }
+.navLink { padding:12px 18px; font-family:var(--font-geist-sans),sans-serif; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--ink); text-decoration:none; border:1px solid transparent; border-bottom:none; }
+.navLinkActive { background:var(--lime); border-color:var(--ink); }
+@media (max-width:560px) { .nav { padding:12px 16px 0; gap:4px; } .navLink { padding:10px 12px; font-size:11px; } }
