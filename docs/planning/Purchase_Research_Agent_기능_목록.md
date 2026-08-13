@@ -99,7 +99,7 @@
 |---|---|---|---|---|---|---|---|
 | `MCP-001` | Product Backend 상품 검색 MCP 도구 | 구현 완료 및 검증 필요 | P0 | MCP stdio server, 상품 검색/상세/근거/비교/조건부 수집/재검증 도구, REST API client | Codex/Claude Code가 MCP를 통해 DB 상품과 출처를 조회하고 계약 테스트가 통과함 | 시스템 구조 | 실제 Codex 및 Claude Code tool call 전체 E2E |
 | `MCP-002` | 구매 조사 Agent 실행 경계 | 부분 구현 | P1 | Codex Plugin workflow, 질문 구조화, 사용자 조건 확인, 도구 호출과 답변 근거 연결 | Plugin이 판매처나 DB를 직접 호출하지 않고 MCP 도구로 근거 있는 답변을 구성함 | 시스템 구조 | Codex 재로그인 복구 E2E/stream/취소/동시성 상한과 Plugin 로컬 설치 검증 |
-| `MCP-003` | 상태 기반 구매 조사 Agent Run | 구현 완료 및 검증 필요 | P0 | 확정 세션의 DB 우선 검색, 조건부 수집, 상태/사건 영구 저장, 재검색과 선택 상품 재검증 orchestration | 같은 세션의 중복 수집 없이 SEARCHING/COLLECTING/READY/VERIFYING/종료 상태가 복구되고 웹과 MCP가 동일한 진행 근거를 반환함 | 시스템 구조 | 2026-08-11 점검 / 실제 Python Worker와 browser의 COLLECTING/VERIFYING 전체 E2E |
+| `MCP-003` | 상태 기반 구매 조사 Agent Run | 구현 완료 및 검증 필요 | P0 | 확정 세션의 DB 우선 검색, 조건부 수집, 상태/사건 영구 저장, 재검색과 선택 상품 재검증 orchestration | 같은 세션의 중복 수집 없이 SEARCHING/COLLECTING/READY/VERIFYING/종료 상태가 복구되고 웹과 MCP가 동일한 진행 근거를 반환함 | 시스템 구조 | 2026-08-12 점검 / 동일 판매처/검색어/필터 freshness 회귀 수정 완료 / 실제 Python Worker와 browser의 COLLECTING/VERIFYING 전체 E2E |
 
 ### Next.js Web
 

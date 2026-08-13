@@ -2313,6 +2313,42 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 남은 위험: 실제 Worker 처리 시간이 60초를 넘으면 화면은 안전하게 중단하지만 실행은
   DB에 계속 남는다. 재개 전용 버튼과 실제 수집/재검증 browser E2E가 필요하다.
 
+### 2026-08-12 MCP-003 조건부 수집 freshness 범위 수정
+
+- 진행상황: **구현 완료 및 검증 필요**. commit `cc628e0`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
+  상품을 현재 검색 범위의 최신 데이터로 오인하던 문제를 수정했다. 실제 사용자 서버를
+  재시작한 뒤 Python Worker 포함 browser E2E는 남아 있다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/repository/CollectionSearchContextRepository.java:25`
+    `findLatestDefaultSearchCollectedAt`: 동일 판매처/정규화 검색어/기본 필터의 마지막 수집
+    완료 시각만 조회
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionRefreshService.java:46`
+    `request`: 상품 검색 결과 대신 정확한 수집 문맥을 기준으로 FRESH/STALE/MISSING 판정
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/collection/service/CollectionRefreshServiceTests.java:40`
+    `doesNotCollectFreshDataWithoutForce`, `collectsStaleData`,
+    `collectsWhenExactSearchContextIsMissing`: 정확한 검색 범위의 단위 판정과 Queue 발행 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:170`
+    `findsLatestCollectionOnlyForExactDefaultSearchScope`: 실제 PostgreSQL JSONB 필터와 검색 범위
+    조회 검증
+- 발생 문제: 검정/270/10만 원 이하 구두 후보가 0개인데 `COLLECTION_SKIPPED`로 즉시
+  종료됐다. `페니 로퍼`를 최근 수집한 상품이 구두 카테고리와 연결돼 있다는 이유로
+  `구두` 검색 범위 전체가 최신이라고 판정됐다.
+- 원인: `CollectionRefreshService`가 수집 요청 문맥이 아니라 상품 이름/브랜드/카테고리와
+  유사 검색어로 조회한 상품의 최신 snapshot을 freshness 근거로 사용했다. native timestamp
+  projection도 PostgreSQL JDBC 실제 반환형인 `Instant` 대신 `OffsetDateTime`으로 선언하면
+  실행 시 형변환 오류가 생길 수 있었다.
+- 해결: `collection_search_contexts`에서 판매처, 앞뒤 공백과 대소문자를 정규화한 검색어 및
+  `{\"inStockOnly\": false}` 기본 필터가 모두 같은 마지막 완료 기록만 사용한다. DB 경계는
+  `Instant`로 받고 응답 경계에서 UTC `OffsetDateTime`으로 변환한다.
+- 검증:
+  - `cd services/product-backend && ./gradlew --no-daemon test`: 전체 통과
+  - 단위/Agent Run/실제 PostgreSQL 범위 회귀 테스트: 통과
+  - 현재 로컬 DB의 `abcmart/구두/{\"inStockOnly\": false}` 마지막 수집은 약 43시간 전으로
+    24시간 TTL 기준 `STALE` 판정 대상임을 읽기 전용 SQL로 확인
+- 남은 위험: 기본 조건부 수집은 현재 필터 없는 검색 범위만 발행한다. 가격/색상/사이즈까지
+  판매처 검색 필터로 전달하는 기능을 추가하면 동일한 필터 정규화 계약으로 조회 범위를
+  확장해야 한다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
