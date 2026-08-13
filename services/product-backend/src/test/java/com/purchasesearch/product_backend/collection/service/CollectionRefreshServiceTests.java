@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -61,6 +62,22 @@ class CollectionRefreshServiceTests {
 		assertThat(response.dataStatus()).isEqualTo(DataStatus.STALE);
 		assertThat(response.collectionRequested()).isTrue();
 		assertThat(response.jobId()).isEqualTo("job-1");
+		verify(publisher).publish(any(CollectionTaskRequest.class));
+	}
+
+	/** 24시간을 분 단위로 초과한 데이터가 시간 절삭 없이 STALE이 되는지 검증한다. */
+	@Test
+	void collectsDataOlderThanTtlByPartialHour() {
+		when(searchContextRepository.findLatestDefaultSearchCollectedAt("abcmart", "구두"))
+				.thenReturn(Optional.of(Instant.now().minus(Duration.ofHours(24).plusMinutes(30))));
+		when(publisher.publish(any(CollectionTaskRequest.class)))
+				.thenReturn(new CollectionTaskResponse("task-boundary", "job-boundary", "QUEUED",
+						"abcmart", "search", OffsetDateTime.now()));
+
+		var response = service.request(new CollectionRefreshRequest("abcmart", "구두", false));
+
+		assertThat(response.dataStatus()).isEqualTo(DataStatus.STALE);
+		assertThat(response.collectionRequested()).isTrue();
 		verify(publisher).publish(any(CollectionTaskRequest.class));
 	}
 

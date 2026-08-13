@@ -50,7 +50,7 @@ public class CollectionRefreshService {
 				.orElse(null);
 		OffsetDateTime latestCollectedAt = latestCollectedInstant == null
 				? null : latestCollectedInstant.atOffset(ZoneOffset.UTC);
-		DataStatus dataStatus = status(latestCollectedAt);
+		DataStatus dataStatus = status(latestCollectedInstant);
 		if (dataStatus == DataStatus.FRESH && !Boolean.TRUE.equals(request.force())) {
 			return new CollectionRefreshResponse(dataStatus, false, null, null, "NO_ACTION", latestCollectedAt);
 		}
@@ -61,11 +61,11 @@ public class CollectionRefreshService {
 	}
 
 	/** 동일 판매처, 검색어와 필터의 마지막 수집 완료 시각으로 상태를 판정한다. */
-	private DataStatus status(OffsetDateTime latestCollectedAt) {
+	private DataStatus status(Instant latestCollectedAt) {
 		if (latestCollectedAt == null) {
 			return DataStatus.MISSING;
 		}
-		long ageHours = Math.max(0, Duration.between(latestCollectedAt, OffsetDateTime.now()).toHours());
-		return ageHours <= staleAfterHours ? DataStatus.FRESH : DataStatus.STALE;
+		Instant staleBoundary = Instant.now().minus(Duration.ofHours(staleAfterHours));
+		return latestCollectedAt.isBefore(staleBoundary) ? DataStatus.STALE : DataStatus.FRESH;
 	}
 }
