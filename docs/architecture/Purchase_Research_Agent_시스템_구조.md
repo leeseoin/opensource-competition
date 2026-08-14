@@ -140,6 +140,31 @@ Wiki는 가격, 재고와 옵션을 저장하지 않는다. 가격/재고/옵션
 
 Product Backend는 Collector가 제공하지 않은 판매처 사실을 만들지 않는다.
 
+### 상태 기반 구매 조사 Agent Run
+
+사용자가 조건을 확인한 뒤의 구매 조사는 Product Backend가 영구 상태를 관리하는
+`Agent Run`으로 실행한다. Codex와 MCP Server는 다음 행동을 제안하고 API를 호출하지만,
+수집 필요 여부와 허용된 상태 전이는 Product Backend의 결정적 정책으로 제한한다.
+
+```text
+조건 확인 완료
+  → SEARCHING: PostgreSQL 후보 검색
+  → READY: 후보와 근거 반환
+  또는
+  → COLLECTING: 결과 없음/오래됨인 판매처만 수집 요청
+  → SEARCHING: 수집 종료 뒤 한 번 재검색
+  → READY / NO_RESULTS / FAILED
+  → VERIFYING: 사용자가 선택한 판매처 상품 재검증
+  → COMPLETED: 가격/재고 변경 여부 반환
+```
+
+`agent_runs`는 현재 상태와 조사 세션/재검증 요청 연결을 저장하고,
+`agent_run_events`는 사용자에게 공개할 단계별 진행 사건을 순서대로 저장한다. 같은 조사
+세션의 실행 시작과 같은 상태의 진행 요청은 중복 수집 작업을 만들지 않아야 한다. 웹과
+MCP는 짧고 상한이 있는 polling으로 실행을 전진시키며, Product Backend 내부에 종료되지
+않는 polling thread를 만들지 않는다. 추천 당시 snapshot과 구매 직전 verification
+snapshot은 계속 분리한다.
+
 ### MCP Server
 
 - 조사 세션, 후보 검색, 상세/근거/비교, 조건부 수집과 재검증 MCP 도구 제공
@@ -261,10 +286,10 @@ com.purchasesearch.product_backend
 | Python Collector | 부분 구현 | ABC마트/29CM 검색/상세, Queue v1 작업 소비와 결과 발행, ACK/retry/DLQ 통합 검증 |
 | Go Collector | 전환 기준 | ABC마트/29CM/무신사 검색, Registry, Queue 운영 안전성 비교 기준 |
 | Contracts | 초안 | Collector와 Queue v1 Schema 및 예제 |
-| Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, 결과 저장, 범용 조건 정규화, FTS/trigram, 선택적 pgvector/BGE-M3 adapter, PUBLISHED Wiki 의미 확장, 상품 상세/근거/비교와 조건부 수집/재검증 API |
+| Product Backend | 부분 구현 | 수집 작업 발행/상태 DB, 결과 저장, 범용 조건 정규화, FTS/trigram, 선택적 pgvector/BGE-M3 adapter, PUBLISHED Wiki 의미 확장, 상품 상세/근거/비교와 조건부 수집/재검증 API, 상태 기반 Agent Run |
 | PostgreSQL 적재 | 부분 구현 | Flyway schema, 수동 적재와 RabbitMQ 결과 기반 upsert/snapshot 및 collection job/task 상태 저장 검증 |
-| MCP Server | 구현 완료 및 검증 필요 | 조사 세션/후보 검색/상세/근거/비교/조건부 수집/재검증 도구 9개와 Product Backend REST 연결 / 실제 Codex 및 Claude Code 전체 도구 선택 E2E 남음 |
-| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 / stream과 관리자 화면 남음 |
+| MCP Server | 구현 완료 및 검증 필요 | 조사 세션/후보 검색/상세/근거/비교/조건부 수집/재검증 도구와 상태 기반 Agent Run 도구의 Product Backend REST 연결 / 실제 Codex 및 Claude Code 전체 도구 선택 E2E 남음 |
+| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, 상태 기반 Agent Run 진행과 DB 후보 표시 / stream과 관리자 화면 남음 |
 | RabbitMQ | 부분 구현 | Spring 작업 발행, Python/Go Worker 시작/결과와 Spring 소비/DLQ 구현 / ABC마트 Python `QUEUED → RUNNING → COMPLETED` E2E 완료, 여러 검색어와 페이지 수집 남음 |
 | Redis | 실행 기반 | Compose 실행은 가능하고 application adapter는 미구현 |
 | Codex Plugin | 기본 구조 | manifest, MCP 설정, 구매 조사 skill 초안 |
@@ -275,7 +300,7 @@ com.purchasesearch.product_backend
 2. 수집 작업 상태를 PostgreSQL에 저장한다. **(구현/통합 테스트 완료)**
 3. 상품 후보 검색 baseline과 품질 평가 data를 만들고 전문 검색을 구현한다. **(DRAFT 평가까지 완료)**
 4. 벡터 검색과 검토형 구매 도메인 Wiki를 단계별 비교한 뒤 통과한 경로만 연결한다. **(PUBLISHED Wiki 운영 연결 완료, 실제 BGE-M3 평가 남음)**
-5. MCP Server가 REST API를 호출하도록 연결한다. **(도구 9개와 Backend Queue 재검증 완료, CLI 전체 E2E 남음)**
-6. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다. **(채팅 후보 경로 부분 구현)**
+5. MCP Server가 REST API를 호출하도록 연결한다. **(상품 조사 도구와 Backend Queue 재검증 완료, CLI 전체 E2E 남음)**
+6. Next.js 채팅과 관리자 화면을 MCP 및 REST API에 연결한다. **(채팅 후보와 Agent Run 진행 경로 부분 구현)**
 
 세부 체크박스와 완료 조건은 [구현 계획](../planning/Purchase_Research_Agent_TODO.md)과 [개발 진행 관리](../development/Purchase_Research_Agent_개발_진행_관리.md)에서 관리한다.

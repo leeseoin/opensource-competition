@@ -102,6 +102,8 @@ Spring Framework, Hibernate, Jackson, JUnit 등 간접 의존성은 Gradle이 �
 
 정확한 Node package 해석 결과는 `frontend/purchase-web/package.json`과 `frontend/purchase-web/package-lock.json`에서 확인한다.
 Node.js 내장 `node:test`를 Next.js server route와 상품군 선택 단위 테스트에 사용한다.
+2026-08-11 Agent Run route 테스트를 `package.json`의 기존 `node:test` 대상에 추가했으며
+새 package와 외부 구성요소 및 version 변경은 없다.
 `next.config.ts`에는 DB 상품 이미지를 화면에 표시하기 위해 ABC마트의
 `image.a-rt.com`과 29CM의 `img.29cm.co.kr` HTTPS host만 허용했다.
 

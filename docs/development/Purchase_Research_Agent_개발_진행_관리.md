@@ -1,6 +1,6 @@
 # Purchase Research Agent 개발 진행 관리
 
-최종 갱신일: 2026-08-10
+최종 갱신일: 2026-08-11
 
 ## 목적
 
@@ -39,13 +39,13 @@
 | 구조와 계약 | 부분 구현 | 역할 분리, Collector v1 스키마와 예제 작성 | 요청 계약 확정, Go/Java DTO 매핑 |
 | Go Collector 기반 | 부분 구현 | module, 설정, HTTP lifecycle, health·실제 검색 endpoint | 공통 URL 검증, retry, 동시성 제한, 나머지 operation |
 | 실제 판매처 Adapter | 부분 구현 | 판매처 Registry와 ABC마트·29CM 공개 검색, 무신사 검색 PoC | 29CM·ABC마트 상품 상세·옵션·리뷰 구현 |
-| Spring Boot Product Backend와 DB | 부분 구현 | Java Contract, Flyway/JPA 저장, 작업 상태, Queue 연동, 조건 정규화, 후보/상세/근거/비교/조건부 수집/재검증 API | 동시 저장 보강, 상품 상세 수집 계약과 다중 작업 E2E |
+| Spring Boot Product Backend와 DB | 부분 구현 | Java Contract, Flyway/JPA 저장, 작업 상태, Queue 연동, 조건 정규화, 후보/상세/근거/비교/조건부 수집/재검증 API와 Agent Run 상태 저장 | 동시 저장 보강, 상품 상세 수집 계약과 실제 Agent Run 다중 작업 E2E |
 | Redis/RabbitMQ 수집 기반 | 부분 구현 | 검색 작업과 결과 계약, Spring producer, Go Worker, Spring 결과 Consumer 및 retry/DLQ | 실제 전체 Queue E2E, Redis limiter, 다중 페이지 |
 | Hybrid 상품 후보 검색 | 부분 구현 | 필수/선호 조건, FTS/trigram, 선택적 pgvector adapter와 60개 DRAFT 평가 | 실제 BGE-M3/10,000개 p95/결정론적 점수 구현 |
 | 검토형 구매 도메인 Wiki | 부분 구현 | DRAFT 검토 경계와 PUBLISHED 직접 관계/동의어 운영 검색 | 용도/색상/구두 사람 검토와 1,000개 품질 평가 |
 | 리뷰 분석과 비교 | 부분 구현 | 상품 2개에서 5개의 가격/재고/판매처/category/최신성 비교 | 리뷰 신호와 공통 스펙 비교 및 점수 근거 연결 |
-| MCP와 Codex Plugin | 구현 완료 및 검증 필요 | stdio MCP 도구 9개, Product Backend REST 연결, 조건 확인 후 검색 E2E와 Backend Queue 재검증 | 실제 Codex/Claude Code 전체 도구 선택, stream/취소와 Plugin 설치 |
-| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, MCP DB 후보 표시 | 실제 browser/접근성/stream과 `/admin/collections` 구현 |
+| MCP와 Codex Plugin | 구현 완료 및 검증 필요 | stdio MCP 도구 13개, Product Backend REST 연결, 조건 확인 후 상태 기반 Agent Run과 Backend Queue 재검증 | 실제 Codex/Claude Code 전체 도구 선택, stream/취소와 Plugin 설치 |
+| Next.js Web | 부분 구현 | Landing/Chat/Compare V2, Codex 조건 확인, Agent Run 사건/DB 후보/재검증 표시 | 실제 browser Agent Run E2E/접근성/stream과 `/admin/collections` 구현 |
 | 공통 품질과 운영 | 부분 구현 | 루트 Makefile, 로컬 인프라와 Python Swagger 단계 검증 기반 | 계약 CI, 구조화 로그와 실제 판매처 Queue E2E |
 | Python/Go 크롤러 비교 | 완료 | 공통 Contract, pagination/checkpoint, 양쪽 판매처 최대 10,000개 실수집과 최신 비교 보고서 | 새 판매처 또는 수집 방식 변경 시 회귀 측정 |
 
@@ -2269,6 +2269,95 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `git diff --check`: 통과
 - 남은 위험: 자동화 browser가 제공되지 않아 실제 hover/focus/open 화면은 사용자 browser에서
   최종 확인해야 한다.
+
+### 2026-08-11 MCP-003 상태 기반 구매 조사 Agent Run
+
+- 진행상황: **구현 완료 및 검증 필요**. commit `721581e`, `400dbf6`, `6872baf`,
+  `6d218e1`, `56c7a23`, `206b168`, `dee92e7`, `74223ea`에서 확정 세션의 DB 우선 검색부터 조건부 수집, 재검색과 선택 상품 재검증을
+  영구 실행 상태로 연결했다. 실제 Python Worker와 browser 전체 E2E는 남아 있다.
+- 구현 위치:
+  - `services/product-backend/src/main/resources/db/migration/V12__add_agent_runs.sql:1`
+    `agent_runs`: 실행 상태/사건/수집 job 연결 schema
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:84`
+    `start`: 같은 세션 중복 방지와 DB 우선 검색 및 조건부 수집
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:215`
+    `requestCollection`: 판매처별 발행 실패 격리와 접수된 부분 수집 계속 진행
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:128`
+    `advance`: 수집과 재검증 job 상태에 따른 결정적 전이
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:148`
+    `verify`: 현재 후보에 포함된 상품만 재검증
+  - `services/mcp-server/src/index.ts:175` `start_agent_run`: 상태 기반 실행 시작 도구
+  - `services/mcp-server/src/index.ts:198` `advance_agent_run`: 제한된 진행 도구
+  - `frontend/purchase-web/app/chat/chat-experience.tsx:215` `pollAgentRun`: 최대 60초 polling과 사건 표시
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:615`
+    `startsIdempotentReadyAgentRunThroughHttpEndpoint`: 실제 PostgreSQL/HTTP READY와 중복 방지
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:654`
+    `startsCollectingAgentRunForMissingDatabaseCandidates`: 실제 RabbitMQ 수집 job 연결과 COLLECTING
+- 발생 문제: 단순 검색 경로는 DB 후보가 없으면 즉시 빈 결과로 끝났고 수집 및 재검증의
+  복구 가능한 진행 상태가 없었다.
+- 원인: research session, collection job과 verification을 연결하는 영구 orchestration
+  식별자와 사건 기록이 없었다. 첫 실제 조건부 수집에서는 JPA 복합키와 연관이 같은
+  `run_id` column을 중복 insert 대상으로 만들었다.
+- 해결: Product Backend가 상태 전이와 영구 저장을 담당하고 MCP/Web은 같은 실행 ID를
+  사용한다. 행 잠금과 고유 제약으로 중복을 막고 수집 요청 실패는 안전한 FAILED 상태로
+  보존한다. 서버 내부 무한 polling 대신 Web이 호출 상한 안에서 진행 API를 사용한다.
+  수집 job 등록과 발행 실패 기록은 독립 transaction으로 먼저 확정해 RabbitMQ Worker가
+  DB commit보다 먼저 결과를 보내는 race를 막았다.
+  `dev-ls`에 이미 있던 수집 요청 snapshot V11과의 Flyway 버전 중복은 Agent Run migration을
+  V12로 이동해 해결했다.
+  PR 리뷰에서 다중 판매처 중 하나의 Queue 발행 실패가 이미 접수된 작업까지 무시하고
+  실행 전체를 FAILED로 끝내는 문제를 확인했다. 하나 이상의 job이 접수됐으면
+  `COLLECTING`으로 계속 진행하고 모두 실패했을 때만 FAILED로 종료하도록 수정했다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test`: 통과
+  - `cd services/product-backend && ./gradlew --no-daemon test --tests '*AgentRunServiceTests'`: 다중 판매처 부분 실패 회귀 포함 통과
+  - Agent Run PostgreSQL/HTTP 단일 통합 테스트: 통과
+  - `cd services/mcp-server && npm test`: 4개 통과
+  - `cd frontend/purchase-web && npm test`: 56개 통과
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `cd frontend/purchase-web && npm run build`: 통과
+  - 실제 로컬 API/PostgreSQL/RabbitMQ/Python Worker에서 READY와 VERIFIED/COMPLETED 통과
+  - 격리 검색어의 실제 MISSING/COLLECTING/0건 수집/NO_RESULTS 통과
+- 남은 위험: 실제 Worker 처리 시간이 60초를 넘으면 화면은 안전하게 중단하지만 실행은
+  DB에 계속 남는다. 재개 전용 버튼과 실제 수집/재검증 browser E2E가 필요하다.
+
+### 2026-08-12 MCP-003 조건부 수집 freshness 범위 수정
+
+- 진행상황: **구현 완료 및 검증 필요**. commit `b9e5616`, `80ca436`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
+  상품을 현재 검색 범위의 최신 데이터로 오인하던 문제를 수정했다. 실제 사용자 서버를
+  재시작한 뒤 Python Worker 포함 browser E2E는 남아 있다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/repository/CollectionSearchContextRepository.java:25`
+    `findLatestDefaultSearchCollectedAt`: 동일 판매처/정규화 검색어/기본 필터의 마지막 수집
+    완료 시각만 조회
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectionRefreshService.java:46`
+    `request`: 상품 검색 결과 대신 정확한 수집 문맥을 기준으로 FRESH/STALE/MISSING 판정
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/collection/service/CollectionRefreshServiceTests.java:40`
+    `doesNotCollectFreshDataWithoutForce`, `collectsStaleData`,
+    `collectsWhenExactSearchContextIsMissing`: 정확한 검색 범위의 단위 판정과 Queue 발행 검증
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/ProductStorageIntegrationTests.java:170`
+    `findsLatestCollectionOnlyForExactDefaultSearchScope`: 실제 PostgreSQL JSONB 필터와 검색 범위
+    조회 검증
+- 발생 문제: 검정/270/10만 원 이하 구두 후보가 0개인데 `COLLECTION_SKIPPED`로 즉시
+  종료됐다. `페니 로퍼`를 최근 수집한 상품이 구두 카테고리와 연결돼 있다는 이유로
+  `구두` 검색 범위 전체가 최신이라고 판정됐다.
+- 원인: `CollectionRefreshService`가 수집 요청 문맥이 아니라 상품 이름/브랜드/카테고리와
+  유사 검색어로 조회한 상품의 최신 snapshot을 freshness 근거로 사용했다. native timestamp
+  projection도 PostgreSQL JDBC 실제 반환형인 `Instant` 대신 `OffsetDateTime`으로 선언하면
+  실행 시 형변환 오류가 생길 수 있었다.
+- 해결: `collection_search_contexts`에서 판매처, 앞뒤 공백과 대소문자를 정규화한 검색어 및
+  `{\"inStockOnly\": false}` 기본 필터가 모두 같은 마지막 완료 기록만 사용한다. DB 경계는
+  `Instant`로 받고 응답 경계에서 UTC `OffsetDateTime`으로 변환한다.
+- PR 리뷰에서 부분 시간이 절삭되어 24시간을 초과한 기록도 FRESH가 될 수 있음을 확인했다.
+  현재 시각에서 TTL을 뺀 `Instant` 경계와 직접 비교하고 24시간 30분 회귀 테스트를 추가했다.
+- 검증:
+  - `cd services/product-backend && ./gradlew --no-daemon test`: 전체 통과
+  - 단위/Agent Run/실제 PostgreSQL 범위 회귀 테스트: 통과
+  - 현재 로컬 DB의 `abcmart/구두/{\"inStockOnly\": false}` 마지막 수집은 약 43시간 전으로
+    24시간 TTL 기준 `STALE` 판정 대상임을 읽기 전용 SQL로 확인
+- 남은 위험: 기본 조건부 수집은 현재 필터 없는 검색 범위만 발행한다. 가격/색상/사이즈까지
+  판매처 검색 필터로 전달하는 기능을 추가하면 동일한 필터 정규화 계약으로 조회 범위를
+  확장해야 한다.
 
 ## 작업 기록 템플릿
 

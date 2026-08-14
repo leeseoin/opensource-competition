@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { PurchaseCondition, ResearchSessionResponse } from "../../../lib/research-session.ts";
+import type { AgentRunResponse, PurchaseCondition, ResearchSessionResponse } from "../../../lib/research-session.ts";
 import type { ResearchMcpOperations } from "../../../lib/research-mcp-client.ts";
 import { handleConfirmRequest } from "./handler.ts";
 
@@ -40,6 +40,10 @@ function mcpStub(overrides: Partial<ResearchMcpOperations>): ResearchMcpOperatio
     createSession: async () => { throw new Error("unexpected create"); },
     confirmSession: async () => { throw new Error("unexpected confirm"); },
     searchCandidates: async () => { throw new Error("unexpected search"); },
+    startAgentRun: async () => { throw new Error("unexpected run start"); },
+    getAgentRun: async () => { throw new Error("unexpected run get"); },
+    advanceAgentRun: async () => { throw new Error("unexpected run advance"); },
+    verifyAgentRunOffer: async () => { throw new Error("unexpected verify"); },
     ...overrides,
   };
 }
@@ -61,21 +65,19 @@ test("확인하지 않은 조건 검색을 차단한다", async () => {
   assert.equal(confirmed, false);
 });
 
-/** 사용자 확인 뒤 MCP 확인과 검색을 순서대로 실행하는지 검증한다. */
-test("확정 조건으로 MCP 상품 후보를 검색한다", async () => {
+/** 사용자 확인 뒤 MCP 확인과 Agent Run 시작을 순서대로 실행하는지 검증한다. */
+test("확정 조건으로 MCP Agent Run을 시작한다", async () => {
   const calls: string[] = [];
-  const emptyResult: ResearchSessionResponse = {
-    ...sessionResponse(),
-    status: "CONFIRMED",
-    confirmedAt: "2026-08-05T23:00:00+09:00",
-    result: {
-      question: "출근용 검정 구두",
-      query: "구두",
-      totalCount: 0,
-      hasNext: false,
-      candidates: [],
-      assessments: [],
-    },
+  const run: AgentRunResponse = {
+    runId: "00000000-0000-4000-8000-000000000002",
+    sessionId,
+    status: "COLLECTING",
+    research: null,
+    collectionJobs: [],
+    verification: null,
+    events: [],
+    error: null,
+    nextAction: "POLL_ADVANCE",
   };
   const response = await handleConfirmRequest(new Request("http://localhost/api/research/confirm", {
     method: "POST",
@@ -85,12 +87,12 @@ test("확정 조건으로 MCP 상품 후보를 검색한다", async () => {
       calls.push("confirm");
       return { ...sessionResponse(), status: "CONFIRMED" };
     },
-    searchCandidates: async () => {
-      calls.push("search");
-      return emptyResult;
+    startAgentRun: async () => {
+      calls.push("start");
+      return run;
     },
   }));
   assert.equal(response.status, 200);
-  assert.deepEqual(calls, ["confirm", "search"]);
-  assert.deepEqual((await response.json()).result.candidates, []);
+  assert.deepEqual(calls, ["confirm", "start"]);
+  assert.equal((await response.json()).status, "COLLECTING");
 });

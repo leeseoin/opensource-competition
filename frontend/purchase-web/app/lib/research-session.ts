@@ -50,6 +50,39 @@ export interface ResearchSessionResponse {
   result: ProductCandidateResponse | null;
 }
 
+/** AgentRunEvent는 사용자가 확인할 수 있는 구매 조사 단계와 당시 상태다. */
+export interface AgentRunEvent {
+  sequence: number;
+  type: string;
+  status: string;
+  message: string;
+  createdAt: string;
+}
+
+/** AgentRunResponse는 DB 검색, 조건부 수집과 재검증의 복구 가능한 실행 상태다. */
+export interface AgentRunResponse {
+  runId: string;
+  sessionId: string;
+  status: "SEARCHING" | "COLLECTING" | "READY" | "VERIFYING" | "COMPLETED" | "NO_RESULTS" | "FAILED";
+  research: ResearchSessionResponse | null;
+  collectionJobs: Array<{
+    jobId: string;
+    merchant: string;
+    dataStatus: string;
+    status: string;
+    productCount: number;
+  }>;
+  verification: {
+    status?: string;
+    changes?: string[];
+    baseline?: { priceAmount?: number | null; stockStatus?: string | null };
+    latest?: { priceAmount?: number | null; stockStatus?: string | null } | null;
+  } | null;
+  events: AgentRunEvent[];
+  error: { code: string; message: string } | null;
+  nextAction: "POLL_ADVANCE" | "SELECT_AND_VERIFY" | "NONE";
+}
+
 /** 알 수 없는 값이 필수/선호 강도인지 확인한다. */
 function isConditionPriority(value: unknown): value is ConditionPriority {
   return value === "required" || value === "preferred";
@@ -137,15 +170,39 @@ export async function createResearchDraft(question: string): Promise<ResearchSes
 export async function confirmResearchDraft(
   sessionId: string,
   conditions: PurchaseCondition,
-): Promise<ResearchSessionResponse> {
+): Promise<AgentRunResponse> {
   const response = await fetch("/api/research/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId, conditions }),
   });
-  const body = await response.json() as ResearchSessionResponse & { message?: string };
+  const body = await response.json() as AgentRunResponse & { message?: string };
   if (!response.ok) {
     throw new Error(body.message ?? "확인한 조건으로 상품을 검색하지 못했습니다.");
+  }
+  return body;
+}
+
+/** browser에서 수집 또는 재검증 중인 Agent Run을 한 단계 진행한다. */
+export async function advanceAgentRun(runId: string): Promise<AgentRunResponse> {
+  const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}/advance`, { method: "POST" });
+  const body = await response.json() as AgentRunResponse & { message?: string };
+  if (!response.ok) {
+    throw new Error(body.message ?? "구매 조사 진행 상태를 확인하지 못했습니다.");
+  }
+  return body;
+}
+
+/** browser에서 READY 후보의 구매 직전 가격과 재고 재검증을 시작한다. */
+export async function verifyAgentRunOffer(runId: string, productId: number): Promise<AgentRunResponse> {
+  const response = await fetch(`/api/agent-runs/${encodeURIComponent(runId)}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ productId }),
+  });
+  const body = await response.json() as AgentRunResponse & { message?: string };
+  if (!response.ok) {
+    throw new Error(body.message ?? "선택 상품을 재검증하지 못했습니다.");
   }
   return body;
 }

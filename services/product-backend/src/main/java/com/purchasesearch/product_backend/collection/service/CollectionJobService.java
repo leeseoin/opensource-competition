@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -56,7 +57,7 @@ public class CollectionJobService {
 	 * @param messages 같은 jobId를 공유하는 페이지 작업 목록
 	 * @throws IllegalArgumentException 작업 목록이 비어 있거나 서로 다른 jobId가 섞인 경우
 	 */
-	@Transactional
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void register(List<CollectionTaskMessage> messages) {
 		if (messages.isEmpty()) {
 			throw new IllegalArgumentException("등록할 수집 작업이 없습니다.");
@@ -81,7 +82,7 @@ public class CollectionJobService {
 	 * @param taskIds 실패한 작업 식별자 목록
 	 * @param message 발행 실패 설명
 	 */
-	@Transactional
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markPublishFailed(List<String> taskIds, String message) {
 		OffsetDateTime failedAt = OffsetDateTime.now(ZoneOffset.UTC);
 		String jobId = null;
