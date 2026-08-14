@@ -215,18 +215,30 @@ public class AgentRunService {
 	private void requestCollection(AgentRun run, PurchaseCondition conditions, List<String> merchants) {
 		String query = conditions.productType().effectiveValue();
 		boolean requested = false;
+		boolean publishFailed = false;
 		for (String merchant : merchants) {
-			CollectionRefreshResponse refresh = collectionRefreshService.request(
-					new CollectionRefreshRequest(merchant, query, false));
-			if (refresh.collectionRequested()) {
-				runJobRepository.save(AgentRunCollectionJob.create(
-						run, refresh.jobId(), merchant, refresh.dataStatus().name()));
-				requested = true;
+			try {
+				CollectionRefreshResponse refresh = collectionRefreshService.request(
+						new CollectionRefreshRequest(merchant, query, false));
+				if (refresh.collectionRequested()) {
+					runJobRepository.save(AgentRunCollectionJob.create(
+							run, refresh.jobId(), merchant, refresh.dataStatus().name()));
+					requested = true;
+				}
+			} catch (CollectionTaskPublishException exception) {
+				publishFailed = true;
 			}
 		}
 		if (requested) {
 			run.transitionTo(AgentRunStatus.COLLECTING);
-			append(run, "COLLECTION_REQUESTED", "DB에 후보가 없어 필요한 판매처 상품 수집을 요청했습니다.");
+			if (publishFailed) {
+				append(run, "COLLECTION_PARTIAL",
+						"일부 판매처 수집 요청은 실패했지만 접수된 판매처 상품 조사를 계속합니다.");
+			} else {
+				append(run, "COLLECTION_REQUESTED", "DB에 후보가 없어 필요한 판매처 상품 수집을 요청했습니다.");
+			}
+		} else if (publishFailed) {
+			throw new CollectionTaskPublishException("요청한 판매처의 상품 수집 작업을 시작하지 못했습니다.");
 		} else {
 			run.transitionTo(AgentRunStatus.NO_RESULTS);
 			append(run, "COLLECTION_SKIPPED", "최신 DB 범위에서 조건을 만족하는 상품을 찾지 못했습니다.");

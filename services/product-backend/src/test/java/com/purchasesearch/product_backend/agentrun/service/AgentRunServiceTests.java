@@ -142,6 +142,25 @@ class AgentRunServiceTests {
 		assertThat(response.error().message()).doesNotContain("secret");
 	}
 
+	/** 여러 판매처 중 하나의 Queue 요청이 실패해도 접수된 작업으로 조사를 계속하는지 검증한다. */
+	@Test
+	void continuesCollectionWhenOneMerchantPublishFails() {
+		when(sessionService.search(sessionId)).thenReturn(research(List.of()));
+		when(refreshService.request(any()))
+				.thenReturn(new CollectionRefreshResponse(
+						DataStatus.MISSING, true, "job-1", "task-1", "QUEUED", null))
+				.thenThrow(new CollectionTaskPublishException("second merchant failed"));
+		when(jobService.get("job-1")).thenReturn(job("QUEUED"));
+
+		var response = service.start(new StartAgentRunRequest(sessionId, List.of("abcmart", "29cm")));
+
+		assertThat(response.status()).isEqualTo(AgentRunStatus.COLLECTING);
+		assertThat(response.error()).isNull();
+		assertThat(response.collectionJobs()).singleElement()
+				.extracting(job -> job.jobId())
+				.isEqualTo("job-1");
+	}
+
 	/** 완료된 수집 뒤 재검색에도 후보가 없으면 추가 수집 없이 NO_RESULTS로 끝나는지 검증한다. */
 	@Test
 	void endsWithNoResultsAfterSinglePostCollectionSearch() {
