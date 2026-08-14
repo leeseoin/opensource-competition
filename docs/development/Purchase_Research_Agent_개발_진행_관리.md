@@ -2273,13 +2273,15 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 ### 2026-08-11 MCP-003 상태 기반 구매 조사 Agent Run
 
 - 진행상황: **구현 완료 및 검증 필요**. commit `721581e`, `400dbf6`, `6872baf`,
-  `6d218e1`, `56c7a23`, `206b168`, `dee92e7`에서 확정 세션의 DB 우선 검색부터 조건부 수집, 재검색과 선택 상품 재검증을
+  `6d218e1`, `56c7a23`, `206b168`, `dee92e7`, `74223ea`에서 확정 세션의 DB 우선 검색부터 조건부 수집, 재검색과 선택 상품 재검증을
   영구 실행 상태로 연결했다. 실제 Python Worker와 browser 전체 E2E는 남아 있다.
 - 구현 위치:
   - `services/product-backend/src/main/resources/db/migration/V12__add_agent_runs.sql:1`
     `agent_runs`: 실행 상태/사건/수집 job 연결 schema
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:84`
     `start`: 같은 세션 중복 방지와 DB 우선 검색 및 조건부 수집
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:215`
+    `requestCollection`: 판매처별 발행 실패 격리와 접수된 부분 수집 계속 진행
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:128`
     `advance`: 수집과 재검증 job 상태에 따른 결정적 전이
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:148`
@@ -2303,8 +2305,12 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   DB commit보다 먼저 결과를 보내는 race를 막았다.
   `dev-ls`에 이미 있던 수집 요청 snapshot V11과의 Flyway 버전 중복은 Agent Run migration을
   V12로 이동해 해결했다.
+  PR 리뷰에서 다중 판매처 중 하나의 Queue 발행 실패가 이미 접수된 작업까지 무시하고
+  실행 전체를 FAILED로 끝내는 문제를 확인했다. 하나 이상의 job이 접수됐으면
+  `COLLECTING`으로 계속 진행하고 모두 실패했을 때만 FAILED로 종료하도록 수정했다.
 - 검증:
   - `cd services/product-backend && ./gradlew test`: 통과
+  - `cd services/product-backend && ./gradlew --no-daemon test --tests '*AgentRunServiceTests'`: 다중 판매처 부분 실패 회귀 포함 통과
   - Agent Run PostgreSQL/HTTP 단일 통합 테스트: 통과
   - `cd services/mcp-server && npm test`: 4개 통과
   - `cd frontend/purchase-web && npm test`: 56개 통과
