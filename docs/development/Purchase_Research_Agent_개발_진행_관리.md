@@ -2272,11 +2272,11 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-11 MCP-003 상태 기반 구매 조사 Agent Run
 
-- 진행상황: **구현 완료 및 검증 필요**. commit `64a069b`, `0eb796b`, `4b78e91`,
-  `9b93e8e`, `5b344eb`, `2425196`에서 확정 세션의 DB 우선 검색부터 조건부 수집, 재검색과 선택 상품 재검증을
+- 진행상황: **구현 완료 및 검증 필요**. commit `721581e`, `400dbf6`, `6872baf`,
+  `6d218e1`, `56c7a23`, `206b168`, `dee92e7`에서 확정 세션의 DB 우선 검색부터 조건부 수집, 재검색과 선택 상품 재검증을
   영구 실행 상태로 연결했다. 실제 Python Worker와 browser 전체 E2E는 남아 있다.
 - 구현 위치:
-  - `services/product-backend/src/main/resources/db/migration/V11__add_agent_runs.sql:1`
+  - `services/product-backend/src/main/resources/db/migration/V12__add_agent_runs.sql:1`
     `agent_runs`: 실행 상태/사건/수집 job 연결 schema
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/agentrun/service/AgentRunService.java:84`
     `start`: 같은 세션 중복 방지와 DB 우선 검색 및 조건부 수집
@@ -2301,11 +2301,13 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   보존한다. 서버 내부 무한 polling 대신 Web이 호출 상한 안에서 진행 API를 사용한다.
   수집 job 등록과 발행 실패 기록은 독립 transaction으로 먼저 확정해 RabbitMQ Worker가
   DB commit보다 먼저 결과를 보내는 race를 막았다.
+  `dev-ls`에 이미 있던 수집 요청 snapshot V11과의 Flyway 버전 중복은 Agent Run migration을
+  V12로 이동해 해결했다.
 - 검증:
   - `cd services/product-backend && ./gradlew test`: 통과
   - Agent Run PostgreSQL/HTTP 단일 통합 테스트: 통과
   - `cd services/mcp-server && npm test`: 4개 통과
-  - `cd frontend/purchase-web && npm test`: 35개 통과
+  - `cd frontend/purchase-web && npm test`: 56개 통과
   - `cd frontend/purchase-web && npm run lint`: 통과
   - `cd frontend/purchase-web && npm run build`: 통과
   - 실제 로컬 API/PostgreSQL/RabbitMQ/Python Worker에서 READY와 VERIFIED/COMPLETED 통과
@@ -2315,7 +2317,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 
 ### 2026-08-12 MCP-003 조건부 수집 freshness 범위 수정
 
-- 진행상황: **구현 완료 및 검증 필요**. commit `cc628e0`, `7ff7910`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
+- 진행상황: **구현 완료 및 검증 필요**. commit `b9e5616`, `80ca436`에서 조건 후보가 없을 때 다른 검색어로 수집한 최신
   상품을 현재 검색 범위의 최신 데이터로 오인하던 문제를 수정했다. 실제 사용자 서버를
   재시작한 뒤 Python Worker 포함 browser E2E는 남아 있다.
 - 구현 위치:
