@@ -27,15 +27,21 @@ def _abc_options(raw: dict | None) -> dict:
     return {
         "colors": raw.get("colors") or [],
         "sizes":  raw.get("sizes")  or [],
+        "available_sizes": raw.get("available_sizes") or [],
     }
 
 
-def _cm29_options(raw: list | None, color_field: str) -> dict:
+def _cm29_options(raw: list | dict | None, color_field: str) -> dict:
     """29CM options 리스트 + color 필드를 통일 형식으로.
 
     colors: product.color (options[].value에서 이미 추출된 값)
     sizes : options[].value에서 'KR (숫자)' 패턴 추출 → 없으면 3-4자리 숫자
     """
+    if isinstance(raw, dict):
+        return {
+            "colors": raw.get("colors") or [],
+            "sizes": raw.get("sizes") or [],
+        }
     colors = [c.strip() for c in color_field.split(",") if c.strip()] if color_field else []
 
     sizes_seen: list[str] = []

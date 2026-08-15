@@ -24,6 +24,7 @@ class SearchItemMappingTests(unittest.TestCase):
         })
 
         self.assertEqual(product["options"]["sizes"], ["265"])
+        self.assertEqual(product["options"]["available_sizes"], ["265"])
         self.assertEqual(product["category"], "로퍼")
         self.assertTrue(product["in_stock"])
 

@@ -71,6 +71,7 @@ class FakeCrawler:
         site: str,
         max_items: int = 500,
         detail_limit: int = 0,
+        option_limit: int = 0,
         page: int = 1,
         max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
@@ -81,6 +82,7 @@ class FakeCrawler:
             "site": site,
             "max_items": max_items,
             "detail_limit": detail_limit,
+            "option_limit": option_limit,
             "page": page,
             "max_pages": max_pages,
         })
@@ -171,7 +173,11 @@ def _raw_product(
         "price": price,
         "link": f"https://example.com/products/{product_id}",
         "image_url": "https://example.com/image.jpg",
-        "options": {"sizes": sizes or [], "colors": colors or []},
+        "options": {
+            "sizes": sizes or [],
+            "available_sizes": sizes or [] if in_stock else [],
+            "colors": colors or [],
+        },
         "in_stock": in_stock,
     }
 
@@ -256,10 +262,44 @@ class CollectionTaskProcessorTests(unittest.IsolatedAsyncioTestCase):
         validate_collection_result_envelope(result)
         self.assertEqual(result["status"], "success")
         self.assertEqual([product["externalId"] for product in result["collectorResult"]["products"]], ["matched"])
+
+    async def test_rejects_unavailable_29cm_option_for_hard_filter(self) -> None:
+        """29CM 품절 옵션의 사이즈와 색상이 필수 조건을 통과하지 않는지 검증한다."""
+
+        product = _raw_product("sold-out-option")
+        product["options"] = [{
+            "name": "SIZE",
+            "value": "BLACK / KR 265",
+            "stock_status": "out_of_stock",
+        }]
+        product["color"] = "BLACK"
+        crawler = FakeCrawler(products=[product])
+        processor = CollectionTaskProcessor(crawler, timeout_seconds=1)
+        task = decode_collection_task(_task_body(filters={
+            "sizes": ["265"],
+            "colors": ["black"],
+        }))
+
+        result = await processor.process(task)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["collectorResult"]["products"], [])
         self.assertEqual(result["collectorResult"]["filters"], task.payload["filters"])
         self.assertEqual(crawler.calls[0]["page"], 2)
         self.assertEqual(crawler.calls[0]["max_items"], 50)
+        self.assertEqual(crawler.calls[0]["option_limit"], 50)
         self.assertEqual(crawler.calls[0]["max_pages"], 1)
+
+    async def test_enriches_only_return_limit_when_option_filters_are_absent(self) -> None:
+        """일반 검색은 저장하지 않을 나머지 상품의 상세 옵션 요청을 만들지 않는지 검증한다."""
+
+        crawler = FakeCrawler(products=[_raw_product("p1")])
+        processor = CollectionTaskProcessor(crawler, timeout_seconds=1)
+
+        result = await processor.process(decode_collection_task(_task_body()))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(crawler.calls[0]["option_limit"], 5)
 
     async def test_returns_nonretryable_failure_for_unsupported_attributes(self) -> None:
         """적용할 수 없는 attributes를 성공으로 과장하지 않고 실패시키는지 검증한다."""

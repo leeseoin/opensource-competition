@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from time import monotonic
 from typing import Any, Protocol
@@ -30,6 +31,7 @@ class CrawlerSearch(Protocol):
         site: str,
         max_items: int = 500,
         detail_limit: int = 0,
+        option_limit: int = 0,
         page: int = 1,
         max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
@@ -97,6 +99,7 @@ class CollectionTaskProcessor:
                     task.merchant,
                     max_items=50,
                     detail_limit=0,
+                    option_limit=_option_enrichment_limit(payload),
                     page=payload["page"],
                     max_pages=1,
                 ),
@@ -230,6 +233,19 @@ def _validate_supported_search(payload: dict[str, Any]) -> None:
         raise ValueError("Python Collector는 attributes 필터를 아직 지원하지 않습니다")
 
 
+def _option_enrichment_limit(payload: dict[str, Any]) -> int:
+    """Queue 검색에서 실제로 저장하거나 필터할 상품의 옵션 수집 상한을 정한다.
+
+    Args:
+        payload: 검증된 검색 payload다.
+
+    Returns:
+        일반 검색은 반환 상한, 옵션 필터가 있으면 검색 pool 전체 크기다.
+    """
+    filters = payload["filters"]
+    return 50 if filters.get("sizes") or filters.get("colors") else payload["limit"]
+
+
 def _apply_filters(products: list[dict[str, Any]], filters: dict[str, Any]) -> list[dict[str, Any]]:
     """판매처에서 확인된 원본 필드만 사용해 모든 Queue 필터를 AND 방식으로 적용한다.
 
@@ -267,19 +283,7 @@ def _matches_filters(product: dict[str, Any], filters: dict[str, Any]) -> bool:
         if not _contains_requested(product_categories, categories):
             return False
 
-    raw_options = product.get("options")
-    size_values: Any = []
-    color_values: Any = [product.get("color")]
-    if isinstance(raw_options, dict):
-        size_values = raw_options.get("sizes")
-        color_values = [product.get("color"), *(raw_options.get("colors") or [])]
-    elif isinstance(raw_options, list):
-        size_values = [option.get("size") for option in raw_options if isinstance(option, dict)]
-        color_values.extend(
-            option.get("color") or option.get("value")
-            for option in raw_options
-            if isinstance(option, dict)
-        )
+    size_values, color_values = _option_filter_values(product)
     if not _contains_requested(_normalized_values(size_values), _normalized_values(filters.get("sizes"))):
         return False
     if not _contains_requested(_normalized_values(color_values), _normalized_values(filters.get("colors"))):
@@ -287,6 +291,50 @@ def _matches_filters(product: dict[str, Any], filters: dict[str, Any]) -> bool:
     if filters.get("inStockOnly") and product.get("in_stock") is not True:
         return False
     return True
+
+
+def _option_filter_values(product: dict[str, Any]) -> tuple[list[Any], list[Any]]:
+    """판매처별 raw option에서 필터에 사용할 사이즈와 색상만 분리한다.
+
+    Args:
+        product: Python 판매처 원본 상품이다.
+
+    Returns:
+        원본 순서를 유지한 사이즈 값과 색상 값이다.
+    """
+    raw_options = product.get("options")
+    sizes: list[Any] = []
+    colors: list[Any] = []
+    if isinstance(raw_options, dict):
+        sizes.extend(raw_options.get("available_sizes") or [])
+        if product.get("in_stock") is True:
+            colors.append(product.get("color"))
+        raw_colors = raw_options.get("colors") or []
+        if product.get("in_stock") is True and len(raw_colors) == 1:
+            colors.extend(raw_colors)
+        return sizes, colors
+    if not isinstance(raw_options, list):
+        if product.get("in_stock") is True:
+            colors.append(product.get("color"))
+        return sizes, colors
+    for option in raw_options:
+        if not isinstance(option, dict):
+            continue
+        if str(option.get("stock_status") or "unknown").casefold() != "available":
+            continue
+        name = str(option.get("name") or "").upper()
+        value = str(option.get("value") or "").strip()
+        if "SIZE" in name or "사이즈" in name:
+            match = re.search(r"\bKR\s*(\d{2,4})\b", value, re.I)
+            if match is None:
+                match = re.search(r"\b(\d{2,4})\s*mm\b", value, re.I)
+            if match is None and re.fullmatch(r"\d{2,4}", value):
+                match = re.fullmatch(r"(\d{2,4})", value)
+            sizes.append(match.group(1) if match else value)
+        if "COLOR" in name or "색상" in name or ("SIZE" in name and "/" in value):
+            color = re.split(r"\s*/\s*|:", value, maxsplit=1)[0]
+            colors.append(re.sub(r"\s*\([^)]*\)\s*$", "", color).strip())
+    return sizes, colors
 
 
 def _normalized_values(raw: Any) -> list[str]:

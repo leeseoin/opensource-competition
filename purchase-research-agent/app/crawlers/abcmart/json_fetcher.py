@@ -112,6 +112,8 @@ class AbcJsonFetcher:
             raise RuntimeError("ABC마트 JSON 상품 ID 또는 이름이 비어 있습니다")
         color = str(item.get("COLOR_ID") or "")
         category_path = str(item.get("CTGR_NAME_ALL") or "")
+        sizes = _sizes(item.get("PRDT_OPTION"), item.get("SIZE_LIST"))
+        available_sizes = sizes if isinstance(item.get("SIZE_LIST"), dict) else []
         return {
             "source_product_id": product_id,
             "title": title,
@@ -130,7 +132,8 @@ class AbcJsonFetcher:
             "in_stock": _in_stock(item.get("SOLD_OUT")),
             "options": {
                 "colors": [color] if color else [],
-                "sizes": _sizes(item.get("PRDT_OPTION"), item.get("SIZE_LIST")),
+                "sizes": sizes,
+                "available_sizes": available_sizes,
             },
         }
 

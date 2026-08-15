@@ -6,7 +6,7 @@ import httpx
 
 from app.crawlers.access_safety import ensure_success, safe_exception_message
 
-_DETAIL_URL = "https://product.29cm.co.kr/catalog/{item_id}"
+_DETAIL_URL = "https://www.29cm.co.kr/products/{item_id}"
 _REVIEW_URL = "https://review-api.29cm.co.kr/api/v4/reviews"
 _IMG_BASE = "https://img.29cm.co.kr"
 
@@ -43,8 +43,11 @@ def _parse_ld(html: str) -> dict:
 
 
 def _parse_options(html: str) -> list[dict]:
-    """self.__next_f 스트리밍 데이터에서 옵션(SIZE/COLOR) 파싱.
-    스트리밍 JSON 안에서 키가 \" 로 이스케이프되어 있는 경우와 일반 " 모두 처리."""
+    """self.__next_f에서 옵션 값과 공개 판매 상태를 함께 파싱한다.
+
+    스트리밍 JSON 안에서 key가 이스케이프된 경우와 일반 JSON인 경우를 모두 처리한다.
+    재고 상태가 같은 옵션 객체 주변에서 확인되지 않으면 ``unknown``으로 둔다.
+    """
     options = []
     seen = set()
     # 이스케이프된 버전 (\\"optionItemName\\":\\"SIZE\\") 과 일반 버전 모두 포함
@@ -59,8 +62,71 @@ def _parse_options(html: str) -> list[dict]:
         key = (name, value)
         if key not in seen:
             seen.add(key)
-            options.append({"name": name, "value": value})
+            prefix = html[max(0, m.start() - 400):m.start()]
+            object_start = prefix.rfind("{")
+            object_prefix = prefix[object_start + 1:] if object_start >= 0 else ""
+            sold_out = _last_json_boolean(object_prefix, "isSoldOut")
+            visible = _last_json_boolean(object_prefix, "isVisible")
+            if sold_out is True or visible is False:
+                stock_status = "out_of_stock"
+            elif sold_out is False and visible is not False:
+                stock_status = "available"
+            else:
+                stock_status = "unknown"
+            options.append({"name": name, "value": value, "stock_status": stock_status})
     return options
+
+
+def _last_json_boolean(text: str, key: str) -> bool | None:
+    """이스케이프 여부와 관계없이 지정 key의 마지막 JSON boolean을 반환한다.
+
+    Args:
+        text: 현재 옵션 앞의 제한된 스트리밍 JSON 조각이다.
+        key: ``isSoldOut`` 또는 ``isVisible`` 같은 boolean key다.
+
+    Returns:
+        마지막 boolean 값이며 찾지 못하면 ``None``이다.
+    """
+    values = re.findall(rf'(?:\\"|"){re.escape(key)}(?:\\"|")\s*:\s*(true|false)', text)
+    if not values:
+        return None
+    return values[-1] == "true"
+
+
+def _option_dimensions(options: list[dict]) -> dict[str, list[str]]:
+    """29CM 옵션 행에서 순서를 유지한 사이즈와 색상을 추출한다.
+
+    Args:
+        options: ``_parse_options``가 반환한 판매처 옵션 행이다.
+
+    Returns:
+        신발 숫자 사이즈와 의류 문자 사이즈 및 색상 목록이다.
+    """
+    sizes: list[str] = []
+    colors: list[str] = []
+    for option in options:
+        name = str(option.get("name") or "").upper()
+        value = str(option.get("value") or "").strip()
+        if not value:
+            continue
+        if "SIZE" in name or "사이즈" in name:
+            found_sizes = re.findall(r"\bKR\s*(\d{2,4})\b", value, re.I)
+            if not found_sizes:
+                found_sizes = re.findall(r"\b(\d{2,4})\s*mm\b", value, re.I)
+            if not found_sizes and re.fullmatch(r"\d{2,4}", value):
+                found_sizes = [value]
+            if not found_sizes and re.fullmatch(r"[A-Za-z]{1,5}|FREE", value, re.I):
+                found_sizes = [value.upper()]
+            sizes.extend(found_sizes)
+        if "COLOR" in name or "색상" in name or ("SIZE" in name and "/" in value):
+            candidate = re.split(r"\s*/\s*|:", value, maxsplit=1)[0]
+            candidate = re.sub(r"\s*\([^)]*\)\s*$", "", candidate).strip()
+            if candidate and not re.fullmatch(r"(?:KR\s*)?\d+(?:\s*mm)?", candidate, re.I):
+                colors.append(candidate)
+    return {
+        "sizes": list(dict.fromkeys(sizes)),
+        "colors": list(dict.fromkeys(colors)),
+    }
 
 
 def _parse_reviews(raw_results: list[dict]) -> list[dict]:
@@ -103,6 +169,51 @@ _DEFAULT_CONCURRENCY = 10
 
 class Cm29DetailFetcher:
     """29CM 공개 상세와 리뷰를 제한된 동시성으로 상품에 추가한다."""
+
+    async def attach_options(
+        self,
+        products: list[dict],
+        limit: int = 10,
+        concurrency: int = _DEFAULT_CONCURRENCY,
+    ) -> tuple[list[dict], list[str]]:
+        """리뷰 API 없이 상세 HTML의 옵션과 옵션별 판매 상태만 수집한다.
+
+        Args:
+            products: 29CM 검색 결과다.
+            limit: 옵션을 확인할 상위 상품 수다.
+            concurrency: 동시에 실행할 상세 요청 상한이다.
+
+        Returns:
+            raw option 행을 보존한 상품과 안전한 부분 실패 경고다.
+
+        Raises:
+            ValueError: limit 또는 concurrency가 올바르지 않은 경우다.
+        """
+        if limit < 0 or concurrency < 1:
+            raise ValueError("limit은 0 이상이고 concurrency는 1 이상이어야 합니다")
+        targets = products[:limit]
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _fetch_one(client: httpx.AsyncClient, product: dict) -> str | None:
+            item_id = str(product.get("source_product_id") or "")
+            if not item_id:
+                return "detail 오류: 29CM 상품 ID가 없습니다"
+            try:
+                async with semaphore:
+                    response = await client.get(_DETAIL_URL.format(item_id=item_id))
+                ensure_success(response, "29cm")
+                raw_options = _parse_options(response.text)
+                product["options"] = raw_options
+                dimensions = _option_dimensions(raw_options)
+                if dimensions["colors"]:
+                    product["color"] = ", ".join(dimensions["colors"])
+                return None
+            except Exception as exc:
+                return f"detail 오류 itemId={item_id}: {safe_exception_message(exc, '29cm', '옵션')}"
+
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=False) as client:
+            results = await asyncio.gather(*(_fetch_one(client, product) for product in targets))
+        return products, [error for error in results if error is not None]
 
     async def attach(
         self,
@@ -174,17 +285,8 @@ class Cm29DetailFetcher:
                 # 색상: options[].value에서 / 또는 : 구분자 앞 부분 추출
                 # "BLACK (3CM) / KR 230 / IT36" → "BLACK"
                 # "베이지-인조가죽-1cm:225mm" → "베이지-인조가죽-1cm"
-                seen_c: set[str] = set()
-                colors: list[str] = []
-                for opt in product["options"]:
-                    raw_val = opt.get("value", "")
-                    c = re.split(r"\s*/\s*|:", raw_val)[0]
-                    c = re.sub(r"\s*\(.*?\)", "", c).strip()
-                    c = re.sub(r"^\[[A-Z]+\]", "", c).strip()
-                    if c and c not in seen_c:
-                        seen_c.add(c)
-                        colors.append(c)
-                product["color"] = ", ".join(colors)
+                dimensions = _option_dimensions(product["options"])
+                product["color"] = ", ".join(dimensions["colors"])
                 return None
             except Exception as exc:
                 return f"detail 오류 itemId={item_id}: {safe_exception_message(exc, '29cm', '상세')}"

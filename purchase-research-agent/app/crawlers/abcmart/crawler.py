@@ -338,6 +338,12 @@ class AbcMartCrawler(SiteCrawler):
         """상위 limit개 상품에 리뷰/옵션을 덧붙인다 (ABC마트 내부 API 사용)."""
         return await DetailFetcher().attach(products, limit=limit)
 
+    async def attach_options(
+        self, products: list[dict], limit: int
+    ) -> tuple[list[dict], list[str]]:
+        """상위 limit개 상품의 공개 옵션 API만 호출해 검색 옵션을 보강한다."""
+        return await DetailFetcher().attach_options(products, limit=limit)
+
     def _dedup(self, items: list[dict], seen: set[str]) -> list[dict]:
         new = []
         for prod in items:
