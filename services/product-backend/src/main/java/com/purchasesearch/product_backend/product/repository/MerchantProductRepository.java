@@ -178,6 +178,17 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 						ORDER BY snapshot.collected_at DESC, snapshot.id DESC
 						LIMIT 1
 					) latest_snapshot ON TRUE
+					LEFT JOIN LATERAL (
+						SELECT snapshot.id
+						FROM offer_snapshots snapshot
+						WHERE snapshot.merchant_product_id = merchant_product.id
+						  AND EXISTS (
+							SELECT 1 FROM product_options known_option
+							WHERE known_option.offer_snapshot_id = snapshot.id
+						  )
+						ORDER BY snapshot.collected_at DESC, snapshot.id DESC
+						LIMIT 1
+					) latest_option_snapshot ON TRUE
 					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
 					  AND (
 						:query IS NULL
@@ -195,6 +206,9 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 								TO_TSVECTOR('simple', product.search_text)
 									@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query))
 								OR WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR SIMILARITY(
+									REGEXP_REPLACE(LOWER(:query), '[^[:alnum:]]', '', 'g'),
+									REGEXP_REPLACE(LOWER(product.name), '[^[:alnum:]]', '', 'g')) >= 0.3
 								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3
 								OR EXISTS (
 									SELECT 1
@@ -217,7 +231,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					  AND (
 						:sizesCsv IS NULL OR EXISTS (
 							SELECT 1 FROM product_options option_value
-							WHERE option_value.offer_snapshot_id = latest_snapshot.id
+							WHERE option_value.offer_snapshot_id = latest_option_snapshot.id
 							  AND option_value.stock_status = 'available'
 							  AND POSITION(',' || LOWER(COALESCE(option_value.size, '')) || ',' IN :sizesCsv) > 0
 						)
@@ -225,7 +239,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					  AND (
 						:colorsCsv IS NULL OR EXISTS (
 							SELECT 1 FROM product_options option_value
-							WHERE option_value.offer_snapshot_id = latest_snapshot.id
+							WHERE option_value.offer_snapshot_id = latest_option_snapshot.id
 							  AND option_value.stock_status = 'available'
 							  AND POSITION(',' || LOWER(COALESCE(option_value.color, '')) || ',' IN :colorsCsv) > 0
 						)
@@ -239,6 +253,9 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 							@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query)) THEN 3
 						WHEN :enableFullText = TRUE
 							AND (WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR SIMILARITY(
+									REGEXP_REPLACE(LOWER(:query), '[^[:alnum:]]', '', 'g'),
+									REGEXP_REPLACE(LOWER(product.name), '[^[:alnum:]]', '', 'g')) >= 0.3
 								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3) THEN 2
 						WHEN :queryVector IS NOT NULL AND semantic_embedding.embedding IS NOT NULL
 							AND semantic_embedding.embedding <=> CAST(:queryVector AS vector) <= 0.55 THEN 1
@@ -262,6 +279,17 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 						ORDER BY snapshot.collected_at DESC, snapshot.id DESC
 						LIMIT 1
 					) latest_snapshot ON TRUE
+					LEFT JOIN LATERAL (
+						SELECT snapshot.id
+						FROM offer_snapshots snapshot
+						WHERE snapshot.merchant_product_id = merchant_product.id
+						  AND EXISTS (
+							SELECT 1 FROM product_options known_option
+							WHERE known_option.offer_snapshot_id = snapshot.id
+						  )
+						ORDER BY snapshot.collected_at DESC, snapshot.id DESC
+						LIMIT 1
+					) latest_option_snapshot ON TRUE
 					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
 					  AND (
 						:query IS NULL
@@ -279,6 +307,9 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 								TO_TSVECTOR('simple', product.search_text)
 									@@ WEBSEARCH_TO_TSQUERY('simple', LOWER(:query))
 								OR WORD_SIMILARITY(LOWER(:query), product.search_text) >= 0.3
+								OR SIMILARITY(
+									REGEXP_REPLACE(LOWER(:query), '[^[:alnum:]]', '', 'g'),
+									REGEXP_REPLACE(LOWER(product.name), '[^[:alnum:]]', '', 'g')) >= 0.3
 								OR WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))) >= 0.3
 								OR EXISTS (
 									SELECT 1 FROM collection_search_contexts fuzzy_context
@@ -299,13 +330,13 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					  AND (:currency IS NULL OR latest_snapshot.currency = :currency)
 					  AND (:sizesCsv IS NULL OR EXISTS (
 						SELECT 1 FROM product_options option_value
-						WHERE option_value.offer_snapshot_id = latest_snapshot.id
+						WHERE option_value.offer_snapshot_id = latest_option_snapshot.id
 						  AND option_value.stock_status = 'available'
 						  AND POSITION(',' || LOWER(COALESCE(option_value.size, '')) || ',' IN :sizesCsv) > 0
 					  ))
 					  AND (:colorsCsv IS NULL OR EXISTS (
 						SELECT 1 FROM product_options option_value
-						WHERE option_value.offer_snapshot_id = latest_snapshot.id
+						WHERE option_value.offer_snapshot_id = latest_option_snapshot.id
 						  AND option_value.stock_status = 'available'
 						  AND POSITION(',' || LOWER(COALESCE(option_value.color, '')) || ',' IN :colorsCsv) > 0
 					  ))
@@ -351,8 +382,11 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 			             WEBSEARCH_TO_TSQUERY('simple', LOWER(:query)))
 			           ELSE 0.0
 			         END,
-			         WORD_SIMILARITY(LOWER(:query), product.search_text),
-			         WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))),
+				         WORD_SIMILARITY(LOWER(:query), product.search_text),
+				         SIMILARITY(
+				           REGEXP_REPLACE(LOWER(:query), '[^[:alnum:]]', '', 'g'),
+				           REGEXP_REPLACE(LOWER(product.name), '[^[:alnum:]]', '', 'g')),
+				         WORD_SIMILARITY(LOWER(:query), LOWER(CAST(product.category_path AS TEXT))),
 			         0.25 * COALESCE((
 			           SELECT MAX(WORD_SIMILARITY(LOWER(:query), LOWER(search_context.search_query)))
 			           FROM offer_snapshots snapshot

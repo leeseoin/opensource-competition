@@ -80,6 +80,7 @@ public record ProductSearchResponse(
 	 * @param color 색상
 	 * @param stockStatus 옵션 재고 상태
 	 * @param price 옵션 가격
+	 * @param source 옵션을 마지막으로 확인한 공개 출처와 시각
 	 */
 	public record OptionView(
 			String externalId,
@@ -87,7 +88,8 @@ public record ProductSearchResponse(
 			String size,
 			String color,
 			String stockStatus,
-			MoneyView price) {
+			MoneyView price,
+			SourceView source) {
 	}
 
 	/**

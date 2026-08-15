@@ -19,6 +19,7 @@ export interface ProductOption {
   color: string | null;
   stockStatus: string;
   price: ProductMoney | null;
+  source: ProductSource;
 }
 
 /** ProductCandidate는 화면에 표시할 판매처 상품의 최신 snapshot을 표현한다. */

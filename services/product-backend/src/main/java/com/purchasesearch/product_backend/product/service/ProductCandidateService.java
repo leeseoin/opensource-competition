@@ -36,6 +36,8 @@ import com.purchasesearch.product_backend.research.dto.PurchaseCondition.Priorit
 @Service
 public class ProductCandidateService {
 
+	private static final double REQUIRED_PRODUCT_TYPE_FUZZY_SCORE = 0.45;
+
 	private static final int DEFAULT_LIMIT = 5;
 	private static final int RETRIEVAL_POOL_LIMIT = 50;
 	private static final Map<String, String> COLOR_ALIASES = Map.ofEntries(
@@ -149,13 +151,22 @@ public class ProductCandidateService {
 				candidate.product().brand() == null ? "" : candidate.product().brand(),
 				String.join(" ", candidate.product().categoryPath())).toLowerCase(Locale.ROOT);
 		String expected = conditions.productType().effectiveValue().trim().toLowerCase(Locale.ROOT);
-		if (searchable.contains(expected)) {
+		if (searchable.contains(expected) || compactSearchText(searchable).contains(compactSearchText(expected))) {
+			return true;
+		}
+		if (candidate.assessment() != null
+				&& candidate.assessment().keywordScore() >= REQUIRED_PRODUCT_TYPE_FUZZY_SCORE) {
 			return true;
 		}
 		return candidate.assessment().matchReasons().stream()
 				.filter(reason -> reason.startsWith("검토 Wiki:"))
 				.map(this::wikiTarget)
 				.anyMatch(target -> !target.isBlank() && searchable.contains(target));
+	}
+
+	/** 상품명 구두점과 띄어쓰기 차이를 제거해 같은 모델명의 표기 변형을 비교한다. */
+	private String compactSearchText(String value) {
+		return value.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");
 	}
 
 	/** 검토 Wiki 설명의 화살표 뒤 확장어만 상품 종류 fail-closed 판정에 사용한다. */
