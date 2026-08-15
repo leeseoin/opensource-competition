@@ -261,6 +261,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] 상위 상품군의 전체 컬러/판매 행 확장과 행별 조건 재판정
 - [x] 쇼핑 카드/이미지 swatch/구매 가능 상태/판매처 이동 UI
 - [ ] 판매처 확정 variant group/model code 수집
+- [x] ABC마트/29CM 사이즈와 색상 상세 옵션 및 옵션별 재고/provenance 연결
 - [ ] 용량/소재/규격 등 범용 옵션 저장 Contract와 상세 Adapter **(진행 중: 설계와 실제 누락 확인 완료)**
 - [ ] 여러 상품군 fixture 기반 오병합/중복 카드/옵션 출처 품질 평가
 
@@ -2389,6 +2390,34 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 남은 위험: 실제 양성 READY 80% 목표는 충족하지 못했다. 필수 조건을 임의 완화하지 않고
   판매처 상세 옵션과 신발 외 데이터 범위를 확장해야 한다. 1,000개 현재 DB 평가는 회귀
   검사이며 사람 relevance gold 기반 Recall@20/nDCG 평가를 대신하지 않는다.
+
+### 2026-08-16 ANALYSIS-004 Python 옵션 재고 근거
+
+- 진행상황: **부분 구현**. ABC마트/29CM의 사이즈와 색상 상세 옵션을 Python Queue 수집,
+  PostgreSQL 저장과 추천 조회까지 연결했다. 범용 attributes 상세 연결과 여러 상품군 고정
+  fixture 평가는 남아 있다.
+- 구현 위치:
+  - `purchase-research-agent/app/crawlers/abcmart/detail_fetcher.py:183` `DetailFetcher.attach_options`: ABC마트 옵션 전용 공개 API 수집
+  - `purchase-research-agent/app/crawlers/cm29/detail_fetcher.py:173` `Cm29DetailFetcher.attach_options`: 29CM 현재 상세 URL의 옵션별 판매 상태 수집
+  - `purchase-research-agent/app/messaging/processor.py:236` `_option_enrichment_limit`: Queue 필터 전 옵션 보강 범위 결정
+  - `purchase-research-agent/app/messaging/processor.py:296` `_option_filter_values`: 구매 가능 옵션만 필수 조건에 사용
+  - `purchase-research-agent/app/services/collector_result_adapter.py:205` `_convert_options`: 판매처 옵션을 provenance 포함 공통 계약으로 변환
+  - `purchase-research-agent/tests/test_collection_queue.py:266` `test_rejects_unavailable_29cm_option_for_hard_filter`: 품절 색상/사이즈 조건 우회 방지
+  - `purchase-research-agent/tests/test_collector_result_adapter.py:67` `test_preserves_29cm_option_pair_and_stock_status`: 옵션 조합/재고 보존 검증
+- 발생 문제: Worker가 상세 옵션을 호출하지 않았고 29CM 목록형 옵션은 공통 Adapter에서
+  버려졌다. 모든 옵션 재고가 `unknown`이라 필수 조건 검색에도 사용할 수 없었다.
+- 원인: Queue 검색이 `detail_limit=0`으로 고정됐으며 공통 변환이 ABC마트 객체형 옵션만
+  가정했다. 상품 대표 색상과 옵션별 구매 가능 상태의 경계도 분리되지 않았다.
+- 해결: 옵션 전용 수집 경로와 판매처별 변환을 추가하고 실제 구매 가능 상태만 필수
+  필터에 사용했다. 모든 공통 옵션은 판매처 URL/수집 시각/수집기 version을 보존한다.
+- 검증:
+  - `make python-crawler-test`: 117개 통과
+  - `cd services/product-backend && ./gradlew test`: 전체 통과
+  - `make docs-check`: 통과
+  - 실제 ABC마트 `230/WHITE` 1개와 29CM 백팩 3개 Queue 수집/PostgreSQL 저장/추천 조회 성공
+- 구현 commit/기록: `ccda7c8` / `docs/reports/코드트래커/2026-08-16-ANALYSIS-004-Python_옵션_재고_근거.md:1`
+- 남은 위험: 용량/소재/규격/저장 용량은 아직 판매처 상세 옵션과 연결되지 않았고,
+  신발 외 전체 상품군 오병합률/중복 카드율/옵션 출처 누락률은 고정 fixture로 측정하지 않았다.
 
 ## 작업 기록 템플릿
 
