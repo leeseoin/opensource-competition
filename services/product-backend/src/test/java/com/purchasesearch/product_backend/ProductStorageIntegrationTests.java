@@ -146,6 +146,7 @@ class ProductStorageIntegrationTests {
 	@Test
 	void storesCollectorResultWithEmptyFilters() throws Exception {
 		String collectorResultJson = Files.readString(abcmartFixturePath())
+				.replace("\r\n", "\n")
 				.replace("""
 						  "filters": {
 						    "sizes": ["270"],
@@ -173,6 +174,7 @@ class ProductStorageIntegrationTests {
 	@Test
 	void findsLatestCollectionOnlyForExactDefaultSearchScope() throws Exception {
 		String collectorResultJson = Files.readString(abcmartFixturePath())
+				.replace("\r\n", "\n")
 				.replace("""
 					  "filters": {
 					    "sizes": ["270"],

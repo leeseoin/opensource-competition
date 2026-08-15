@@ -111,6 +111,7 @@ class CollectionResultConsumerIntegrationTests {
 	@Test
 	void consumesSuccessfulResultAndStoresProducts() throws Exception {
 		String collectorResult = Files.readString(abcmartCollectorResultPath())
+				.replace("\r\n", "\n")
 				.replace("""
 						  "filters": {
 						    "sizes": ["270"],
@@ -465,6 +466,7 @@ class CollectionResultConsumerIntegrationTests {
 	 */
 	private String normalizedCollectorResult() throws Exception {
 		return Files.readString(abcmartCollectorResultPath())
+				.replace("\r\n", "\n")
 				.replace("""
 					  "filters": {
 					    "sizes": ["270"],
