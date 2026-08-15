@@ -9,6 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -27,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.purchasesearch.product_backend.collection.dto.CollectorResult;
 import com.purchasesearch.product_backend.agentrun.repository.AgentRunRepository;
 import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
+import com.purchasesearch.product_backend.collection.repository.StaleSearchContext;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService;
 import com.purchasesearch.product_backend.collection.service.CollectorResultStoreService.StoreReport;
 import com.purchasesearch.product_backend.evidence.repository.EvidenceRepository;
@@ -190,6 +194,64 @@ class ProductStorageIntegrationTests {
 		assertThat(collectionSearchContextRepository
 				.findLatestDefaultSearchCollectedAt("29cm", "구두"))
 				.isEmpty();
+	}
+
+	/**
+	 * 사전 갱신 배치 조회가 기본 필터로 수집된 조합만 마지막 수집이 오래된 순으로 반환하고,
+	 * 기준 시각보다 최신인 조합은 제외하며, batchSize를 넘지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 읽기 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void findsStaleDefaultSearchContextsOldestFirstWithinBatchSize() throws Exception {
+		String collectorResultJson = Files.readString(abcmartFixturePath())
+				.replace("\r\n", "\n")
+				.replace("""
+						  "filters": {
+						    "sizes": ["270"],
+						    "inStockOnly": true
+						  },
+						""", "  \"filters\": {},\n");
+		mockMvc.perform(post("/internal/v1/collection-results")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(collectorResultJson))
+				.andExpect(status().isOk());
+
+		insertDefaultSearchContext("stale-context-002", "29cm", "로퍼", Instant.now().minus(Duration.ofHours(2)));
+		insertDefaultSearchContext("fresh-context-003", "29cm", "슬리퍼", Instant.now());
+
+		Instant staleBoundary = Instant.now().minus(Duration.ofHours(1));
+
+		List<StaleSearchContext> firstPage = collectionSearchContextRepository
+				.findStaleDefaultSearchContexts(staleBoundary, 1);
+		assertThat(firstPage).singleElement().satisfies(context -> {
+			assertThat(context.getMerchant()).isEqualTo("abcmart");
+			assertThat(context.getSearchQuery()).isEqualTo("구두");
+		});
+
+		List<StaleSearchContext> allStale = collectionSearchContextRepository
+				.findStaleDefaultSearchContexts(staleBoundary, 10);
+		assertThat(allStale)
+				.extracting(StaleSearchContext::getMerchant, StaleSearchContext::getSearchQuery)
+				.containsExactly(
+						org.assertj.core.groups.Tuple.tuple("abcmart", "구두"),
+						org.assertj.core.groups.Tuple.tuple("29cm", "로퍼"));
+	}
+
+	/**
+	 * 사전 갱신 배치 조회 테스트 전용으로 기본 필터의 검색 문맥 한 건을 직접 삽입한다.
+	 *
+	 * @param requestId 고유 request_id
+	 * @param merchant 판매처 식별자
+	 * @param searchQuery 검색어
+	 * @param collectedAt 마지막 수집 완료 시각
+	 */
+	private void insertDefaultSearchContext(String requestId, String merchant, String searchQuery, Instant collectedAt) {
+		jdbcTemplate.update("""
+				INSERT INTO collection_search_contexts
+				    (request_id, merchant, search_query, filters, collected_at, collector_version)
+				VALUES (?, ?, ?, jsonb_build_object('inStockOnly', false), ?, ?)
+				""", requestId, merchant, searchQuery, Timestamp.from(collectedAt), "test-v1");
 	}
 
 	/**
