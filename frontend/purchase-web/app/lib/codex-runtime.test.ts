@@ -127,6 +127,16 @@ test("사용자 색상 표현의 필수와 선호 강도를 구분한다", async
   assert.equal(preferred.colors[0]?.priority, "preferred");
 });
 
+/** 다른 색을 명시적으로 거부한 문장은 완화 단어가 함께 있어도 필수 색상으로 유지하는지 검증한다. */
+test("다른 색 불가 문맥은 필수 색상으로 유지한다", async () => {
+  const result = await structurePurchaseQuestion(
+    "갈색 구두를 찾아줘. 없으면 다른 색은 안 돼",
+    async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "preferred" }] }),
+  );
+
+  assert.equal(result.colors[0]?.priority, "required");
+});
+
 /** 특정 모델명이 필수 조건으로 잘못 분류돼도 상품 검색어로 복구하는지 검증한다. */
 test("미확인 상품 종류에서 필수 모델명을 검색어로 승격한다", async () => {
   const result = await structurePurchaseQuestion("탈리타 5 블랙 250 찾아줘", async () => JSON.stringify({
@@ -137,6 +147,18 @@ test("미확인 상품 종류에서 필수 모델명을 검색어로 승격한�
 
   assert.equal(result.productType.value, "탈리타 5");
   assert.deepEqual(result.requirements, []);
+});
+
+/** 일반 기능 요구사항은 미확인 상품 종류를 대신하는 모델명으로 오인하지 않는지 검증한다. */
+test("미확인 상품 종류에서 일반 필수 조건은 검색어로 승격하지 않는다", async () => {
+  const result = await structurePurchaseQuestion("방수 기능은 필수야", async () => JSON.stringify({
+    ...validCondition,
+    productType: { value: "미확인", priority: "required" },
+    requirements: [{ value: "방수", priority: "required" }],
+  }));
+
+  assert.equal(result.productType.value, "미확인");
+  assert.deepEqual(result.requirements, [{ value: "방수", priority: "required" }]);
 });
 
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */

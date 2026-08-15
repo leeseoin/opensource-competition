@@ -302,9 +302,17 @@ class ProductStorageIntegrationTests {
 		CollectorResult latest = objectMapper.treeToValue(withoutOptions, CollectorResult.class);
 
 		StoreReport report = collectorResultStoreService.store(latest);
+		var withoutOptionsAgain = (tools.jackson.databind.node.ObjectNode) objectMapper.readTree(
+				withoutOptions.toString().replace(
+						"2026-07-31T15:00:00+09:00",
+						"2026-08-01T15:00:00+09:00"));
+		withoutOptionsAgain.put("requestId", "backend-test-no-options-003");
+		StoreReport repeatedReport = collectorResultStoreService.store(
+				objectMapper.treeToValue(withoutOptionsAgain, CollectorResult.class));
 
 		assertThat(report.optionCount()).isEqualTo(1);
-		assertThat(productOptionRepository.count()).isEqualTo(2);
+		assertThat(repeatedReport.optionCount()).isEqualTo(1);
+		assertThat(productOptionRepository.count()).isEqualTo(3);
 		assertThat(productOptionRepository.findAll())
 				.allSatisfy(option -> {
 					assertThat(option.getSize()).isEqualTo("270");

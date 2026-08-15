@@ -162,17 +162,20 @@ function isSoftColorPreference(question: string, color: string): boolean {
     Math.max(0, colorIndex - 12),
     Math.min(normalizedQuestion.length, colorIndex + color.length + 30),
   );
+  if (/(다른\s*색|색(?:은|도)?\s*달라도)[^.!?]{0,8}(안\s*(돼|됨|괜찮)|싫|불가)/.test(context)) {
+    return false;
+  }
   return /(이면|이었으면|였으면)\s*(좋|괜찮)|선호|가능하면|가급적|되도록|우선|상관없|아니어도|없으면|달라도|다른\s*색/.test(context);
 }
 
-/** 미확인 상품 종류 대신 모델명으로 기록된 첫 필수 조건을 검색어로 승격한다. */
+/** 미확인 상품 종류 대신 숫자 포함 모델명으로 기록된 첫 필수 조건을 검색어로 승격한다. */
 function promoteProductModelRequirement(condition: PurchaseCondition): PurchaseCondition {
   const productType = condition.productType.value.trim();
   if (!/^(미확인|알\s*수\s*없음|unknown|상품)$/i.test(productType)) {
     return condition;
   }
   const modelIndex = condition.requirements.findIndex((item) =>
-    item.priority === "required" && /[\p{L}\p{N}]/u.test(item.value));
+    item.priority === "required" && /\p{L}/u.test(item.value) && /\p{N}/u.test(item.value));
   if (modelIndex < 0) {
     return condition;
   }

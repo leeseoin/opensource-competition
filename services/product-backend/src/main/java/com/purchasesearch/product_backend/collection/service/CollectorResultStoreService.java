@@ -110,11 +110,11 @@ public class CollectorResultStoreService {
 			MerchantProduct merchantProduct = upsertMerchantProduct(result, product);
 			searchDocuments.add(new ProductSearchDocument(
 					merchantProduct.getId(), buildSearchDocument(result, product)));
-			OfferSnapshot previousSnapshot = offerSnapshotRepository
-					.findFirstByMerchantProductOrderByCollectedAtDescIdDesc(merchantProduct)
+			OfferSnapshot previousOptionSnapshot = offerSnapshotRepository
+					.findLatestWithOptions(merchantProduct.getId())
 					.orElse(null);
 			OfferSnapshot snapshot = saveOfferSnapshot(result, product, merchantProduct);
-			optionCount += saveOptions(product, snapshot, previousSnapshot);
+			optionCount += saveOptions(product, snapshot, previousOptionSnapshot);
 			evidenceCount += saveEvidence(product, merchantProduct, snapshot);
 			verificationCount += saveVerification(product, merchantProduct, snapshot);
 		}
@@ -274,15 +274,15 @@ public class CollectorResultStoreService {
 	 *
 	 * @param product 옵션을 포함한 상품
 	 * @param snapshot 옵션이 속할 offer snapshot
-	 * @param previousSnapshot 이번 수집 직전의 최신 snapshot 또는 null
+	 * @param previousOptionSnapshot 이번 수집 전에 마지막으로 옵션이 확인된 snapshot 또는 null
 	 * @return 저장하거나 이전 근거에서 이월한 옵션 개수
 	 */
 	private int saveOptions(
 			CollectorResult.Product product,
 			OfferSnapshot snapshot,
-			OfferSnapshot previousSnapshot) {
-		if (product.options().isEmpty() && previousSnapshot != null) {
-			return carryForwardOptions(previousSnapshot, snapshot);
+			OfferSnapshot previousOptionSnapshot) {
+		if (product.options().isEmpty() && previousOptionSnapshot != null) {
+			return carryForwardOptions(previousOptionSnapshot, snapshot);
 		}
 		for (CollectorResult.Option option : product.options()) {
 			Money price = option.price();
