@@ -2369,17 +2369,19 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:310` `carryForwardOptions`: 원래 옵션 provenance 이월
   - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:315` `toSummary`: 기존 빈 최신 옵션 읽기 복구
   - `frontend/purchase-web/app/lib/codex-runtime.ts:155` `isSoftColorPreference`: 색상 완화 문맥 보정
-  - `frontend/purchase-web/app/lib/codex-runtime.ts:169` `promoteProductModelRequirement`: 특정 모델명 검색어 복구
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:172` `promoteProductModelRequirement`: 숫자 포함 특정 모델명 검색어 복구
   - `services/product-backend/src/test/java/com/purchasesearch/product_backend/agentrun/service/AgentRunServiceTests.java:187` `verifiesSelectedReadyCandidateAndCompletesRun`: 재검증 상태 전이
 - 발생 문제: 최초 1,000개 평가가 재고 `unknown` 상품까지 정답으로 포함해 실제 검색 결함과
   평가 표본 오류가 섞였고, trigram 후보도 필수 상품 종류 후처리에서 제거됐다. 최신 검색
-  수집이 옵션을 생략하면 이전 옵션도 검색에서 사라졌다.
+  수집이 옵션을 생략하면 이전 옵션도 검색에서 사라졌고, 직전 snapshot만 보는 최초 수정은
+  옵션 누락이 두 번 연속되면 이월이 끊길 수 있었다.
 - 해결: 구매 가능한 `available` snapshot만 양성 표본으로 사용하고 compact trigram과 최소
-  keyword score를 적용했다. 옵션은 원래 출처를 유지해 이월하며 기존 빈 snapshot은 마지막
-  옵션 근거로 복구한다. 필수 조건은 자동 완화하지 않았다.
+  keyword score를 적용했다. 옵션은 마지막으로 확인된 snapshot에서 원래 출처를 유지해
+  이월하며 기존 빈 snapshot은 마지막 옵션 근거로 복구한다. 숫자 없는 일반 요구사항은
+  모델명으로 승격하지 않고 다른 색 불가 문맥은 필수로 유지했다.
 - 검증:
   - `cd services/product-backend && ./gradlew test`: 전체 통과
-  - `cd frontend/purchase-web && npm test`: 57개 통과
+  - `cd frontend/purchase-web && npm test`: 59개 통과
   - `cd frontend/purchase-web && npm run build`: 통과
   - 현재 DB 1,000개 회귀: API 오류 0건/false zero 0%/상품군 적중률 99.26%/오타 적중률 93%/필수 위반 0건/중복 0건/p95 61.617ms
   - 실제 Codex 질문 10개: 조건 구조화 10/10/실행 종료 10/10/양성 READY 2/9
