@@ -8,6 +8,7 @@ import styles from "./admin-layout.module.css";
 const TABS = [
   { href: "/admin/collections", label: "현황" },
   { href: "/admin/collections/new", label: "새 수집 요청" },
+  { href: "/admin/collections/products", label: "상품 재검증" },
 ];
 
 /** AdminNav는 관리 화면 기능이 늘어난 만큼 현황/새 요청 화면을 탭으로 구분해 보여준다. */
