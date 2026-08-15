@@ -119,12 +119,24 @@ test("사용자 색상 표현의 필수와 선호 강도를 구분한다", async
     async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "preferred" }] }),
   );
   const preferred = await structurePurchaseQuestion(
-    "갈색이면 좋겠지만 다른 색도 괜찮은 구두 찾아줘",
+    "갈색 구두를 찾아줘. 없으면 색은 달라도 괜찮아",
     async () => JSON.stringify({ ...validCondition, colors: [{ value: "갈색", priority: "required" }] }),
   );
 
   assert.equal(explicit.colors[0]?.priority, "required");
   assert.equal(preferred.colors[0]?.priority, "preferred");
+});
+
+/** 특정 모델명이 필수 조건으로 잘못 분류돼도 상품 검색어로 복구하는지 검증한다. */
+test("미확인 상품 종류에서 필수 모델명을 검색어로 승격한다", async () => {
+  const result = await structurePurchaseQuestion("탈리타 5 블랙 250 찾아줘", async () => JSON.stringify({
+    ...validCondition,
+    productType: { value: "미확인", priority: "required" },
+    requirements: [{ value: "탈리타 5", priority: "required" }],
+  }));
+
+  assert.equal(result.productType.value, "탈리타 5");
+  assert.deepEqual(result.requirements, []);
 });
 
 /** JSON이 아닌 Codex 최종 응답을 계약 오류로 거절하는지 검증한다. */

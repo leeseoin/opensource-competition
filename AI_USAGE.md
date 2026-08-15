@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-11
+최종 갱신일: 2026-08-15
 
 ## 이 문서를 공개하는 이유
 
@@ -43,6 +43,8 @@
   PostgreSQL에 저장하며 MCP와 Web은 제한된 polling만 수행한다.
 - Next.js Agent Gateway는 server에서 Codex CLI를 읽기 전용/비대화형으로 실행해
   `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
+- Agent Gateway는 색상 완화 문맥과 특정 모델명이 잘못 분류된 경우를 결정론적으로
+  보정한다. 보정 전후 조건은 사용자가 확인하며 상품 사실을 생성하지 않는다.
 - Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
   Plugin prompt, OAuth 오류 원문과 child process stderr는 browser 응답에 노출하지 않는다.
 - 사용자가 조건을 확인한 뒤 공식 MCP client가 MCP Server의 확인 및 검색 도구를 호출한다.
@@ -98,3 +100,4 @@
 | 2026-08-11 | Codex CLI 구조화 출력용 엄격 Schema를 하위 호환 공용 PurchaseCondition 계약과 분리하고 안전한 실패 로그를 추가 | Codex CLI 0.146.1 실제 호출과 Web API에서 조건 생성 및 MCP DRAFT 저장 성공을 검증하고 원본 stderr 비노출을 유지 |
 | 2026-08-11 | Codex 조건 구조화 뒤 사용자 색상 표현의 필수/선호 강도를 결정적으로 보정 | `갈색 찾아줘`는 필수로 처리해 검정 후보를 제외하고 `갈색이면 좋겠어`만 선호로 유지하는 단위 테스트와 실제 Web 검색 0건을 검증 |
 | 2026-08-11 | Codex를 사용해 상태 기반 구매 조사 Agent Run과 MCP/Web 진행 및 재검증 연결을 구현 | PostgreSQL Flyway/JPA 상태, 중복 방지 잠금, 실패 보존, MCP stdio 계약, Web route/unit test와 production build 및 Spring Boot 전체 test로 검증 / 실제 ABC마트 Queue의 READY/VERIFIED/NO_RESULTS API E2E 통과, browser E2E는 후속 수동 검증 대상으로 유지 |
+| 2026-08-15 | Codex를 사용해 상품명 오타 검색, 마지막 확인 옵션 복구, 색상 완화와 특정 모델명 조건 보정을 구현하고 1,000개 회귀 평가를 수행 | 필수 조건 위반 0건/false zero 0%/상품군 적중률 99.26%/검색 p95 61.617ms와 실제 Web/MCP/Queue 재검증 VERIFIED 1건을 확인 / 실제 양성 질문 READY는 2/9로 수집 데이터 확장 필요 |

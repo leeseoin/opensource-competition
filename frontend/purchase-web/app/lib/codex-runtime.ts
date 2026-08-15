@@ -162,13 +162,36 @@ function isSoftColorPreference(question: string, color: string): boolean {
     Math.max(0, colorIndex - 12),
     Math.min(normalizedQuestion.length, colorIndex + color.length + 30),
   );
-  return /(이면|이었으면|였으면)\s*(좋|괜찮)|선호|가능하면|가급적|되도록|우선|상관없|아니어도/.test(context);
+  return /(이면|이었으면|였으면)\s*(좋|괜찮)|선호|가능하면|가급적|되도록|우선|상관없|아니어도|없으면|달라도|다른\s*색/.test(context);
+}
+
+/** 미확인 상품 종류 대신 모델명으로 기록된 첫 필수 조건을 검색어로 승격한다. */
+function promoteProductModelRequirement(condition: PurchaseCondition): PurchaseCondition {
+  const productType = condition.productType.value.trim();
+  if (!/^(미확인|알\s*수\s*없음|unknown|상품)$/i.test(productType)) {
+    return condition;
+  }
+  const modelIndex = condition.requirements.findIndex((item) =>
+    item.priority === "required" && /[\p{L}\p{N}]/u.test(item.value));
+  if (modelIndex < 0) {
+    return condition;
+  }
+  const model = condition.requirements[modelIndex];
+  return {
+    ...condition,
+    productType: {
+      ...condition.productType,
+      value: model.value.trim(),
+    },
+    requirements: condition.requirements.filter((_, index) => index !== modelIndex),
+  };
 }
 
 /** 명시 색상의 강도와 productType의 색상 중복을 검색 정책에 맞게 보정한다. */
 function normalizePurchaseCondition(condition: PurchaseCondition, question: string): PurchaseCondition {
-  let productType = condition.productType.value.trim();
-  for (const color of condition.colors) {
+  const promoted = promoteProductModelRequirement(condition);
+  let productType = promoted.productType.value.trim();
+  for (const color of promoted.colors) {
     const token = color.value.trim();
     if (!token) {
       continue;
@@ -177,14 +200,14 @@ function normalizePurchaseCondition(condition: PurchaseCondition, question: stri
   }
   productType = productType.replace(/\s+/g, " ").trim();
   return {
-    ...condition,
-    colors: condition.colors.map((color) => ({
+    ...promoted,
+    colors: promoted.colors.map((color) => ({
       ...color,
       priority: isSoftColorPreference(question, color.value) ? "preferred" : "required",
     })),
     productType: {
-      ...condition.productType,
-      value: productType || condition.productType.value.trim(),
+      ...promoted.productType,
+      value: productType || promoted.productType.value.trim(),
     },
   };
 }
@@ -203,6 +226,7 @@ export async function structurePurchaseQuestion(
     "아래 Plugin 규칙을 적용하되 상품을 검색하거나 사실을 추측하지 않는다.",
     pluginRules,
     "productType에는 구두, 운동화처럼 상품 종류만 기록한다.",
+    "상품 종류를 모르는 특정 모델명 요청이면 미확인으로 두지 말고 모델명을 productType에 기록한다.",
     "색상, 사이즈, 가격, 판매처와 용도는 각각의 전용 필드에만 기록하고 productType에 중복하지 않는다.",
     "각 조건의 priority는 구매 불가능 조건이면 required, 가능하면 만족할 선호이면 preferred로 기록한다.",
     "productType은 required, 용도는 기본 preferred, 사용자가 명시한 사이즈와 가격 상한은 기본 required로 기록한다.",
