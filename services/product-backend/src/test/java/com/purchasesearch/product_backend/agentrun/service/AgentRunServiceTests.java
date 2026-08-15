@@ -31,6 +31,8 @@ import com.purchasesearch.product_backend.collection.dto.CollectionRefreshRespon
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
 import com.purchasesearch.product_backend.collection.service.CollectionJobService;
 import com.purchasesearch.product_backend.collection.service.CollectionRefreshService;
+import com.purchasesearch.product_backend.evidence.dto.OfferVerificationResponse;
+import com.purchasesearch.product_backend.evidence.dto.OfferVerificationResponse.VerificationStatus;
 import com.purchasesearch.product_backend.evidence.service.OfferVerificationService;
 import com.purchasesearch.product_backend.product.dto.ProductCandidateResponse;
 import com.purchasesearch.product_backend.product.dto.ProductSearchResponse.ProductSummary;
@@ -180,6 +182,35 @@ class AgentRunServiceTests {
 		verify(refreshService, never()).request(any());
 	}
 
+	/** READY 후보를 선택하면 재검증을 시작하고 Queue 완료 뒤 COMPLETED로 끝나는지 검증한다. */
+	@Test
+	void verifiesSelectedReadyCandidateAndCompletesRun() {
+		AgentRun run = AgentRun.start(session);
+		ReflectionTestUtils.setField(run, "runId", runId);
+		run.transitionTo(AgentRunStatus.READY);
+		ProductSummary candidate = mock(ProductSummary.class);
+		when(candidate.id()).thenReturn(11L);
+		when(sessionService.search(sessionId)).thenReturn(research(List.of(candidate)));
+		when(runRepository.findByIdForUpdate(runId)).thenReturn(Optional.of(run));
+		UUID verificationId = UUID.randomUUID();
+		when(verificationService.request(11L)).thenReturn(verification(
+				verificationId, VerificationStatus.QUEUED));
+
+		var verifying = service.verify(runId, 11L);
+
+		assertThat(verifying.status()).isEqualTo(AgentRunStatus.VERIFYING);
+		assertThat(verifying.nextAction()).isEqualTo("POLL_ADVANCE");
+		when(verificationService.get(verificationId)).thenReturn(verification(
+				verificationId, VerificationStatus.VERIFIED));
+
+		var completed = service.advance(runId);
+
+		assertThat(completed.status()).isEqualTo(AgentRunStatus.COMPLETED);
+		assertThat(completed.nextAction()).isEqualTo("NONE");
+		assertThat(completed.verification().status()).isEqualTo(VerificationStatus.VERIFIED);
+		verify(verificationService).request(11L);
+	}
+
 	/** 테스트용 확정 구매 조건을 생성한다. */
 	private PurchaseCondition conditions() {
 		return new PurchaseCondition(
@@ -204,5 +235,12 @@ class AgentRunServiceTests {
 				0, 0, "COMPLETED".equals(status) ? 1 : 0, 0, 0, 0,
 				new VerificationSummary(0, 0, 0, 0, 0, 0, 0),
 				OffsetDateTime.now(), "COMPLETED".equals(status) ? OffsetDateTime.now() : null, List.of());
+	}
+
+	/** 테스트 상태만 지정한 재검증 응답을 생성한다. */
+	private OfferVerificationResponse verification(UUID verificationId, VerificationStatus status) {
+		return new OfferVerificationResponse(
+				verificationId, 11L, "verification-job-1", status, "PRIORITY_SEARCH_REFRESH",
+				null, null, List.of());
 	}
 }
