@@ -350,6 +350,138 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * sort=oldest 파라미터가 마지막 수집이 가장 오래된 상품부터 반환하는지 검증한다.
+	 * 관리자 화면이 재검증(재수집)이 시급한 상품을 고를 때 사용하는 정렬이다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void sortsProductsByOldestCollectedAtWhenRequested() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		CollectorResult secondProduct = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-stale-002")
+						.replace("1010110882", "stale-test-002"),
+				CollectorResult.class);
+		collectorResultStoreService.store(secondProduct);
+		long freshId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "1010110882")
+				.orElseThrow().getId();
+		long staleId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "stale-test-002")
+				.orElseThrow().getId();
+		jdbcTemplate.update(
+				"UPDATE merchant_products SET last_collected_at = ? WHERE id = ?",
+				Timestamp.from(Instant.now().minus(Duration.ofDays(10))), staleId);
+		jdbcTemplate.update(
+				"UPDATE merchant_products SET last_collected_at = ? WHERE id = ?",
+				Timestamp.from(Instant.now()), freshId);
+
+		mockMvc.perform(get("/internal/v1/products")
+						.param("merchant", "abcmart")
+						.param("limit", "10")
+						.param("sort", "oldest"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products[0].externalId").value("stale-test-002"))
+				.andExpect(jsonPath("$.products[1].externalId").value("1010110882"));
+
+		mockMvc.perform(get("/internal/v1/products")
+						.param("merchant", "abcmart")
+						.param("limit", "10"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products[0].externalId").value("1010110882"))
+				.andExpect(jsonPath("$.products[1].externalId").value("stale-test-002"));
+	}
+
+	/**
+	 * staleHours 파라미터가 마지막 수집이 그 시간(시) 이전인 상품만 남기는지 검증한다.
+	 * 관리자 화면의 "N시간 이상 지난 것만" 필터가 이 조건에 대응한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void filtersProductsByStaleHoursThreshold() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		CollectorResult secondProduct = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-stale-003")
+						.replace("1010110882", "stale-test-003"),
+				CollectorResult.class);
+		collectorResultStoreService.store(secondProduct);
+		long freshId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "1010110882")
+				.orElseThrow().getId();
+		long staleId = merchantProductRepository.findByMerchantAndExternalId("abcmart", "stale-test-003")
+				.orElseThrow().getId();
+		jdbcTemplate.update(
+				"UPDATE merchant_products SET last_collected_at = ? WHERE id = ?",
+				Timestamp.from(Instant.now().minus(Duration.ofHours(10))), staleId);
+		jdbcTemplate.update(
+				"UPDATE merchant_products SET last_collected_at = ? WHERE id = ?",
+				Timestamp.from(Instant.now()), freshId);
+
+		mockMvc.perform(get("/internal/v1/products")
+						.param("merchant", "abcmart")
+						.param("limit", "10")
+						.param("staleHours", "5"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products.length()").value(1))
+				.andExpect(jsonPath("$.products[0].externalId").value("stale-test-003"));
+
+		mockMvc.perform(get("/internal/v1/products")
+						.param("merchant", "abcmart")
+						.param("limit", "10"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.products.length()").value(2));
+	}
+
+	/**
+	 * 대량 재검증 요청이 배경 스레드에서 실제로 처리되어 COMPLETED로 끝나는지 검증한다.
+	 * 존재하지 않는 상품 ID를 써서 개별 재검증 성공 여부가 아니라, 컨트롤러가 즉시
+	 * 배치를 접수하고 {@code @Async} 실행기가 실제로 동작해 상태가 PROCESSING에서
+	 * COMPLETED로 바뀌는 비동기 배관 자체를 검증한다.
+	 *
+	 * @throws Exception HTTP 요청 또는 진행 상태 대기에 실패한 경우
+	 */
+	@Test
+	void completesBulkVerificationBatchAsynchronously() throws Exception {
+		String response = mockMvc.perform(post("/internal/v1/offer-verifications/products/bulk")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"productIds\":[999999999]}"))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.requestedCount").value(1))
+				.andReturn().getResponse().getContentAsString();
+		String batchId = objectMapper.readTree(response).get("batchId").asText();
+
+		waitUntil(() -> {
+			try {
+				String status = mockMvc.perform(get("/internal/v1/offer-verifications/products/bulk/{batchId}", batchId))
+						.andReturn().getResponse().getContentAsString();
+				return objectMapper.readTree(status).get("status").asText().equals("COMPLETED");
+			} catch (Exception exception) {
+				return false;
+			}
+		}, Duration.ofSeconds(10));
+
+		mockMvc.perform(get("/internal/v1/offer-verifications/products/bulk/{batchId}", batchId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("COMPLETED"))
+				.andExpect(jsonPath("$.processedCount").value(1))
+				.andExpect(jsonPath("$.queuedCount").value(0))
+				.andExpect(jsonPath("$.results[0].success").value(false))
+				.andExpect(jsonPath("$.results[0].error").value("상품을 찾을 수 없습니다."));
+	}
+
+	/** 조건이 참이 될 때까지 짧은 간격으로 재확인하고, 제한 시간을 넘기면 실패시킨다. */
+	private void waitUntil(java.util.function.BooleanSupplier condition, Duration timeout) throws InterruptedException {
+		long deadline = System.nanoTime() + timeout.toNanos();
+		while (System.nanoTime() < deadline) {
+			if (condition.getAsBoolean()) {
+				return;
+			}
+			Thread.sleep(50);
+		}
+		throw new AssertionError("배치 처리가 제한 시간 안에 끝나지 않았습니다.");
+	}
+
+	/**
 	 * 사용자 질문 후보 API가 원본 질문을 보존하고 DB 상품의 가격, 재고와 출처를 반환하는지 검증한다.
 	 *
 	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
