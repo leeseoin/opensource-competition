@@ -15,8 +15,13 @@
 않는다. 동시에 진행할 (키워드 x 사이트) 조합 수는 keyword_concurrency로 제한한다.
 한 조합이 예외로 실패해도 나머지 조합 결과에는 영향을 주지 않는다.
 
+detail_cache_ttl_hours를 0보다 크게 주면, 같은 (판매처, 상품)을 그 시간 안에 이미 상세
+조회했을 경우 다시 조회하지 않는다(app/services/detail_freshness_cache.py). 개발 중
+같은 키워드로 스크립트를 반복 실행할 때 상세/리뷰 API에 불필요한 부하를 주지 않으려는
+용도이며, 캐시로 건너뛴 상품은 이번 실행 결과에 검색 단계 필드만 남고 상세는 비어 있다.
+
 사용법:
-    python scripts/run_unified_crawl.py [keyword[,keyword2,...]] [max_items_per_site] [detail_limit] [keyword_concurrency]
+    python scripts/run_unified_crawl.py [keyword[,keyword2,...]] [max_items_per_site] [detail_limit] [keyword_concurrency] [detail_cache_ttl_hours]
 """
 
 import asyncio
@@ -29,18 +34,37 @@ from app.crawlers import SITE_CRAWLERS
 from app.crawlers.base import jittered_sleep
 from app.normalizer import normalize
 from app.services.contract_validation import validate_items
+from app.services.detail_freshness_cache import DetailFreshnessCache
 
 _DEFAULT_KEYWORD_CONCURRENCY = 3
+_DETAIL_CACHE_PATH = Path("output/detail_freshness_cache.json")
 
 
-async def _crawl_site(site: str, keyword: str, max_items: int, detail_limit: int) -> tuple[list[dict], list[str]]:
+async def _crawl_site(
+    site: str,
+    keyword: str,
+    max_items: int,
+    detail_limit: int,
+    cache: DetailFreshnessCache | None = None,
+) -> tuple[list[dict], list[str]]:
     crawler = SITE_CRAWLERS[site]()
     products, errors = await crawler.crawl(keyword, max_items)
 
     effective_limit = len(products) if detail_limit < 0 else detail_limit
     if effective_limit > 0 and products:
-        products, detail_errors = await crawler.attach_details(products, limit=effective_limit)
-        errors.extend(detail_errors)
+        window = products[:effective_limit]
+        targets = window
+        if cache is not None:
+            targets, fresh = cache.split_stale(site, window)
+            if fresh:
+                print(f"[{site}:{keyword}] 캐시로 상세 조회 건너뜀 {len(fresh)}개")
+        if targets:
+            # attach_details는 전달한 목록을 그 자리에서 갱신하므로(id 참조 공유),
+            # products 안의 같은 dict 객체가 함께 갱신된다 — 별도 병합이 필요 없다.
+            _, detail_errors = await crawler.attach_details(targets, limit=len(targets))
+            errors.extend(detail_errors)
+            if cache is not None:
+                cache.mark_fetched(site, targets)
 
     return products, errors
 
@@ -51,13 +75,14 @@ async def _crawl_site_bounded(
     keyword: str,
     max_items: int,
     detail_limit: int,
+    cache: DetailFreshnessCache | None,
 ) -> tuple[list[dict], list[str]]:
     """동시에 진행하는 (키워드 x 사이트) 조합 수를 세마포어로 제한하고, 시작 전 약간의
     무작위 지연을 둬 여러 조합이 정확히 같은 순간에 몰리지 않게 한다."""
 
     async with semaphore:
         await jittered_sleep(0.3, spread=0.3)
-        return await _crawl_site(site, keyword, max_items, detail_limit)
+        return await _crawl_site(site, keyword, max_items, detail_limit, cache)
 
 
 async def main() -> None:
@@ -66,6 +91,8 @@ async def main() -> None:
     max_items = int(sys.argv[2]) if len(sys.argv) > 2 else 5
     detail_limit = int(sys.argv[3]) if len(sys.argv) > 3 else -1
     keyword_concurrency = int(sys.argv[4]) if len(sys.argv) > 4 else _DEFAULT_KEYWORD_CONCURRENCY
+    detail_cache_ttl_hours = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
+    cache = DetailFreshnessCache(_DETAIL_CACHE_PATH, ttl_hours=detail_cache_ttl_hours) if detail_cache_ttl_hours > 0 else None
 
     semaphore = asyncio.Semaphore(keyword_concurrency)
     sites = list(SITE_CRAWLERS)
@@ -73,7 +100,7 @@ async def main() -> None:
 
     results = await asyncio.gather(
         *(
-            _crawl_site_bounded(semaphore, site, keyword, max_items, detail_limit)
+            _crawl_site_bounded(semaphore, site, keyword, max_items, detail_limit, cache)
             for keyword, site in combos
         ),
         return_exceptions=True,
