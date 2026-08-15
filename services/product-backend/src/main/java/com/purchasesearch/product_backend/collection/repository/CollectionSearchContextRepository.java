@@ -1,6 +1,7 @@
 package com.purchasesearch.product_backend.collection.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,4 +35,31 @@ public interface CollectionSearchContextRepository
 	Optional<Instant> findLatestDefaultSearchCollectedAt(
 			@Param("merchant") String merchant,
 			@Param("searchQuery") String searchQuery);
+
+	/**
+	 * 기본 필터로 수집된 판매처/검색어 조합 중 마지막 수집이 기준 시각보다 오래된 조합을
+	 * 가장 오래된 순으로 조회한다. CollectionFreshnessScheduler가 사용자 요청 전에
+	 * 미리 갱신할 대상을 고를 때 사용한다.
+	 *
+	 * @param staleBoundary 이 시각 이전에 마지막으로 수집됐으면 대상에 포함한다
+	 * @param batchSize 한 번에 반환할 최대 조합 수
+	 * @return 판매처, 검색어와 마지막 수집 시각을 오래된 순으로 담은 목록
+	 */
+	@Query(nativeQuery = true, value = """
+			WITH latest AS (
+				SELECT DISTINCT ON (merchant, LOWER(BTRIM(search_query)))
+					merchant, search_query, collected_at
+				FROM collection_search_contexts
+				WHERE filters = jsonb_build_object('inStockOnly', false)
+				ORDER BY merchant, LOWER(BTRIM(search_query)), collected_at DESC
+			)
+			SELECT merchant AS merchant, search_query AS searchQuery, collected_at AS collectedAt
+			FROM latest
+			WHERE collected_at < :staleBoundary
+			ORDER BY collected_at ASC
+			LIMIT :batchSize
+			""")
+	List<StaleSearchContext> findStaleDefaultSearchContexts(
+			@Param("staleBoundary") Instant staleBoundary,
+			@Param("batchSize") int batchSize);
 }

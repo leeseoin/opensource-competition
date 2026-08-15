@@ -1,5 +1,7 @@
 package com.purchasesearch.product_backend.product.service;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,7 +83,7 @@ public class ProductQueryService {
 	}
 
 	/**
-	 * 판매처와 상품명, 브랜드 또는 수집 요청 검색어로 최신 상품 정보를 검색한다.
+	 * 판매처와 상품명, 브랜드 또는 수집 요청 검색어로 최근 수집 순 상품 정보를 검색한다.
 	 *
 	 * @param merchant 선택 판매처
 	 * @param query 선택 검색어
@@ -90,12 +92,44 @@ public class ProductQueryService {
 	 */
 	@Transactional(readOnly = true)
 	public ProductSearchResponse search(String merchant, String query, int limit) {
+		return search(merchant, query, limit, "latest");
+	}
+
+	/**
+	 * 판매처와 상품명, 브랜드 또는 수집 요청 검색어로 상품 정보를 검색한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param query 선택 검색어
+	 * @param limit 최대 반환 상품 수
+	 * @param sort "oldest"면 마지막 수집이 오래된 순, 그 외(기본 "latest")면 최근 수집 순
+	 * @return 전체 개수와 다음 결과 여부를 포함한 상품 목록
+	 */
+	@Transactional(readOnly = true)
+	public ProductSearchResponse search(String merchant, String query, int limit, String sort) {
+		return search(merchant, query, limit, sort, null);
+	}
+
+	/**
+	 * 판매처와 상품명, 브랜드 또는 수집 요청 검색어로 상품 정보를 검색한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param query 선택 검색어
+	 * @param limit 최대 반환 상품 수
+	 * @param sort "oldest"면 마지막 수집이 오래된 순, 그 외(기본 "latest")면 최근 수집 순
+	 * @param staleHours 지정하면 마지막 수집이 이 시간(시) 이전인 상품만 반환한다. 관리자
+	 *     화면이 "N시간 이상 지난 상품만" 같은 재검증 대상을 고를 때 쓴다.
+	 * @return 전체 개수와 다음 결과 여부를 포함한 상품 목록
+	 */
+	@Transactional(readOnly = true)
+	public ProductSearchResponse search(String merchant, String query, int limit, String sort, Integer staleHours) {
 		String normalizedMerchant = normalize(merchant);
 		String normalizedQuery = normalize(query);
-		Page<MerchantProduct> page = merchantProductRepository.search(
-				normalizedMerchant,
-				normalizedQuery,
-				PageRequest.of(0, limit));
+		Instant staleBoundary = staleHours == null ? null : Instant.now().minus(Duration.ofHours(staleHours));
+		Page<MerchantProduct> page = "oldest".equals(sort)
+				? merchantProductRepository.searchOldestFirst(
+						normalizedMerchant, normalizedQuery, staleBoundary, PageRequest.of(0, limit))
+				: merchantProductRepository.search(
+						normalizedMerchant, normalizedQuery, staleBoundary, PageRequest.of(0, limit));
 		List<ProductSummary> products = page.getContent().stream()
 				.map(this::toSummary)
 				.toList();

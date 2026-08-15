@@ -1,5 +1,6 @@
 package com.purchasesearch.product_backend.product.repository;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -69,6 +70,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 	 *
 	 * @param merchant 선택 판매처
 	 * @param query 선택 검색어
+	 * @param staleBoundary 지정하면 이 시각보다 마지막 수집이 오래된(이전인) 상품만 반환한다
 	 * @param pageable 페이지 조건
 	 * @return 최근 수집 순서의 판매처 상품 page
 	 */
@@ -79,6 +81,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					FROM merchant_products merchant_product
 					JOIN products product ON product.id = merchant_product.product_id
 					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
+					  AND (CAST(:staleBoundary AS timestamptz) IS NULL OR merchant_product.last_collected_at <= CAST(:staleBoundary AS timestamptz))
 					  AND (
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
@@ -100,6 +103,7 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 					FROM merchant_products merchant_product
 					JOIN products product ON product.id = merchant_product.product_id
 					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
+					  AND (CAST(:staleBoundary AS timestamptz) IS NULL OR merchant_product.last_collected_at <= CAST(:staleBoundary AS timestamptz))
 					  AND (
 						:query IS NULL
 						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
@@ -117,6 +121,67 @@ public interface MerchantProductRepository extends JpaRepository<MerchantProduct
 	Page<MerchantProduct> search(
 			@Param("merchant") String merchant,
 			@Param("query") String query,
+			@Param("staleBoundary") Instant staleBoundary,
+			Pageable pageable);
+
+	/**
+	 * search()와 같은 조건이되 마지막 수집이 가장 오래된 상품부터 반환한다. 관리자 화면이
+	 * 재검증(재수집)이 시급한 상품을 고를 때 사용한다.
+	 *
+	 * @param merchant 선택 판매처
+	 * @param query 선택 검색어
+	 * @param staleBoundary 지정하면 이 시각보다 마지막 수집이 오래된(이전인) 상품만 반환한다
+	 * @param pageable 페이지 조건
+	 * @return 마지막 수집이 오래된 순서의 판매처 상품 page
+	 */
+	@Query(
+			nativeQuery = true,
+			value = """
+					SELECT merchant_product.*
+					FROM merchant_products merchant_product
+					JOIN products product ON product.id = merchant_product.product_id
+					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
+					  AND (CAST(:staleBoundary AS timestamptz) IS NULL OR merchant_product.last_collected_at <= CAST(:staleBoundary AS timestamptz))
+					  AND (
+						:query IS NULL
+						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR LOWER(CAST(product.category_path AS TEXT)) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR EXISTS (
+							SELECT 1
+							FROM offer_snapshots snapshot
+							JOIN collection_search_contexts search_context
+							  ON search_context.request_id = snapshot.request_id
+							WHERE snapshot.merchant_product_id = merchant_product.id
+							  AND LOWER(search_context.search_query) LIKE LOWER(CONCAT('%', :query, '%'))
+						)
+					  )
+					ORDER BY merchant_product.last_collected_at ASC, merchant_product.id ASC
+					""",
+			countQuery = """
+					SELECT COUNT(merchant_product.id)
+					FROM merchant_products merchant_product
+					JOIN products product ON product.id = merchant_product.product_id
+					WHERE (:merchant IS NULL OR merchant_product.merchant = :merchant)
+					  AND (CAST(:staleBoundary AS timestamptz) IS NULL OR merchant_product.last_collected_at <= CAST(:staleBoundary AS timestamptz))
+					  AND (
+						:query IS NULL
+						OR LOWER(product.name) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR LOWER(COALESCE(product.brand, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+						OR EXISTS (
+							SELECT 1
+							FROM offer_snapshots snapshot
+							JOIN collection_search_contexts search_context
+							  ON search_context.request_id = snapshot.request_id
+							WHERE snapshot.merchant_product_id = merchant_product.id
+							  AND LOWER(search_context.search_query) LIKE LOWER(CONCAT('%', :query, '%'))
+						)
+					  )
+					""")
+	Page<MerchantProduct> searchOldestFirst(
+			@Param("merchant") String merchant,
+			@Param("query") String query,
+			@Param("staleBoundary") Instant staleBoundary,
 			Pageable pageable);
 
 	/**

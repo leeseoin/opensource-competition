@@ -42,13 +42,18 @@ public class ProductQueryController {
 	 *
 	 * @param merchant 선택 판매처
 	 * @param query 선택 상품 검색어
-	 * @param limit 최대 반환 상품 수
-	 * @return 전체 개수와 최신 상품 목록
+	 * @param limit 최대 반환 상품 수(1~10,000). 관리자 화면의 대량 재검증 대상 조회처럼
+	 *     큰 값이 필요한 경우를 감안해 상한을 10,000으로 둔다.
+	 * @param sort "oldest"면 마지막 수집이 오래된 순, 그 외(기본 "latest")면 최근 수집 순.
+	 *     관리자 화면이 재검증이 시급한 상품을 고를 때 "oldest"를 쓴다.
+	 * @param staleHours 지정하면 마지막 수집이 이 시간(시) 이전인 상품만 반환한다. 예를 들어
+	 *     5를 주면 "5시간 이상 지난 상품만" 조회된다.
+	 * @return 전체 개수와 상품 목록
 	 */
 	@GetMapping
 	@Operation(
-			summary = "저장된 최신 상품 검색",
-			description = "판매처, 상품명 또는 브랜드 검색어와 최대 반환 개수로 최신 snapshot을 조회한다.")
+			summary = "저장된 상품 검색",
+			description = "판매처, 상품명 또는 브랜드 검색어와 최대 반환 개수, 정렬 방향, 최신성 경과 시간으로 상품을 조회한다.")
 	public ProductSearchResponse search(
 			@RequestParam(required = false)
 			@Pattern(regexp = "^[a-z0-9][a-z0-9-]*$")
@@ -59,8 +64,14 @@ public class ProductQueryController {
 			String query,
 			@RequestParam(defaultValue = "20")
 			@Min(1)
-			@Max(100)
-			int limit) {
-		return productQueryService.search(merchant, query, limit);
+			@Max(10_000)
+			int limit,
+			@RequestParam(defaultValue = "latest")
+			@Pattern(regexp = "^(latest|oldest)$")
+			String sort,
+			@RequestParam(required = false)
+			@Min(0)
+			Integer staleHours) {
+		return productQueryService.search(merchant, query, limit, sort, staleHours);
 	}
 }
