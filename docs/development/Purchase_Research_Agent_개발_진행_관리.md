@@ -2359,6 +2359,35 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   판매처 검색 필터로 전달하는 기능을 추가하면 동일한 필터 정규화 계약으로 조회 범위를
   확장해야 한다.
 
+### 2026-08-15 ANALYSIS-002/ANALYSIS-004/VERIFY-001 검색 품질과 재검증 E2E
+
+- 진행상황: **부분 구현**. 상품명 오타 후보 보존, 빈 최신 옵션의 마지막 근거 복구,
+  자연어 색상 완화와 특정 모델명 보정 및 구매 직전 실제 재검증 E2E를 완료했다.
+- 구현 위치:
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/repository/MerchantProductRepository.java:344` `searchCandidates`: compact trigram 검색과 마지막 옵션 snapshot 필터
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductCandidateService.java:145` `matchesRequiredProductType`: 고신뢰 오타 후보 보존
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/collection/service/CollectorResultStoreService.java:310` `carryForwardOptions`: 원래 옵션 provenance 이월
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/product/service/ProductQueryService.java:315` `toSummary`: 기존 빈 최신 옵션 읽기 복구
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:155` `isSoftColorPreference`: 색상 완화 문맥 보정
+  - `frontend/purchase-web/app/lib/codex-runtime.ts:169` `promoteProductModelRequirement`: 특정 모델명 검색어 복구
+  - `services/product-backend/src/test/java/com/purchasesearch/product_backend/agentrun/service/AgentRunServiceTests.java:187` `verifiesSelectedReadyCandidateAndCompletesRun`: 재검증 상태 전이
+- 발생 문제: 최초 1,000개 평가가 재고 `unknown` 상품까지 정답으로 포함해 실제 검색 결함과
+  평가 표본 오류가 섞였고, trigram 후보도 필수 상품 종류 후처리에서 제거됐다. 최신 검색
+  수집이 옵션을 생략하면 이전 옵션도 검색에서 사라졌다.
+- 해결: 구매 가능한 `available` snapshot만 양성 표본으로 사용하고 compact trigram과 최소
+  keyword score를 적용했다. 옵션은 원래 출처를 유지해 이월하며 기존 빈 snapshot은 마지막
+  옵션 근거로 복구한다. 필수 조건은 자동 완화하지 않았다.
+- 검증:
+  - `cd services/product-backend && ./gradlew test`: 전체 통과
+  - `cd frontend/purchase-web && npm test`: 57개 통과
+  - `cd frontend/purchase-web && npm run build`: 통과
+  - 현재 DB 1,000개 회귀: API 오류 0건/false zero 0%/상품군 적중률 99.26%/오타 적중률 93%/필수 위반 0건/중복 0건/p95 61.617ms
+  - 실제 Codex 질문 10개: 조건 구조화 10/10/실행 종료 10/10/양성 READY 2/9
+  - 실제 Web/MCP/Backend/Python Worker 재검증: `VERIFIED`와 `COMPLETED` 1건
+- 남은 위험: 실제 양성 READY 80% 목표는 충족하지 못했다. 필수 조건을 임의 완화하지 않고
+  판매처 상세 옵션과 신발 외 데이터 범위를 확장해야 한다. 1,000개 현재 DB 평가는 회귀
+  검사이며 사람 relevance gold 기반 Recall@20/nDCG 평가를 대신하지 않는다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
