@@ -110,8 +110,11 @@ public class CollectorResultStoreService {
 			MerchantProduct merchantProduct = upsertMerchantProduct(result, product);
 			searchDocuments.add(new ProductSearchDocument(
 					merchantProduct.getId(), buildSearchDocument(result, product)));
+			OfferSnapshot previousSnapshot = offerSnapshotRepository
+					.findFirstByMerchantProductOrderByCollectedAtDescIdDesc(merchantProduct)
+					.orElse(null);
 			OfferSnapshot snapshot = saveOfferSnapshot(result, product, merchantProduct);
-			optionCount += saveOptions(product, snapshot);
+			optionCount += saveOptions(product, snapshot, previousSnapshot);
 			evidenceCount += saveEvidence(product, merchantProduct, snapshot);
 			verificationCount += saveVerification(product, merchantProduct, snapshot);
 		}
@@ -271,9 +274,16 @@ public class CollectorResultStoreService {
 	 *
 	 * @param product 옵션을 포함한 상품
 	 * @param snapshot 옵션이 속할 offer snapshot
-	 * @return 저장한 옵션 개수
+	 * @param previousSnapshot 이번 수집 직전의 최신 snapshot 또는 null
+	 * @return 저장하거나 이전 근거에서 이월한 옵션 개수
 	 */
-	private int saveOptions(CollectorResult.Product product, OfferSnapshot snapshot) {
+	private int saveOptions(
+			CollectorResult.Product product,
+			OfferSnapshot snapshot,
+			OfferSnapshot previousSnapshot) {
+		if (product.options().isEmpty() && previousSnapshot != null) {
+			return carryForwardOptions(previousSnapshot, snapshot);
+		}
 		for (CollectorResult.Option option : product.options()) {
 			Money price = option.price();
 			Provenance provenance = option.provenance();
@@ -291,6 +301,30 @@ public class CollectorResultStoreService {
 					provenance.collectorVersion()));
 		}
 		return product.options().size();
+	}
+
+	/**
+	 * 검색 응답이 옵션을 생략했을 때 마지막으로 확인된 옵션과 원래 provenance를 새 offer에 연결한다.
+	 * 새 수집 사실로 위장하지 않도록 옵션의 collectedAt과 collectorVersion은 이전 값을 유지한다.
+	 */
+	private int carryForwardOptions(OfferSnapshot previousSnapshot, OfferSnapshot snapshot) {
+		List<ProductOption> previousOptions = productOptionRepository
+				.findAllByOfferSnapshotOrderById(previousSnapshot);
+		for (ProductOption option : previousOptions) {
+			productOptionRepository.save(ProductOption.create(
+					snapshot,
+					option.getExternalId(),
+					option.getLabel(),
+					option.getSize(),
+					option.getColor(),
+					option.getStockStatus(),
+					option.getPriceAmount(),
+					option.getCurrency(),
+					option.getSourceUrl(),
+					option.getCollectedAt(),
+					option.getCollectorVersion()));
+		}
+		return previousOptions.size();
 	}
 
 	/**

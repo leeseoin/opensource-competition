@@ -316,8 +316,12 @@ public class ProductQueryService {
 		OfferSnapshot snapshot = offerSnapshotRepository
 				.findFirstByMerchantProductOrderByCollectedAtDescIdDesc(merchantProduct)
 				.orElseThrow(() -> new IllegalStateException("판매처 상품에 offer snapshot이 없습니다."));
+		OfferSnapshot optionSnapshot = productOptionRepository
+				.findAllByOfferSnapshotOrderById(snapshot).isEmpty()
+						? offerSnapshotRepository.findLatestWithOptions(merchantProduct.getId()).orElse(snapshot)
+						: snapshot;
 		List<OptionView> options = productOptionRepository
-				.findAllByOfferSnapshotOrderById(snapshot)
+				.findAllByOfferSnapshotOrderById(optionSnapshot)
 				.stream()
 				.map(this::toOption)
 				.toList();
@@ -358,7 +362,11 @@ public class ProductQueryService {
 				option.getSize(),
 				option.getColor(),
 				option.getStockStatus(),
-				toMoney(option.getPriceAmount(), option.getCurrency()));
+				toMoney(option.getPriceAmount(), option.getCurrency()),
+				new SourceView(
+						option.getSourceUrl(),
+						option.getCollectedAt(),
+						option.getCollectorVersion()));
 	}
 
 	/**

@@ -286,6 +286,71 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * 최신 검색 응답이 옵션을 생략해도 마지막으로 확인한 옵션 provenance를 이월해 필수
+	 * 사이즈 검색이 갑자기 0건이 되지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 변환 또는 HTTP 검증에 실패한 경우
+	 */
+	@Test
+	void carriesForwardLastKnownOptionsWhenLatestSearchOmitsThem() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		var withoutOptions = (tools.jackson.databind.node.ObjectNode) objectMapper.readTree(
+				Files.readString(abcmartFixturePath())
+						.replace("2026-07-30T15:00:00+09:00", "2026-07-31T15:00:00+09:00"));
+		withoutOptions.put("requestId", "backend-test-no-options-002");
+		((tools.jackson.databind.node.ObjectNode) withoutOptions.at("/products/0")).putArray("options");
+		CollectorResult latest = objectMapper.treeToValue(withoutOptions, CollectorResult.class);
+
+		StoreReport report = collectorResultStoreService.store(latest);
+
+		assertThat(report.optionCount()).isEqualTo(1);
+		assertThat(productOptionRepository.count()).isEqualTo(2);
+		assertThat(productOptionRepository.findAll())
+				.allSatisfy(option -> {
+					assertThat(option.getSize()).isEqualTo("270");
+					assertThat(option.getCollectedAt())
+							.isEqualTo(OffsetDateTime.parse("2026-07-30T15:00:00+09:00"));
+				});
+
+		String sessionId = createConfirmedResearchSession("270 구두", purchaseCondition("[]"));
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.candidates[0].externalId").value("1010110882"))
+				.andExpect(jsonPath("$.result.candidates[0].options[0].size").value("270"));
+	}
+
+	/**
+	 * 수정 이전에 이미 빈 최신 snapshot이 저장된 상품도 마지막 옵션 snapshot으로 검색과
+	 * 응답을 복구하는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 검증에 실패한 경우
+	 */
+	@Test
+	void readsLastKnownOptionsForHistoricalEmptyLatestSnapshot() throws Exception {
+		collectorResultStoreService.store(loadAbcmartCollectorResult());
+		long productId = merchantProductRepository
+				.findByMerchantAndExternalId("abcmart", "1010110882")
+				.orElseThrow()
+				.getId();
+		jdbcTemplate.update("""
+				INSERT INTO offer_snapshots (
+				  merchant_product_id, request_id, price_amount, currency,
+				  stock_status, source_url, collected_at, collector_version)
+				VALUES (?, 'historical-empty-options', 69000, 'KRW',
+				  'available', 'https://abcmart.a-rt.com/product?prdtNo=1010110882',
+				  '2026-08-01T15:00:00+09:00', 'search-without-options-v1')
+				""", productId);
+
+		String sessionId = createConfirmedResearchSession("270 구두", purchaseCondition("[]"));
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.candidates[0].externalId").value("1010110882"))
+				.andExpect(jsonPath("$.result.candidates[0].options[0].size").value("270"))
+				.andExpect(jsonPath("$.result.candidates[0].options[0].source.collectorVersion")
+						.value("abcmart-search-v2"));
+	}
+
+	/**
 	 * 사용자 질문 후보 API가 원본 질문을 보존하고 DB 상품의 가격, 재고와 출처를 반환하는지 검증한다.
 	 *
 	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
@@ -936,6 +1001,32 @@ class ProductStorageIntegrationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.result.totalCount").value(1))
 				.andExpect(jsonPath("$.result.candidates[0].externalId").value("1010110882"));
+	}
+
+	/**
+	 * 특정 모델명의 한 글자가 빠진 검색어도 trigram 점수 근거가 충분하면 필수 상품 종류
+	 * 후처리에서 다시 제거하지 않는지 검증한다.
+	 *
+	 * @throws Exception fixture 저장 또는 HTTP 요청에 실패한 경우
+	 */
+	@Test
+	void keepsHighConfidenceModelNameTypoCandidateAfterRequiredTypeCheck() throws Exception {
+		CollectorResult model = objectMapper.readValue(
+				Files.readString(abcmartFixturePath())
+						.replace("backend-test-001", "backend-test-model-typo-001")
+						.replace("1010110882", "model-typo-test-001")
+						.replace("\"query\": \"구두\"", "\"query\": \"여성화\"")
+						.replace("\"name\": \"페니 로퍼\"", "\"name\": \"탈리타 5\""),
+				CollectorResult.class);
+		collectorResultStoreService.store(model);
+		String typoCondition = purchaseCondition("[]").replace(
+				"\"value\": \"구두\"",
+				"\"value\": \"탈리 5\"");
+		String sessionId = createConfirmedResearchSession("탈리 5 찾아줘", typoCondition);
+
+		mockMvc.perform(post("/internal/v1/research-sessions/{sessionId}/search", sessionId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result.candidates[0].externalId").value("model-typo-test-001"));
 	}
 
 	/**
