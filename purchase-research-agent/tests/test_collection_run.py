@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,39 @@ class FakePageCrawler:
 
 def _product(product_id: str) -> dict[str, Any]:
     return {"source_product_id": product_id, "title": product_id}
+
+
+class SyntheticPageCrawler:
+    """실제 판매처 대신 요청한 페이지 번호로 결정적인 상품을 생성하는 대량 수집용 대역이다.
+
+    호출 순서가 아니라 SiteCrawler.crawl에 전달되는 실제 start_page 인자로 상품을 만들어서,
+    체크포인트에서 재개했을 때 새 crawler 인스턴스가 이전 실행과 겹치지 않는 뒷 페이지부터
+    이어받는지(그리고 이어받아도 내용이 어긋나지 않는지) 검증할 수 있다.
+    """
+
+    def __init__(self, *, available_pages: int, fail_on_pages: set[int] | None = None):
+        self.available_pages = available_pages
+        self._fail_on_pages = fail_on_pages or set()
+        self.calls: list[tuple[int, int]] = []
+
+    async def crawl(
+        self,
+        keyword: str,
+        max_items: int,
+        *,
+        start_page: int = 1,
+        max_pages: int | None = None,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        self.calls.append((start_page, max_items))
+        if start_page in self._fail_on_pages:
+            return [], [f"page {start_page} 예외(재시도 후에도 실패): MERCHANT_TEMPORARY_FAILURE: 원격 서버 오류"]
+        if start_page > self.available_pages:
+            return [], []
+        products = [
+            _product(f"item-{start_page:05d}-{i:03d}")
+            for i in range(max_items)
+        ]
+        return products, []
 
 
 def _make_clock(step: float):
@@ -326,6 +360,101 @@ class CollectionRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["seen_ids"], ["p1"])
         self.assertEqual(payload["next_page"], 2)
         self.assertFalse(list(self.checkpoint_dir.glob("*.tmp")), "임시 파일이 남아 있으면 안 된다")
+
+
+class LargeScaleCheckpointResumeTests(unittest.IsolatedAsyncioTestCase):
+    """실제 판매처 없이 10,000개 규모에서 request budget 중단과 checkpoint 재개가
+    정확히 이어지는지 검증한다. 실사이트에 부하를 주지 않도록 SyntheticPageCrawler로
+    페이지 내용을 결정적으로 생성한다(app/services/rate_limiter.py의 MerchantRateLimiter
+    같은 실제 네트워크 호출은 전혀 발생하지 않는다)."""
+
+    PAGE_SIZE = 50
+    TARGET_ITEMS = 10_000
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.checkpoint_dir = Path(self._tmp.name)
+
+    async def test_reaches_10000_items_across_interrupted_and_resumed_runs(self) -> None:
+        total_pages_needed = self.TARGET_ITEMS // self.PAGE_SIZE  # 200
+        first_phase_pages = 60  # 3,000개 수집 후 request budget 소진으로 중단됐다고 가정
+
+        first_crawler = SyntheticPageCrawler(available_pages=total_pages_needed)
+        first_config = CollectionRunConfig(
+            merchant="abcmart",
+            keyword="구두",
+            checkpoint_dir=self.checkpoint_dir,
+            max_items=self.TARGET_ITEMS,
+            page_size=self.PAGE_SIZE,
+            request_budget=first_phase_pages,
+            min_interval_seconds=0,
+        )
+        first_products, first_stats = await CollectionRunner(first_crawler).run(first_config)
+
+        self.assertEqual(first_stats.stop_reason, "request_budget_exhausted")
+        self.assertEqual(first_stats.page_fetch_count, first_phase_pages)
+        self.assertEqual(len(first_products), first_phase_pages * self.PAGE_SIZE)
+        self.assertFalse(first_stats.checkpoint_resumed)
+
+        # 새 process가 checkpoint에서 이어받는 상황을 흉내 내도록 crawler 인스턴스를 새로 만든다.
+        second_crawler = SyntheticPageCrawler(available_pages=total_pages_needed)
+        second_config = CollectionRunConfig(
+            merchant="abcmart",
+            keyword="구두",
+            checkpoint_dir=self.checkpoint_dir,
+            max_items=self.TARGET_ITEMS,
+            page_size=self.PAGE_SIZE,
+            request_budget=total_pages_needed,  # 남은 140페이지를 넉넉히 감당
+            min_interval_seconds=0,
+            resume=True,
+        )
+
+        started = time.perf_counter()
+        products, stats = await CollectionRunner(second_crawler).run(second_config)
+        elapsed = time.perf_counter() - started
+
+        self.assertTrue(stats.checkpoint_resumed)
+        self.assertEqual(stats.stop_reason, "target_reached")
+        self.assertEqual(second_crawler.calls[0][0], first_phase_pages + 1, "checkpoint 다음 페이지부터 재개해야 한다")
+        self.assertEqual(len(products), self.TARGET_ITEMS)
+        unique_ids = {p["source_product_id"] for p in products}
+        self.assertEqual(len(unique_ids), self.TARGET_ITEMS, "10,000개가 중복 없이 모두 고유해야 한다")
+        self.assertEqual(stats.duplicate_count, 0)
+        self.assertEqual(stats.page_fetch_count, total_pages_needed - first_phase_pages)
+        self.assertLess(elapsed, 10.0, "외부 요청 없는 순수 mock 실행은 몇 초 안에 끝나야 한다")
+
+        checkpoint_path = self.checkpoint_dir / "abcmart_구두.checkpoint.json"
+        payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["next_page"], total_pages_needed + 1)
+        self.assertEqual(len(payload["seen_ids"]), self.TARGET_ITEMS)
+
+    async def test_request_budget_below_target_leaves_room_for_a_later_resume(self) -> None:
+        """중단 시점의 request budget이 남은 목표를 다 채우지 못해도 두 번째 실행에서
+        같은 checkpoint로 이어받을 수 있는 상태로 정확히 멈추는지 검증한다."""
+
+        crawler = SyntheticPageCrawler(available_pages=500)
+        config = CollectionRunConfig(
+            merchant="29cm",
+            keyword="운동화",
+            checkpoint_dir=self.checkpoint_dir,
+            max_items=self.TARGET_ITEMS,
+            page_size=self.PAGE_SIZE,
+            request_budget=1,  # 극단적으로 낮은 예산으로 매 실행마다 강제 중단시킨다
+            min_interval_seconds=0,
+        )
+
+        collected: list[dict[str, Any]] = []
+        run_count = 0
+        while len(collected) < self.TARGET_ITEMS:
+            run_count += 1
+            config.resume = run_count > 1
+            products, stats = await CollectionRunner(SyntheticPageCrawler(available_pages=500)).run(config)
+            self.assertEqual(stats.stop_reason, "request_budget_exhausted" if len(products) < self.TARGET_ITEMS else "target_reached")
+            collected = products
+
+        self.assertEqual(run_count, self.TARGET_ITEMS // self.PAGE_SIZE, "예산 1페이지짜리 실행을 페이지 수만큼 반복해야 한다")
+        self.assertEqual(len({p["source_product_id"] for p in collected}), self.TARGET_ITEMS)
 
 
 class CollectionRunConfigValidationTests(unittest.TestCase):

@@ -4,7 +4,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -13,13 +16,19 @@ import com.purchasesearch.product_backend.collection.dto.CollectionRefreshRespon
 import com.purchasesearch.product_backend.collection.dto.CollectionRefreshResponse.DataStatus;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
+import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
 import com.purchasesearch.product_backend.collection.repository.CollectionSearchContextRepository;
+import com.purchasesearch.product_backend.collection.repository.StaleSearchContext;
 
 /** CollectionRefreshService는 DB 데이터 없음/만료를 판정하고 필요한 검색 수집만 Queue에 등록한다. */
 @Service
 public class CollectionRefreshService {
 
+	private static final Logger log = LoggerFactory.getLogger(CollectionRefreshService.class);
+
 	private static final int REFRESH_LIMIT = 5;
+	// 사용자가 직접 기다리는 반응형 갱신(우선순위 30)보다 뒤로 밀려야 하는 배경 사전 갱신 우선순위다.
+	private static final int BACKGROUND_REFRESH_PRIORITY = 5;
 
 	private final CollectionSearchContextRepository searchContextRepository;
 	private final CollectionTaskPublisher collectionTaskPublisher;
@@ -58,6 +67,34 @@ public class CollectionRefreshService {
 				request.merchant(), normalizedQuery, 1, REFRESH_LIMIT, "ko-KR", "KRW", 30, 2, null));
 		return new CollectionRefreshResponse(
 				dataStatus, true, queued.jobId(), queued.taskId(), queued.status(), latestCollectedAt);
+	}
+
+	/**
+	 * TTL이 지난 기본 검색 범위를 마지막 수집이 오래된 순으로 최대 batchSize개 찾아
+	 * 낮은 우선순위로 미리 갱신을 발행한다. 사용자가 검색하기 전에 데이터를 채워 둬
+	 * {@link #request}가 STALE/MISSING을 반환하며 만드는 대기 시간을 줄이는 데 쓰인다.
+	 * 개별 발행 실패는 기록만 하고 나머지 batch 처리를 막지 않는다.
+	 *
+	 * @param batchSize 이번 실행에서 시도할 최대 판매처/검색어 조합 수
+	 * @return 실제로 Queue 발행에 성공한 조합 수
+	 */
+	public int refreshStaleBatch(int batchSize) {
+		Instant staleBoundary = Instant.now().minus(Duration.ofHours(staleAfterHours));
+		List<StaleSearchContext> staleContexts =
+				searchContextRepository.findStaleDefaultSearchContexts(staleBoundary, batchSize);
+		int queued = 0;
+		for (StaleSearchContext context : staleContexts) {
+			try {
+				collectionTaskPublisher.publish(new CollectionTaskRequest(
+						context.getMerchant(), context.getSearchQuery(),
+						1, REFRESH_LIMIT, "ko-KR", "KRW", BACKGROUND_REFRESH_PRIORITY, null, null));
+				queued++;
+			} catch (CollectionTaskPublishException exception) {
+				log.warn("사전 갱신 발행 실패: merchant={}, query={}, reason={}",
+						context.getMerchant(), context.getSearchQuery(), exception.getMessage());
+			}
+		}
+		return queued;
 	}
 
 	/** 동일 판매처, 검색어와 필터의 마지막 수집 완료 시각으로 상태를 판정한다. */

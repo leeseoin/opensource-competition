@@ -2,14 +2,72 @@
 
 from __future__ import annotations
 
+import json
 import unittest
+from unittest.mock import patch
+
+import httpx
 
 from app.crawlers.cm29.detail_fetcher import (
+    Cm29DetailFetcher,
     _option_dimensions,
     _parse_ld,
     _parse_options,
     _parse_reviews,
 )
+
+
+class DetailUrlRedirectAvoidanceTests(unittest.IsolatedAsyncioTestCase):
+    """상세 조회가 307로 리다이렉트되는 구 URL이 아니라 현재 URL로 바로 요청하는지 검증한다.
+
+    2026-08-15 실사이트 검증 중 발견: item_id로 상세 URL을 직접 만들 때 여전히 구
+    product.29cm.co.kr/catalog/{id} 형식을 쓰고 있어서, 상세를 조회한 모든 상품이
+    MERCHANT_REDIRECT_BLOCKED(HTTP 307)로 실패했다. verification.py의
+    _canonical_detail_url이 검색 API의 stale link만 고쳐줬을 뿐, 여기서 새로 만드는
+    URL은 그 대상이 아니었다.
+    """
+
+    async def test_requests_current_product_url_not_legacy_catalog_url(self) -> None:
+        requested_urls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requested_urls.append(str(request.url))
+            if "review-api" in str(request.url):
+                return httpx.Response(200, json={"data": {"count": 0, "results": []}})
+            return httpx.Response(200, text=_detail_html())
+
+        real_async_client = httpx.AsyncClient
+
+        def fake_async_client(*args, **kwargs) -> httpx.AsyncClient:
+            return real_async_client(headers=kwargs.get("headers"), transport=httpx.MockTransport(handler))
+
+        with patch("app.crawlers.cm29.detail_fetcher.httpx.AsyncClient", side_effect=fake_async_client):
+            products, errors = await Cm29DetailFetcher().attach(
+                [{"source_product_id": "2468262", "title": "테스트"}], limit=1
+            )
+
+        detail_urls = [url for url in requested_urls if "review-api" not in url]
+        self.assertEqual(detail_urls, ["https://www.29cm.co.kr/products/2468262"])
+        self.assertNotIn("product.29cm.co.kr", " ".join(requested_urls))
+        self.assertEqual(errors, [])
+        self.assertEqual(products[0]["category"], "신발")
+
+
+def _detail_html() -> str:
+    """상세 URL 요청에 응답할 최소 Product JSON-LD HTML을 만든다."""
+
+    payload = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "category": "신발",
+        "image": [],
+        "offers": {"availability": "https://schema.org/InStock"},
+    }
+    return (
+        '<html><head><script type="application/ld+json">'
+        f"{json.dumps(payload, ensure_ascii=False)}"
+        "</script></head><body></body></html>"
+    )
 
 
 class ParseLdTests(unittest.TestCase):

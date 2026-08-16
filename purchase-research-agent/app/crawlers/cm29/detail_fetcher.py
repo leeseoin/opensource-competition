@@ -6,6 +6,9 @@ import httpx
 
 from app.crawlers.access_safety import ensure_success, safe_exception_message
 
+# 29CM이 상세 URL을 product.29cm.co.kr/catalog/{id}에서 이 형식으로 옮겼다(verification.py의
+# _canonical_detail_url과 같은 이전). 구 형식은 항상 307로 여기를 가리키는데 follow_redirects=False라
+# ensure_success가 MERCHANT_REDIRECT_BLOCKED로 막으므로, item_id로 직접 만들 때도 현재 형식을 써야 한다.
 _DETAIL_URL = "https://www.29cm.co.kr/products/{item_id}"
 _REVIEW_URL = "https://review-api.29cm.co.kr/api/v4/reviews"
 _IMG_BASE = "https://img.29cm.co.kr"

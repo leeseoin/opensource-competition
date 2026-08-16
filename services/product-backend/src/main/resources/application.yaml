@@ -51,6 +51,15 @@ springdoc:
     tags-sorter: alpha
     document-title: Purchase Research Product Backend API
 
+purchase-research:
+  freshness:
+    offer-ttl-hours: ${FRESHNESS_OFFER_TTL_HOURS:24}
+    scheduler:
+      enabled: ${FRESHNESS_SCHEDULER_ENABLED:false}
+      interval-ms: ${FRESHNESS_SCHEDULER_INTERVAL_MS:1800000}
+      initial-delay-ms: ${FRESHNESS_SCHEDULER_INITIAL_DELAY_MS:60000}
+      batch-size: ${FRESHNESS_SCHEDULER_BATCH_SIZE:20}
+
 purchase:
   wiki:
     enabled: ${WIKI_ENABLED:true}

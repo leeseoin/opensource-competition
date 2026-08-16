@@ -18,6 +18,110 @@ _HEADERS = {
 _PAGE_SIZE = 50
 _JSON_DIR = Path("output/raw_json/29cm")
 
+# 카테고리명 -> (대표 검색어, 대분류명, 중분류명). 2026-08-15에 listing API를 실측한 결과,
+# 서버사이드 카테고리 브라우징 전용 API를 찾지 못했다 — pageType=CATEGORY_PLP를 포함해
+# facets나 top-level categoryLargeCode를 body 어디에 넣어도 조용히 무시되고 카테고리가
+# 뒤섞인 전체 카탈로그(total=1,086,031)가 그대로 돌아온다. 그래서 대표 검색어로 검색한
+# 뒤 각 상품에 이미 포함된 largeCategoryName/middleCategoryName이 정확히 일치하는
+# 상품만 남기는 방식으로 대신한다. crawl_category()의 대표 검색어로 실제로 찾을 수
+# 있는 범위라는 한계가 있어(카테고리 전수 열람이 아님), ABC마트 crawl_category처럼
+# 완전한 커버리지를 보장하지 않는다.
+CATEGORIES: dict[str, tuple[str, str, str]] = {
+    "로퍼_여성": ("로퍼", "여성슈즈", "로퍼"),
+    "힐펌프스_여성": ("구두", "여성슈즈", "힐/펌프스"),
+    "부츠_여성": ("부츠", "여성슈즈", "부츠"),
+    "샌들_여성": ("샌들", "여성슈즈", "샌들"),
+    "슬리퍼_여성": ("슬리퍼", "여성슈즈", "슬리퍼"),
+    "스니커즈_여성": ("스니커즈", "여성슈즈", "스니커즈"),
+    "플랫슈즈_여성": ("로퍼", "여성슈즈", "플랫슈즈"),
+    "스니커즈_남성": ("운동화", "남성슈즈", "스니커즈"),
+    "로퍼_남성": ("로퍼", "남성슈즈", "로퍼"),
+    "구두_남성": ("로퍼", "남성슈즈", "구두"),
+    "샌들_남성": ("슬리퍼", "남성슈즈", "샌들"),
+    "슬리퍼_남성": ("슬리퍼", "남성슈즈", "슬리퍼"),
+}
+
+# 대분류명 -> categoryLargeCode. 2026-08-15에 상품 상세 페이지에 박혀있는 카테고리
+# nav(React Server Components 스트리밍 데이터)에서 뽑았다. 위 CATEGORIES가 실제로
+# 필터링에 쓰는 값은 아니다 — categoryLargeCode를 listing API 어디에 넣어도 무시된다는
+# 걸 실측으로 확인했다(모듈 상단 CATEGORIES 주석 참고). 나중에 진짜 카테고리 브라우징
+# API를 찾으면 바로 쓸 수 있도록 참고용으로만 남겨둔다.
+LARGE_CATEGORY_CODES: dict[str, str] = {
+    "여성의류": "268100100",
+    "여성슈즈": "270100100",
+    "여성가방": "269100100",
+    "여성모자": "310100100",
+    "여성주얼리": "305100100",
+    "여성액세서리": "271100100",
+    "남성의류": "272100100",
+    "남성슈즈": "274100100",
+    "남성가방": "273100100",
+    "남성모자": "311100100",
+    "남성주얼리": "306100100",
+    "남성액세서리": "275100100",
+    "뷰티": "266100100",
+    "주방/생활": "292100100",
+    "가구/인테리어": "291100100",
+    "컴퓨터/디지털": "294100100",
+    "가전": "293100100",
+    "컬처": "265100100",
+    "레저": "286100100",
+    "키즈": "290100100",
+    "푸드": "289100100",
+    "어스": "307100100",
+}
+
+# "대분류>중분류[>소분류]" -> 코드. 상품 상세 페이지 카테고리 nav(여성슈즈 중/소분류)와
+# 실제 검색 결과에 박힌 largeCategoryNo/middleCategoryNo/smallCategoryNo(여성슈즈,
+# 남성슈즈 둘 다, 2026-08-15에 로퍼/힐/부츠/샌들/슬리퍼/스니커즈/운동화 키워드로 실측
+# 확인)를 합쳐 정리했다. LARGE_CATEGORY_CODES와 마찬가지로 API 필터링에는 못 쓰고
+# 참고/역추적용이다.
+SHOE_CATEGORY_CODES: dict[str, str] = {
+    "여성슈즈": "270100100",
+    "여성슈즈>단독": "270116100",
+    "여성슈즈>해외브랜드": "270123100",
+    "여성슈즈>샌들": "270104100",
+    "여성슈즈>샌들>스트랩샌들": "270104101",
+    "여성슈즈>샌들>슬링백샌들": "270104107",
+    "여성슈즈>스니커즈": "270106100",
+    "여성슈즈>스니커즈>로우탑": "270106102",
+    "여성슈즈>스니커즈>러닝화": "270106104",
+    "여성슈즈>스니커즈>뮬": "270106109",
+    "여성슈즈>부츠": "270103100",
+    "여성슈즈>부츠>롱부츠": "270103102",
+    "여성슈즈>부츠>플랫부츠": "270103103",
+    "여성슈즈>부츠>미드힐부츠": "270103104",
+    "여성슈즈>부츠>워커부츠": "270103109",
+    "여성슈즈>슬리퍼": "270105100",
+    "여성슈즈>슬리퍼>슬라이드": "270105101",
+    "여성슈즈>슬리퍼>플립플랍": "270105103",
+    "여성슈즈>로퍼": "270101100",
+    "여성슈즈>로퍼>플레인로퍼": "270101101",
+    "여성슈즈>로퍼>기타로퍼": "270101102",
+    "여성슈즈>플랫슈즈": "270121100",
+    "여성슈즈>플랫슈즈>메리제인": "270121101",
+    "여성슈즈>플랫슈즈>플랫": "270121103",
+    "여성슈즈>힐/펌프스": "270102100",
+    "여성슈즈>힐/펌프스>미드힐": "270102101",
+    "여성슈즈>힐/펌프스>하이힐": "270102102",
+    "여성슈즈>힐/펌프스>키튼힐": "270102109",
+    "여성슈즈>힐/펌프스>플랫폼": "270102110",
+    "여성슈즈>신발 액세서리": "270107100",
+    "남성슈즈": "274100100",
+    "남성슈즈>스니커즈": "274101100",
+    "남성슈즈>스니커즈>로우탑": "274101102",
+    "남성슈즈>스니커즈>러닝화": "274101104",
+    "남성슈즈>로퍼": "274102100",
+    "남성슈즈>로퍼>페니로퍼": "274102101",
+    "남성슈즈>로퍼>플레인로퍼": "274102102",
+    "남성슈즈>구두": "274103100",
+    "남성슈즈>구두>더비": "274103102",
+    "남성슈즈>샌들": "274105100",
+    "남성슈즈>샌들>워터샌들": "274105109",
+    "남성슈즈>슬리퍼": "274110100",
+    "남성슈즈>슬리퍼>슬라이드": "274110101",
+}
+
 
 def _format_won(amount: int | float | None) -> str:
     """선택 숫자 금액을 쉼표가 포함된 원화 문자열로 변환한다."""
@@ -123,8 +227,51 @@ class Cm29Crawler(SiteCrawler):
     async def crawl_category(
         self, category: str, max_items: int
     ) -> tuple[list[dict], list[str]]:
-        """29CM 카테고리 코드 매핑은 아직 조사하지 않았다 — 검색(crawl)만 지원한다."""
-        return [], ["29CM 카테고리 크롤링은 아직 미구현 (키워드 검색만 지원)"]
+        """CATEGORIES의 대표 검색어로 검색한 뒤 대분류/중분류명이 일치하는 상품만 남긴다.
+
+        서버사이드 카테고리 브라우징 API를 찾지 못해 검색 결과를 사후 필터링하는
+        방식으로 대신한다(모듈 상단 CATEGORIES 주석 참고). 그래서 대표 검색어로
+        찾을 수 있는 상품 범위 안에서만 동작하며, 카테고리 전수를 보장하지 않는다.
+
+        Args:
+            category: CATEGORIES 딕셔너리 키다.
+            max_items: 반환할 고유 상품 상한이다.
+
+        Returns:
+            대분류/중분류가 일치하는 상품과 검색 경고 목록이다.
+        """
+
+        if category not in CATEGORIES:
+            return [], [f"알 수 없는 카테고리: {category}. 가능한 값: {list(CATEGORIES.keys())}"]
+
+        seed_keyword, large_name, middle_name = CATEGORIES[category]
+        errors: list[str] = []
+        matched: list[dict] = []
+        seen_ids: set[str] = set()
+        page = 1
+        max_pages = 40  # 대표 검색어 결과 안에서만 찾으므로 무한히 넘기지 않도록 상한을 둔다.
+
+        while len(matched) < max_items and page <= max_pages:
+            page_products, page_errors = await self.crawl(
+                seed_keyword, _PAGE_SIZE, start_page=page, max_pages=1,
+            )
+            errors.extend(page_errors)
+            if not page_products:
+                break
+
+            for product in page_products:
+                product_id = str(product.get("source_product_id") or "")
+                if not product_id or product_id in seen_ids:
+                    continue
+                seen_ids.add(product_id)
+                if _matches_category(product, large_name, middle_name):
+                    matched.append(product)
+
+            page += 1
+            await jittered_sleep(1.0)
+
+        print(f"[29CM:category] {category} 검색어='{seed_keyword}' {len(matched)}개 (요청 {max_items}개)")
+        return matched[:max_items], errors
 
     async def attach_details(
         self, products: list[dict], limit: int, review_limit: int = 0
@@ -213,3 +360,21 @@ def _discount_percent(
     if sell_price is None or original_price in (None, 0):
         return None
     return round((float(original_price) - float(sell_price)) * 100 / float(original_price))
+
+
+def _matches_category(product: dict, large_name: str, middle_name: str) -> bool:
+    """상품의 category_path가 대분류/중분류명을 정확한 단계로 포함하는지 확인한다.
+
+    Args:
+        product: Cm29Crawler._parse가 만든 원본 상품이다.
+        large_name: 대상 대분류명이다(예: "여성슈즈").
+        middle_name: 대상 중분류명이다(예: "샌들").
+
+    Returns:
+        category_path를 " > "로 나눈 단계 중 두 이름이 각각 정확히 있으면 참이다.
+        부분 문자열이 아니라 단계 단위로 비교해 우연한 일치를 막는다.
+    """
+
+    parts = [part.strip() for part in str(product.get("category_path") or "").split(">")]
+    parts = [part for part in parts if part]
+    return large_name in parts and middle_name in parts
