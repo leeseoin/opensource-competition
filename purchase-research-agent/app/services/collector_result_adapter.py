@@ -208,19 +208,109 @@ def _convert_options(
     amount: int | None,
     provenance: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """연결 관계가 없는 크롤러 옵션 목록을 과장하지 않고 개별 선택값으로 변환한다."""
+    """판매처가 확인한 옵션 값과 재고 상태만 공통 옵션 계약으로 변환한다."""
 
     raw_options = product.get("options")
+    if isinstance(raw_options, list):
+        return _convert_29cm_options(raw_options, external_id, amount, provenance)
     if not isinstance(raw_options, dict):
         return []
     sizes = _unique_strings(raw_options.get("sizes"))
+    available_sizes = set(_unique_strings(raw_options.get("available_sizes")))
     colors = _unique_strings(raw_options.get("colors"))
+    primary_color = str(product.get("color") or "").strip() or (colors[0] if len(colors) == 1 else None)
     options: list[dict[str, Any]] = []
     for size in sizes:
-        options.append(_option(f"{external_id}-size-{size}", size, size, None, amount, provenance))
+        stock_status = "available" if size in available_sizes else "unknown"
+        label = f"{size} / {primary_color}" if primary_color else size
+        options.append(_option(
+            f"{external_id}-size-{size}",
+            label,
+            size,
+            primary_color,
+            stock_status,
+            amount,
+            provenance,
+        ))
     for color in colors:
-        options.append(_option(f"{external_id}-color-{color}", color, None, color, amount, provenance))
+        stock_status = _stock_status(product.get("in_stock")) if color == primary_color else "unknown"
+        options.append(_option(
+            f"{external_id}-color-{color}",
+            color,
+            None,
+            color,
+            stock_status,
+            amount,
+            provenance,
+        ))
     return options
+
+
+def _convert_29cm_options(
+    raw_options: list[Any],
+    external_id: str,
+    amount: int | None,
+    provenance: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """29CM 옵션 행의 사이즈/색상 조합과 공개 재고 상태를 보존한다.
+
+    Args:
+        raw_options: 상세 HTML에서 읽은 판매처 옵션 행이다.
+        external_id: 판매처 상품 식별자다.
+        amount: 상품 수준 가격이다.
+        provenance: 상세 상품 URL과 수집 시각이다.
+
+    Returns:
+        판매처 행 순서와 조합을 유지한 공통 옵션 목록이다.
+    """
+    converted: list[dict[str, Any]] = []
+    for index, raw in enumerate(raw_options):
+        if not isinstance(raw, dict):
+            continue
+        label = str(raw.get("value") or "").strip()
+        if not label:
+            continue
+        size, color = _29cm_option_dimensions(str(raw.get("name") or ""), label)
+        converted.append(_option(
+            f"{external_id}-option-{index + 1}",
+            label,
+            size,
+            color,
+            _option_stock_status(raw.get("stock_status")),
+            amount,
+            provenance,
+        ))
+    return converted
+
+
+def _29cm_option_dimensions(name: str, value: str) -> tuple[str | None, str | None]:
+    """29CM 옵션 이름과 표시값에서 사이즈와 색상 차원을 추출한다."""
+
+    normalized_name = name.upper()
+    size: str | None = None
+    if "SIZE" in normalized_name or "사이즈" in normalized_name:
+        match = re.search(r"\bKR\s*(\d{2,4})\b", value, re.I)
+        if match is None:
+            match = re.search(r"\b(\d{2,4})\s*mm\b", value, re.I)
+        if match is None and re.fullmatch(r"\d{2,4}", value):
+            match = re.fullmatch(r"(\d{2,4})", value)
+        if match:
+            size = match.group(1)
+        elif re.fullmatch(r"[A-Za-z]{1,5}|FREE", value, re.I):
+            size = value.upper()
+    color: str | None = None
+    if "COLOR" in normalized_name or "색상" in normalized_name or ("SIZE" in normalized_name and "/" in value):
+        candidate = re.split(r"\s*/\s*|:", value, maxsplit=1)[0]
+        candidate = re.sub(r"\s*\([^)]*\)\s*$", "", candidate).strip()
+        if candidate and not re.fullmatch(r"(?:KR\s*)?\d+(?:\s*mm)?", candidate, re.I):
+            color = candidate
+    return size, color
+
+
+def _option_stock_status(raw: Any) -> str:
+    """판매처 옵션의 허용된 재고 상태만 보존하고 나머지는 unknown으로 제한한다."""
+
+    return raw if raw in {"available", "out_of_stock"} else "unknown"
 
 
 def _category_path(product: dict[str, Any]) -> list[str]:
@@ -263,6 +353,7 @@ def _option(
     label: str,
     size: str | None,
     color: str | None,
+    stock_status: str,
     amount: int | None,
     provenance: dict[str, Any],
 ) -> dict[str, Any]:
@@ -273,7 +364,7 @@ def _option(
         "label": label[:300],
         "size": size,
         "color": color,
-        "stockStatus": "unknown",
+        "stockStatus": stock_status,
         "price": _money(amount),
         "provenance": provenance,
     }

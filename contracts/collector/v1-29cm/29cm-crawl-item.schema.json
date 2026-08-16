@@ -116,7 +116,11 @@
         "type": "object",
         "properties": {
           "name":  { "type": "string" },
-          "value": { "type": "string" }
+          "value": { "type": "string" },
+          "stock_status": {
+            "enum": ["available", "out_of_stock", "unknown"],
+            "description": "같은 옵션 객체의 isSoldOut/isVisible 공개 값으로 확인한 판매 상태다."
+          }
         }
       },
       "description": "스트리밍 데이터에서 파싱한 옵션 목록 (SIZE / COLOR 등, KR·IT 사이즈 포함)."

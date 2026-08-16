@@ -8,7 +8,13 @@ from unittest.mock import patch
 
 import httpx
 
-from app.crawlers.cm29.detail_fetcher import Cm29DetailFetcher, _parse_ld, _parse_options, _parse_reviews
+from app.crawlers.cm29.detail_fetcher import (
+    Cm29DetailFetcher,
+    _option_dimensions,
+    _parse_ld,
+    _parse_options,
+    _parse_reviews,
+)
 
 
 class DetailUrlRedirectAvoidanceTests(unittest.IsolatedAsyncioTestCase):
@@ -97,14 +103,14 @@ class ParseOptionsTests(unittest.TestCase):
 
         options = _parse_options(html)
 
-        self.assertEqual(options, [{"name": "SIZE", "value": "230mm"}])
+        self.assertEqual(options, [{"name": "SIZE", "value": "230mm", "stock_status": "unknown"}])
 
     def test_parses_escaped_streaming_option_pairs(self) -> None:
         html = r'\"optionItemName\":\"COLOR\",\"optionItemValue\":\"BLACK\"'
 
         options = _parse_options(html)
 
-        self.assertEqual(options, [{"name": "COLOR", "value": "BLACK"}])
+        self.assertEqual(options, [{"name": "COLOR", "value": "BLACK", "stock_status": "unknown"}])
 
     def test_deduplicates_repeated_option_pairs(self) -> None:
         html = (
@@ -116,12 +122,38 @@ class ParseOptionsTests(unittest.TestCase):
         options = _parse_options(html)
 
         self.assertEqual(options, [
-            {"name": "SIZE", "value": "230mm"},
-            {"name": "SIZE", "value": "235mm"},
+            {"name": "SIZE", "value": "230mm", "stock_status": "unknown"},
+            {"name": "SIZE", "value": "235mm", "stock_status": "unknown"},
         ])
 
     def test_returns_empty_list_when_no_options_present(self) -> None:
         self.assertEqual(_parse_options("<html></html>"), [])
+
+    def test_preserves_available_and_sold_out_option_status(self) -> None:
+        """29CM streaming option 객체의 공개 판매 상태를 각 옵션에 연결하는지 검증한다."""
+
+        html = (
+            r'{\"isSoldOut\":false,\"isVisible\":true,'
+            r'\"optionItemName\":\"SIZE\",\"optionItemValue\":\"230\"}'
+            r'{\"isSoldOut\":true,\"isVisible\":true,'
+            r'\"optionItemName\":\"SIZE\",\"optionItemValue\":\"235\"}'
+        )
+
+        options = _parse_options(html)
+
+        self.assertEqual([option["stock_status"] for option in options], ["available", "out_of_stock"])
+
+    def test_extracts_shoe_apparel_and_color_dimensions(self) -> None:
+        """신발 숫자/의류 문자 사이즈와 결합 색상을 범용 목록으로 추출하는지 검증한다."""
+
+        dimensions = _option_dimensions([
+            {"name": "SIZE", "value": "BLACK (3CM) / KR 230 / IT36"},
+            {"name": "SIZE", "value": "M"},
+            {"name": "COLOR", "value": "NAVY"},
+        ])
+
+        self.assertEqual(dimensions["sizes"], ["230", "M"])
+        self.assertEqual(dimensions["colors"], ["BLACK", "NAVY"])
 
 
 class ParseReviewsTests(unittest.TestCase):

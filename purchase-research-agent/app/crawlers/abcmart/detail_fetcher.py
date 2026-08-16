@@ -180,6 +180,50 @@ _EMPTY_DETAIL = {"images": [], "category": "", "category_path": "", "in_stock": 
 class DetailFetcher:
     """ABC마트 공개 상세/리뷰/옵션을 제한된 동시성으로 결합한다."""
 
+    async def attach_options(
+        self,
+        products: list[dict],
+        limit: int = 10,
+        concurrency: int = _DEFAULT_API_CONCURRENCY,
+    ) -> tuple[list[dict], list[str]]:
+        """리뷰와 browser 없이 공개 옵션 API만 호출해 검색 결과를 보강한다.
+
+        Args:
+            products: ABC마트 검색 결과다.
+            limit: 옵션을 확인할 상위 상품 수다.
+            concurrency: 동시에 실행할 옵션 API 요청 상한이다.
+
+        Returns:
+            기존 재고 근거를 보존한 상품 목록과 안전한 부분 실패 경고다.
+
+        Raises:
+            ValueError: limit 또는 concurrency가 올바르지 않은 경우다.
+        """
+        if limit < 0 or concurrency < 1:
+            raise ValueError("limit은 0 이상이고 concurrency는 1 이상이어야 합니다")
+        targets = products[:limit]
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _fetch_bounded(client: httpx.AsyncClient, product: dict) -> str | None:
+            pno = _prdtno(product.get("link", ""))
+            if not pno:
+                return "옵션 오류: ABC마트 상품 번호가 없습니다"
+            async with semaphore:
+                result = await _fetch_option(client, pno)
+            if "_err" in result:
+                return f"옵션 오류 prdtNo={pno}: {result['_err']}"
+            existing = product.get("options") if isinstance(product.get("options"), dict) else {}
+            product["options"] = {
+                "colors": result.get("colors") or existing.get("colors") or [],
+                "sizes": result.get("sizes") or existing.get("sizes") or [],
+                "available_sizes": existing.get("available_sizes") or [],
+            }
+            return None
+
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=10, follow_redirects=False) as client:
+            results = await asyncio.gather(*(_fetch_bounded(client, product) for product in targets))
+        return products, [error for error in results if error is not None]
+
     async def attach(
         self,
         products: list[dict],

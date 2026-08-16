@@ -181,6 +181,12 @@
         "sizes": {
           "type": "array",
           "items": { "type": "string", "maxLength": 50 }
+        },
+        "available_sizes": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 50 },
+          "uniqueItems": true,
+          "description": "검색 JSON의 SIZE_LIST에서 재고 수량이 양수로 확인된 사이즈다. 단순 표시 문자열은 포함하지 않는다."
         }
       },
       "description": "OptionsPayload(colors, sizes)와 필드명이 그대로 일치한다. DB product_option.option_value가 VARCHAR(50)이므로 각 항목도 50자 이하여야 한다."

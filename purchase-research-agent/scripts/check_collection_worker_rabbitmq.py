@@ -36,6 +36,7 @@ class FixtureCrawler:
         site: str,
         max_items: int = 500,
         detail_limit: int = 0,
+        option_limit: int = 0,
         page: int = 1,
         max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:

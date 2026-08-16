@@ -31,7 +31,11 @@ class CollectorResultAdapterTests(unittest.TestCase):
                 "link": "https://example.com/products/abc-1",
                 "site": "abcmart",
                 "review_count": 1,
-                "options": {"sizes": ["270", "270"], "colors": ["BLACK"]},
+                "options": {
+                    "sizes": ["270", "270"],
+                    "available_sizes": ["270"],
+                    "colors": ["BLACK"],
+                },
                 "category_path": "신발 > 구두",
                 "in_stock": True,
                 "reviews": [{
@@ -53,10 +57,39 @@ class CollectorResultAdapterTests(unittest.TestCase):
         self.assertNotIn("verification", result["products"][0])
         self.assertEqual(result["products"][0]["price"]["amount"], 19000)
         self.assertEqual(len(result["products"][0]["options"]), 2)
+        self.assertEqual(result["products"][0]["options"][0]["stockStatus"], "available")
+        self.assertEqual(result["products"][0]["options"][0]["color"], "BLACK")
         self.assertEqual(result["products"][0]["categoryPath"], ["신발", "구두"])
         self.assertEqual(result["products"][0]["stockStatus"], "available")
         self.assertEqual(result["products"][0]["reviews"][0]["createdAt"], "2026-08-04T00:00:00+09:00")
         self.assertEqual(result["products"][0]["provenance"]["collectorVersion"], "python-collector-v1")
+
+    def test_preserves_29cm_option_pair_and_stock_status(self) -> None:
+        """29CM 상세 옵션의 색상/사이즈 조합과 판매 상태를 공통 계약에 보존하는지 검증한다."""
+
+        result = build_collector_result(
+            [{
+                "source_product_id": "29-available-1",
+                "title": "테스트 슬링백",
+                "price": "89,000원",
+                "link": "https://product.29cm.co.kr/catalog/29-available-1",
+                "site": "29cm",
+                "options": [{
+                    "name": "SIZE",
+                    "value": "BLACK (3CM) / KR 230 / IT36",
+                    "stock_status": "available",
+                }],
+            }],
+            request_id="python-29cm-options-001",
+            merchant="29cm",
+            query="슬링백",
+            collected_at="2026-08-15T03:00:00+00:00",
+        )
+
+        option = result["products"][0]["options"][0]
+        self.assertEqual(option["size"], "230")
+        self.assertEqual(option["color"], "BLACK")
+        self.assertEqual(option["stockStatus"], "available")
 
     def test_marks_crawler_errors_as_partial_warnings(self) -> None:
         """일부 크롤링 오류가 저장 가능한 partial 상태와 경고로 바뀌는지 검증한다."""

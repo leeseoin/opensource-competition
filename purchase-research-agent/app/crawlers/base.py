@@ -61,3 +61,15 @@ class SiteCrawler(ABC):
         상세 수집을 지원하지 않는 사이트는 기본 구현(no-op)을 그대로 쓰면 된다.
         """
         return products, []
+
+    async def attach_options(self, products: list[dict], limit: int) -> tuple[list[dict], list[str]]:
+        """상위 limit개 상품에 리뷰 없이 구매 옵션만 덧붙인다.
+
+        Args:
+            products: 검색 단계에서 확보한 상품 목록이다.
+            limit: 옵션을 확인할 상품 상한이다.
+
+        Returns:
+            옵션이 보강된 상품과 판매처별 부분 실패 경고다.
+        """
+        return products, []

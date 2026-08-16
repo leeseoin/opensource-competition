@@ -280,6 +280,12 @@ class Cm29Crawler(SiteCrawler):
         review_limit이 0이면 상품당 리뷰를 페이지네이션으로 전부 가져온다."""
         return await Cm29DetailFetcher().attach(products, limit=limit, review_limit=review_limit)
 
+    async def attach_options(
+        self, products: list[dict], limit: int
+    ) -> tuple[list[dict], list[str]]:
+        """상위 limit개 상품의 상세 HTML에서 구매 옵션만 수집한다."""
+        return await Cm29DetailFetcher().attach_options(products, limit=limit)
+
     def _dedup(self, items: list[dict], seen: set[str]) -> list[dict]:
         """이미 수집한 29CM 상품 ID를 제외하고 새 상품만 반환한다."""
 

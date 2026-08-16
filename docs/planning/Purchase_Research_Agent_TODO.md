@@ -376,7 +376,7 @@
 - [ ] 판매처 상위 상품 ID/모델 코드 기반 확정 묶음
 - [x] `size/color` 외 용량/소재/규격/저장 용량을 표현하는 범용 조건 `attributes` Contract
 - [ ] 범용 조건 `attributes`와 Collector 상세 옵션의 실제 필터 연결
-- [ ] 29CM/ABC마트 상세 옵션 Adapter와 옵션별 provenance
+- [x] 29CM/ABC마트 상세 옵션 Adapter와 옵션별 provenance
 - [ ] 의류/가방/가구/전자제품 저장 fixture와 상품군 오병합 회귀 테스트
 - [ ] 상품군 오병합률/후보 카드 중복률/옵션 출처 누락률 평가
 

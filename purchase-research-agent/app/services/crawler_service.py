@@ -20,6 +20,7 @@ class CrawlerService:
         site: str,
         max_items: int = 500,
         detail_limit: int = 0,
+        option_limit: int = 0,
         page: int = 1,
         max_pages: int | None = None,
     ) -> tuple[list[dict], list[str]]:
@@ -30,6 +31,7 @@ class CrawlerService:
             site: 등록된 판매처 식별자다.
             max_items: 반환할 상품 상한이다.
             detail_limit: 상세정보를 추가할 상위 상품 수다.
+            option_limit: 리뷰 없이 옵션만 추가할 상위 상품 수다.
             page: 수집을 시작할 1 기반 페이지다.
             max_pages: 최대 수집 페이지 수이며 ``None``이면 상품 상한까지 진행한다.
 
@@ -52,9 +54,14 @@ class CrawlerService:
             max_pages=max_pages,
         )
 
+        if detail_limit > 0 and option_limit > 0:
+            raise ValueError("detail_limit과 option_limit은 동시에 사용할 수 없습니다")
         if detail_limit > 0 and products:
             products, detail_errors = await crawler.attach_details(products, limit=detail_limit)
             errors.extend(detail_errors)
+        elif option_limit > 0 and products:
+            products, option_errors = await crawler.attach_options(products, limit=option_limit)
+            errors.extend(option_errors)
 
         if site == "abcmart":
             products, contract_errors = validate_items(products)
