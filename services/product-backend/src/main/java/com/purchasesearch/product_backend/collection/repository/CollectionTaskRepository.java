@@ -1,6 +1,7 @@
 package com.purchasesearch.product_backend.collection.repository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +32,15 @@ public interface CollectionTaskRepository extends JpaRepository<CollectionTask, 
 	 * @return 페이지 오름차순 작업 목록
 	 */
 	List<CollectionTask> findAllByJobJobIdOrderByPageAsc(String jobId);
+
+	/**
+	 * 같은 idempotencyKey를 가진 작업이 지정한 상태 중 하나로 아직 진행 중인지 확인한다.
+	 *
+	 * @param idempotencyKey 판매처/검색 조건에서 계산한 멱등성 key
+	 * @param statuses 진행 중으로 간주할 작업 상태 목록
+	 * @return 진행 중인 동일 조건 작업이 있으면 true
+	 */
+	boolean existsByIdempotencyKeyAndStatusIn(String idempotencyKey, Collection<String> statuses);
 
 	/**
 	 * 요청 시각이 창 안에 있는 페이지 작업을 상태별로 센다.

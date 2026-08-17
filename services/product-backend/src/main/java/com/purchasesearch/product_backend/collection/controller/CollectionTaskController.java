@@ -16,6 +16,7 @@ import com.purchasesearch.product_backend.collection.dto.CollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse.ErrorResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
+import com.purchasesearch.product_backend.collection.exception.DuplicateCollectionTaskException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
 import com.purchasesearch.product_backend.collection.service.CollectionTaskPublisher;
 
@@ -68,6 +69,10 @@ public class CollectionTaskController {
 				description = "입력 또는 현재 지원 범위 위반",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(
+				responseCode = "409",
+				description = "동일 조건 작업이 이미 QUEUED 또는 RUNNING으로 진행 중",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(
 				responseCode = "503",
 				description = "RabbitMQ 발행 실패",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -94,6 +99,10 @@ public class CollectionTaskController {
 		@ApiResponse(
 				responseCode = "400",
 				description = "입력 또는 최대 200페이지 범위 위반",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(
+				responseCode = "409",
+				description = "요청한 페이지가 모두 이미 진행 중인 동일 조건 작업과 중복",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(
 				responseCode = "503",
@@ -131,6 +140,20 @@ public class CollectionTaskController {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidTask(InvalidCollectionTaskException exception) {
 		return new ErrorResponse("INVALID_COLLECTION_TASK", exception.getMessage());
+	}
+
+	/**
+	 * 이미 진행 중인 동일 조건 작업과의 중복을 409 응답으로 변환한다.
+	 * {@link CollectionTaskPublishException}의 하위 타입이지만 Spring이 더 구체적인 타입을
+	 * 우선 매칭하므로 503이 아닌 이 handler가 적용된다.
+	 *
+	 * @param exception 중복 거부 예외
+	 * @return 오류 코드와 설명
+	 */
+	@ExceptionHandler(DuplicateCollectionTaskException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleDuplicateTask(DuplicateCollectionTaskException exception) {
+		return new ErrorResponse("DUPLICATE_COLLECTION_TASK", exception.getMessage());
 	}
 
 	/**

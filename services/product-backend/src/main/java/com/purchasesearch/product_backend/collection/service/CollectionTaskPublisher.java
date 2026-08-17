@@ -31,6 +31,7 @@ import com.purchasesearch.product_backend.collection.dto.CollectionTaskMessage.S
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
+import com.purchasesearch.product_backend.collection.exception.DuplicateCollectionTaskException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
 import com.purchasesearch.product_backend.collection.messaging.CollectionQueueNames;
 
@@ -78,10 +79,16 @@ public class CollectionTaskPublisher {
 	 * @param request Swagger 또는 관리 API가 받은 검색 조건
 	 * @return 발행된 작업 추적 정보
 	 * @throws InvalidCollectionTaskException 현재 지원 범위나 필터 의미를 위반한 경우
+	 * @throws DuplicateCollectionTaskException 동일한 idempotencyKey의 작업이 이미 QUEUED 또는
+	 *     RUNNING으로 진행 중인 경우
 	 * @throws CollectionTaskPublishException 직렬화, RabbitMQ 발행 또는 confirm에 실패한 경우
 	 */
 	public CollectionTaskResponse publish(CollectionTaskRequest request) {
 		CollectionTaskMessage task = createTask(request);
+		if (isDuplicateInFlight(task)) {
+			throw new DuplicateCollectionTaskException(
+					"동일한 조건의 수집 작업이 이미 진행 중입니다. idempotencyKey=" + task.idempotencyKey());
+		}
 		collectionJobService.register(List.of(task));
 		try {
 			publishTask(task);
@@ -98,6 +105,8 @@ public class CollectionTaskPublisher {
 	 * @param request 시작 페이지와 페이지 수가 포함된 검색 조건
 	 * @return 전체 작업을 묶는 jobId와 발행 범위
 	 * @throws InvalidCollectionTaskException 마지막 페이지가 최대 범위를 벗어난 경우
+	 * @throws DuplicateCollectionTaskException 요청한 페이지가 모두 이미 진행 중인 동일 조건
+	 *     작업과 중복돼 새로 발행할 작업이 하나도 없는 경우
 	 * @throws CollectionTaskPublishException 일부 또는 전체 작업의 broker 확인에 실패한 경우
 	 */
 	public BulkCollectionTaskResponse publishPages(BulkCollectionTaskRequest request) {
@@ -111,9 +120,23 @@ public class CollectionTaskPublisher {
 		int endPage = (int) endPageValue;
 		String jobId = "job-" + UUID.randomUUID();
 		OffsetDateTime requestedAt = OffsetDateTime.now(ZoneOffset.UTC);
-		List<CollectionTaskMessage> tasks = new ArrayList<>(pageCount);
+		List<CollectionTaskMessage> candidates = new ArrayList<>(pageCount);
 		for (int page = startPage; page <= endPage; page++) {
-			tasks.add(createTask(request.toPageRequest(page), jobId, requestedAt));
+			candidates.add(createTask(request.toPageRequest(page), jobId, requestedAt));
+		}
+
+		List<CollectionTaskMessage> tasks = new ArrayList<>(candidates.size());
+		List<Integer> skippedDuplicatePages = new ArrayList<>();
+		for (CollectionTaskMessage candidate : candidates) {
+			if (isDuplicateInFlight(candidate)) {
+				skippedDuplicatePages.add(candidate.payload().page());
+			} else {
+				tasks.add(candidate);
+			}
+		}
+		if (tasks.isEmpty()) {
+			throw new DuplicateCollectionTaskException(
+					"요청한 페이지가 모두 이미 진행 중인 동일 조건 작업과 중복됩니다. page=" + skippedDuplicatePages);
 		}
 		collectionJobService.register(tasks);
 
@@ -128,7 +151,7 @@ public class CollectionTaskPublisher {
 						tasks.subList(index, tasks.size()).stream().map(CollectionTaskMessage::taskId).toList(),
 						exception.getMessage());
 				throw new CollectionTaskPublishException(
-						"전체 " + pageCount + "개 중 " + publishedCount
+						"전체 " + tasks.size() + "개 중 " + publishedCount
 								+ "개 작업만 접수된 뒤 RabbitMQ 발행이 실패했습니다.",
 						exception);
 			}
@@ -142,7 +165,18 @@ public class CollectionTaskPublisher {
 				startPage,
 				endPage,
 				publishedCount,
-				requestedAt);
+				requestedAt,
+				skippedDuplicatePages);
+	}
+
+	/**
+	 * 작업의 idempotencyKey로 같은 조건이 이미 QUEUED 또는 RUNNING으로 진행 중인지 확인한다.
+	 *
+	 * @param task 발행하려는 작업
+	 * @return 진행 중인 동일 조건 작업이 있으면 true
+	 */
+	private boolean isDuplicateInFlight(CollectionTaskMessage task) {
+		return collectionJobService.isDuplicateInFlight(task.idempotencyKey());
 	}
 
 	/**

@@ -34,6 +34,7 @@ import com.purchasesearch.product_backend.collection.repository.CollectionTaskRe
 public class CollectionJobService {
 
 	private static final Set<String> RETRYABLE_STATUSES = Set.of("FAILED", "PARTIAL");
+	private static final Set<String> ACTIVE_TASK_STATUSES = Set.of("QUEUED", "RUNNING");
 
 	private final CollectionJobRepository collectionJobRepository;
 	private final CollectionTaskRepository collectionTaskRepository;
@@ -49,6 +50,18 @@ public class CollectionJobService {
 			CollectionTaskRepository collectionTaskRepository) {
 		this.collectionJobRepository = collectionJobRepository;
 		this.collectionTaskRepository = collectionTaskRepository;
+	}
+
+	/**
+	 * 같은 판매처/검색 조건(idempotencyKey)의 작업이 아직 QUEUED 또는 RUNNING으로 진행 중인지 확인한다.
+	 * 이미 종료된(SUCCESS/PARTIAL/FAILED/PUBLISH_FAILED) 과거 작업은 새 요청을 막지 않는다.
+	 *
+	 * @param idempotencyKey 판매처/검색 조건에서 계산한 멱등성 key
+	 * @return 진행 중인 동일 조건 작업이 있으면 true
+	 */
+	@Transactional(readOnly = true)
+	public boolean isDuplicateInFlight(String idempotencyKey) {
+		return collectionTaskRepository.existsByIdempotencyKeyAndStatusIn(idempotencyKey, ACTIVE_TASK_STATUSES);
 	}
 
 	/**

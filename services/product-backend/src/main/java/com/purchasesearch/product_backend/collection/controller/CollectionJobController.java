@@ -17,6 +17,7 @@ import com.purchasesearch.product_backend.collection.dto.CollectionJobResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse.ErrorResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionJobNotFoundException;
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
+import com.purchasesearch.product_backend.collection.exception.DuplicateCollectionTaskException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
 import com.purchasesearch.product_backend.collection.service.CollectionJobService;
 import com.purchasesearch.product_backend.collection.service.CollectionTaskPublisher;
@@ -133,6 +134,10 @@ public class CollectionJobController {
 				description = "존재하지 않는 jobId",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(
+				responseCode = "409",
+				description = "동일 조건의 다른 작업이 이미 진행 중",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(
 				responseCode = "503",
 				description = "RabbitMQ 발행 실패",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -163,6 +168,18 @@ public class CollectionJobController {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidTask(InvalidCollectionTaskException exception) {
 		return new ErrorResponse("INVALID_COLLECTION_TASK", exception.getMessage());
+	}
+
+	/**
+	 * 이미 진행 중인 동일 조건 작업과의 중복을 409 응답으로 변환한다.
+	 *
+	 * @param exception 중복 거부 예외
+	 * @return 오류 코드와 설명
+	 */
+	@ExceptionHandler(DuplicateCollectionTaskException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleDuplicateTask(DuplicateCollectionTaskException exception) {
+		return new ErrorResponse("DUPLICATE_COLLECTION_TASK", exception.getMessage());
 	}
 
 	/**
