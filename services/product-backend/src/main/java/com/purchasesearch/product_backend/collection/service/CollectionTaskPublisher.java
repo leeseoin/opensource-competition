@@ -1,6 +1,5 @@
 package com.purchasesearch.product_backend.collection.service;
 
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
@@ -13,14 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageBuilder;
-import org.springframework.amqp.core.MessageDeliveryMode;
-import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
 import com.purchasesearch.product_backend.collection.dto.BulkCollectionTaskRequest;
@@ -33,12 +25,14 @@ import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
 import com.purchasesearch.product_backend.collection.exception.DuplicateCollectionTaskException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
-import com.purchasesearch.product_backend.collection.messaging.CollectionQueueNames;
 
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * CollectionTaskPublisher는 HTTP 검색 조건을 Queue v1 작업으로 정규화하고 RabbitMQ broker 확인까지 기다린다.
+ * CollectionTaskPublisher는 HTTP 검색 조건을 Queue v1 작업으로 정규화한다. 단건 발행({@link #publish})은
+ * RabbitMQ broker 확인까지 HTTP 스레드가 직접 기다리고, 다중 페이지 발행({@link #publishPages})은
+ * job 등록까지만 동기로 처리한 뒤 실제 broker 발행은 {@link CollectionTaskPagePublishRunner}에 맡기고
+ * 즉시 응답한다(페이지 수만큼 confirm 대기가 누적되는 것을 피하기 위함).
  */
 @Service
 public class CollectionTaskPublisher {
@@ -51,26 +45,29 @@ public class CollectionTaskPublisher {
 	private static final int DEFAULT_MAX_ATTEMPTS = 2;
 	private static final String DEFAULT_LOCALE = "ko-KR";
 	private static final String DEFAULT_CURRENCY = "KRW";
-	private static final long CONFIRM_TIMEOUT_SECONDS = 5;
 
-	private final RabbitTemplate rabbitTemplate;
+	private final CollectionTaskAmqpGateway collectionTaskAmqpGateway;
 	private final ObjectMapper objectMapper;
 	private final CollectionJobService collectionJobService;
+	private final CollectionTaskPagePublishRunner collectionTaskPagePublishRunner;
 
 	/**
 	 * 작업 JSON 생성과 RabbitMQ 발행에 필요한 의존성을 연결한다.
 	 *
-	 * @param rabbitTemplate Spring AMQP 발행 도구
+	 * @param collectionTaskAmqpGateway 작업 한 건을 RabbitMQ에 발행하는 저수준 Bean
 	 * @param objectMapper Spring Boot 공통 JSON mapper
 	 * @param collectionJobService Queue 발행 전후 작업 상태 저장 서비스
+	 * @param collectionTaskPagePublishRunner 다중 페이지 발행을 배경 스레드로 넘기는 Bean
 	 */
 	public CollectionTaskPublisher(
-			RabbitTemplate rabbitTemplate,
+			CollectionTaskAmqpGateway collectionTaskAmqpGateway,
 			ObjectMapper objectMapper,
-			CollectionJobService collectionJobService) {
-		this.rabbitTemplate = rabbitTemplate;
+			CollectionJobService collectionJobService,
+			CollectionTaskPagePublishRunner collectionTaskPagePublishRunner) {
+		this.collectionTaskAmqpGateway = collectionTaskAmqpGateway;
 		this.objectMapper = objectMapper;
 		this.collectionJobService = collectionJobService;
+		this.collectionTaskPagePublishRunner = collectionTaskPagePublishRunner;
 	}
 
 	/**
@@ -91,7 +88,7 @@ public class CollectionTaskPublisher {
 		}
 		collectionJobService.register(List.of(task));
 		try {
-			publishTask(task);
+			collectionTaskAmqpGateway.publish(task);
 		} catch (CollectionTaskPublishException exception) {
 			collectionJobService.markPublishFailed(List.of(task.taskId()), exception.getMessage());
 			throw exception;
@@ -100,14 +97,17 @@ public class CollectionTaskPublisher {
 	}
 
 	/**
-	 * 연속된 검색 페이지를 같은 jobId의 독립 작업으로 나눠 순서대로 발행한다.
+	 * 연속된 검색 페이지를 같은 jobId의 독립 작업으로 나눠 등록한다. job 등록까지만 동기로
+	 * 처리하고, 실제 RabbitMQ 발행은 {@link CollectionTaskPagePublishRunner}에 맡긴 뒤 즉시
+	 * 반환한다 — 페이지 수(최대 200)만큼 broker confirm(페이지당 최대 5초)이 쌓이면 HTTP
+	 * 타임아웃을 넘길 수 있기 때문이다. 실제 발행 성공/실패는 반환된 jobId로
+	 * {@code GET /internal/v1/collection-jobs/{jobId}}를 조회해 확인한다.
 	 *
 	 * @param request 시작 페이지와 페이지 수가 포함된 검색 조건
-	 * @return 전체 작업을 묶는 jobId와 발행 범위
+	 * @return 전체 작업을 묶는 jobId와 접수된 페이지 범위(taskCount는 confirm이 아니라 등록 기준)
 	 * @throws InvalidCollectionTaskException 마지막 페이지가 최대 범위를 벗어난 경우
 	 * @throws DuplicateCollectionTaskException 요청한 페이지가 모두 이미 진행 중인 동일 조건
 	 *     작업과 중복돼 새로 발행할 작업이 하나도 없는 경우
-	 * @throws CollectionTaskPublishException 일부 또는 전체 작업의 broker 확인에 실패한 경우
 	 */
 	public BulkCollectionTaskResponse publishPages(BulkCollectionTaskRequest request) {
 		int startPage = request.startPage() == null ? DEFAULT_PAGE : request.startPage();
@@ -139,23 +139,7 @@ public class CollectionTaskPublisher {
 					"요청한 페이지가 모두 이미 진행 중인 동일 조건 작업과 중복됩니다. page=" + skippedDuplicatePages);
 		}
 		collectionJobService.register(tasks);
-
-		int publishedCount = 0;
-		for (int index = 0; index < tasks.size(); index++) {
-			CollectionTaskMessage task = tasks.get(index);
-			try {
-				publishTask(task);
-				publishedCount++;
-			} catch (CollectionTaskPublishException exception) {
-				collectionJobService.markPublishFailed(
-						tasks.subList(index, tasks.size()).stream().map(CollectionTaskMessage::taskId).toList(),
-						exception.getMessage());
-				throw new CollectionTaskPublishException(
-						"전체 " + tasks.size() + "개 중 " + publishedCount
-								+ "개 작업만 접수된 뒤 RabbitMQ 발행이 실패했습니다.",
-						exception);
-			}
-		}
+		collectionTaskPagePublishRunner.runAsync(tasks);
 
 		return new BulkCollectionTaskResponse(
 				jobId,
@@ -164,7 +148,7 @@ public class CollectionTaskPublisher {
 				"search",
 				startPage,
 				endPage,
-				publishedCount,
+				tasks.size(),
 				requestedAt,
 				skippedDuplicatePages);
 	}
@@ -187,46 +171,10 @@ public class CollectionTaskPublisher {
 	 * @throws com.purchasesearch.product_backend.collection.exception.CollectionJobNotFoundException
 	 *     job이 존재하지 않는 경우
 	 * @throws InvalidCollectionTaskException job이 FAILED 또는 PARTIAL 상태가 아닌 경우
-	 * @throws CollectionTaskPublishException 일부 또는 전체 작업의 broker 확인에 실패한 경우
 	 */
 	public BulkCollectionTaskResponse retryJob(String jobId) {
 		BulkCollectionTaskRequest retryRequest = collectionJobService.toRetryRequest(jobId);
 		return publishPages(retryRequest);
-	}
-
-	/**
-	 * 작업 한 건을 persistent 메시지로 발행하고 RabbitMQ broker ACK를 확인한다.
-	 *
-	 * @param task 발행할 단일 페이지 작업
-	 * @throws CollectionTaskPublishException 직렬화, RabbitMQ 발행 또는 confirm에 실패한 경우
-	 */
-	private void publishTask(CollectionTaskMessage task) {
-		CorrelationData correlationData = new CorrelationData(task.taskId());
-		Message message = createMessage(task);
-
-		try {
-			rabbitTemplate.send(
-					CollectionQueueNames.COLLECTION_EXCHANGE,
-					CollectionQueueNames.SEARCH_ROUTING_KEY,
-					message,
-					correlationData);
-			CorrelationData.Confirm confirm = correlationData.getFuture()
-					.get(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-			if (!confirm.ack()) {
-				throw new CollectionTaskPublishException(
-						"RabbitMQ가 수집 작업을 확인하지 않았습니다: " + confirm.reason());
-			}
-			if (correlationData.getReturned() != null) {
-				throw new CollectionTaskPublishException("수집 작업을 받을 RabbitMQ Queue가 없습니다.");
-			}
-		} catch (CollectionTaskPublishException exception) {
-			throw exception;
-		} catch (InterruptedException exception) {
-			Thread.currentThread().interrupt();
-			throw new CollectionTaskPublishException("RabbitMQ 작업 확인 대기가 중단됐습니다.", exception);
-		} catch (Exception exception) {
-			throw new CollectionTaskPublishException("RabbitMQ에 수집 작업을 발행하지 못했습니다.", exception);
-		}
 	}
 
 	/**
@@ -410,29 +358,6 @@ public class CollectionTaskPublisher {
 			throw new CollectionTaskPublishException("SHA-256 멱등성 키를 만들 수 없습니다.", exception);
 		} catch (Exception exception) {
 			throw new CollectionTaskPublishException("수집 조건을 멱등성 JSON으로 만들 수 없습니다.", exception);
-		}
-	}
-
-	/**
-	 * Queue 작업을 persistent JSON RabbitMQ 메시지로 직렬화한다.
-	 *
-	 * @param task 발행할 수집 작업
-	 * @return 메시지 ID와 우선순위가 포함된 RabbitMQ 메시지
-	 * @throws CollectionTaskPublishException JSON 직렬화에 실패한 경우
-	 */
-	private Message createMessage(CollectionTaskMessage task) {
-		try {
-			byte[] body = objectMapper.writeValueAsBytes(task);
-			return MessageBuilder.withBody(body)
-					.setContentType(MessageProperties.CONTENT_TYPE_JSON)
-					.setContentEncoding(StandardCharsets.UTF_8.name())
-					.setDeliveryMode(MessageDeliveryMode.PERSISTENT)
-					.setMessageId(task.taskId())
-					.setPriority(task.priority())
-					.setTimestamp(java.util.Date.from(task.requestedAt().toInstant()))
-					.build();
-		} catch (Exception exception) {
-			throw new CollectionTaskPublishException("CollectionTask JSON을 생성하지 못했습니다.", exception);
 		}
 	}
 }
