@@ -128,10 +128,10 @@ class FakeExchange:
         self.fail = fail
 
     async def publish(self, message: Any, routing_key: str, mandatory: bool) -> None:
-        """발행 정보를 기록하고 설정된 경우 broker 오류를 발생시킨다."""
+        """발행 정보와 AMQP 우선순위를 기록하고 설정된 경우 broker 오류를 발생시킨다."""
 
         status = json.loads(message.body).get("status", "retry")
-        self.events.append(f"publish:{routing_key}:{status}:{mandatory}")
+        self.events.append(f"publish:{routing_key}:{status}:{mandatory}:priority={message.priority}")
         if self.fail:
             raise RuntimeError("publisher confirm failed")
 
@@ -364,6 +364,9 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decision.action, "ack")
         self.assertEqual(decision.routing_key, SEARCH_RETRY_KEY)
         self.assertEqual(json.loads(decision.body)["attempt"], 1)
+        self.assertEqual(
+            decision.priority, 25, "재시도 메시지도 원본 작업의 우선순위를 그대로 유지해야 한다"
+        )
 
     async def test_exhausted_failure_publishes_result_then_rejects(self) -> None:
         """마지막 실행 실패는 결과를 발행하고 원본을 DLQ로 보내는지 검증한다."""
@@ -416,8 +419,28 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
         await worker._handle_message(FakeExchange(events), FakeMessage(_task_body(), events))
 
         self.assertEqual(events, [
-            f"publish:{RESULT_ROUTING_KEY}:running:True",
-            f"publish:{RESULT_ROUTING_KEY}:success:True",
+            f"publish:{RESULT_ROUTING_KEY}:running:True:priority=0",
+            f"publish:{RESULT_ROUTING_KEY}:success:True:priority=0",
+            "ack",
+        ])
+
+    async def test_retry_publish_keeps_original_priority(self) -> None:
+        """재시도로 되돌아가는 검색 작업이 원본 우선순위를 AMQP 메시지 속성에도 유지하는지 검증한다."""
+
+        events: list[str] = []
+        worker = RabbitCollectionWorker(
+            "amqp://unused",
+            FixedProcessor({"status": "failed", "error": {"retryable": True}}),
+        )
+
+        await worker._handle_message(
+            FakeExchange(events),
+            FakeMessage(_task_body(attempt=0, max_attempts=2), events),
+        )
+
+        self.assertEqual(events, [
+            f"publish:{RESULT_ROUTING_KEY}:running:True:priority=0",
+            f"publish:{SEARCH_RETRY_KEY}:retry:True:priority=25",
             "ack",
         ])
 
@@ -436,7 +459,9 @@ class RabbitDecisionTests(unittest.IsolatedAsyncioTestCase):
                 FakeMessage(_task_body(), events),
             )
 
-        self.assertEqual(events, [f"publish:{RESULT_ROUTING_KEY}:running:True", "reject:True"])
+        self.assertEqual(
+            events, [f"publish:{RESULT_ROUTING_KEY}:running:True:priority=0", "reject:True"]
+        )
 
 
 if __name__ == "__main__":

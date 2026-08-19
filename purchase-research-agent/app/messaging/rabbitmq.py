@@ -50,6 +50,7 @@ class WorkerDecision:
     routing_key: str | None = None
     body: bytes | None = None
     message_id: str | None = None
+    priority: int | None = None
 
 
 async def decide_message(body: bytes, processor: TaskProcessor) -> WorkerDecision:
@@ -93,6 +94,7 @@ async def decide_message(body: bytes, processor: TaskProcessor) -> WorkerDecisio
             routing_key=SEARCH_RETRY_KEY,
             body=_json_body(next_task.to_dict()),
             message_id=next_task.task_id,
+            priority=next_task.priority,
         )
 
     return WorkerDecision(
@@ -191,6 +193,7 @@ class RabbitCollectionWorker:
                     decision.routing_key,
                     decision.body,
                     decision.message_id,
+                    priority=decision.priority,
                 )
             except Exception:
                 await message.reject(requeue=True)
@@ -225,6 +228,7 @@ class RabbitCollectionWorker:
         routing_key: str,
         body: bytes,
         message_id: str | None,
+        priority: int | None = None,
     ) -> None:
         """publisher confirm을 요구하는 persistent 메시지를 지정 경로에 발행한다.
 
@@ -233,6 +237,10 @@ class RabbitCollectionWorker:
             routing_key: 결과 또는 retry routing key다.
             body: UTF-8 JSON body다.
             message_id: broker와 로그에서 추적할 작업 식별자다.
+            priority: 우선순위 검색 Queue로 되돌아갈 때 유지할 AMQP 메시지 우선순위다.
+                Spring Boot가 최초 발행 시 심는 우선순위(``CollectionTaskMessage.priority``)와
+                동일한 값을 재시도 메시지에도 적용해, 재시도가 우선순위 큐 정렬에서
+                밀려나지 않게 한다.
         """
 
         await exchange.publish(
@@ -241,6 +249,7 @@ class RabbitCollectionWorker:
                 content_type="application/json",
                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                 message_id=message_id,
+                priority=priority,
             ),
             routing_key=routing_key,
             mandatory=True,

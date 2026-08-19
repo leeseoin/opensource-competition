@@ -43,6 +43,9 @@ public class CollectionTask {
 	@Column(nullable = false, length = 32)
 	private String status;
 
+	@Column(name = "idempotency_key", nullable = false, length = 80)
+	private String idempotencyKey;
+
 	@Column(name = "product_count", nullable = false)
 	private int productCount;
 
@@ -109,6 +112,7 @@ public class CollectionTask {
 		task.job = job;
 		task.page = message.payload().page();
 		task.status = "QUEUED";
+		task.idempotencyKey = message.idempotencyKey();
 		task.requestedAt = message.requestedAt();
 		return task;
 	}

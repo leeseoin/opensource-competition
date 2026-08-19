@@ -21,6 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -57,6 +58,9 @@ class CollectionTaskPublisherIntegrationTests {
 
 	@Autowired
 	private CollectionJobRepository collectionJobRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	/**
 	 * 각 테스트 전에 검색 Queue와 DLQ에 남은 메시지를 제거한다.
@@ -133,27 +137,38 @@ class CollectionTaskPublisherIntegrationTests {
 	}
 
 	/**
-	 * 동일한 판매처와 검색 조건을 두 번 요청하면 실행 ID는 달라도 멱등성 키는 같은지 검증한다.
+	 * 동일한 판매처와 검색 조건을 같은 작업이 아직 진행 중인 동안 다시 요청하면 409로 거절되고,
+	 * 그 작업이 끝난 뒤에는 같은 멱등성 키로 다시 발행할 수 있는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청, Queue 수신 또는 JSON 해석에 실패한 경우
 	 */
 	@Test
-	void createsStableIdempotencyKeyForSameSearchConditions() throws Exception {
+	void rejectsDuplicateWhileInFlightThenAllowsAfterCompletion() throws Exception {
 		mockMvc.perform(post("/internal/v1/collection-tasks")
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(minimalRequest()))
 				.andExpect(status().isAccepted());
-		mockMvc.perform(post("/internal/v1/collection-tasks")
-					.contentType(MediaType.APPLICATION_JSON)
-					.content(minimalRequest()))
-				.andExpect(status().isAccepted());
-
 		CollectionTaskMessage first = readTask(receiveSearchTask());
-		CollectionTaskMessage second = readTask(receiveSearchTask());
 
-		assertThat(first.taskId()).isNotEqualTo(second.taskId());
-		assertThat(first.jobId()).isNotEqualTo(second.jobId());
-		assertThat(first.idempotencyKey()).isEqualTo(second.idempotencyKey());
+		mockMvc.perform(post("/internal/v1/collection-tasks")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(minimalRequest()))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("DUPLICATE_COLLECTION_TASK"));
+		assertThat(rabbitTemplate.receive(CollectionQueueNames.SEARCH_TASK_QUEUE)).isNull();
+
+		jdbcTemplate.update(
+				"UPDATE collection_tasks SET status = 'SUCCESS' WHERE task_id = ?", first.taskId());
+
+		mockMvc.perform(post("/internal/v1/collection-tasks")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(minimalRequest()))
+				.andExpect(status().isAccepted());
+		CollectionTaskMessage third = readTask(receiveSearchTask());
+
+		assertThat(third.taskId()).isNotEqualTo(first.taskId());
+		assertThat(third.jobId()).isNotEqualTo(first.jobId());
+		assertThat(third.idempotencyKey()).isEqualTo(first.idempotencyKey());
 	}
 
 	/**
@@ -213,6 +228,77 @@ class CollectionTaskPublisherIntegrationTests {
 		assertThat(first.taskId()).isNotEqualTo(second.taskId()).isNotEqualTo(third.taskId());
 		assertThat(first.idempotencyKey()).isNotEqualTo(second.idempotencyKey());
 		assertThat(second.idempotencyKey()).isNotEqualTo(third.idempotencyKey());
+	}
+
+	/**
+	 * 이미 다른 job으로 진행 중인 페이지는 건너뛰고 나머지 새 페이지만 발행하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청, Queue 수신 또는 JSON 해석에 실패한 경우
+	 */
+	@Test
+	void skipsPageAlreadyInFlightInAnotherJobAndPublishesTheRest() throws Exception {
+		mockMvc.perform(post("/internal/v1/collection-tasks")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(minimalRequest().replace("\"page\": 1", "\"page\": 2")))
+				.andExpect(status().isAccepted());
+		receiveSearchTask();
+
+		String pagesRequest = """
+				{
+				  "merchant": "29cm",
+				  "query": "구두",
+				  "startPage": 2,
+				  "pageCount": 2,
+				  "filters": {
+				    "sizes": ["270"],
+				    "inStockOnly": true
+				  }
+				}
+				""";
+
+		mockMvc.perform(post("/internal/v1/collection-tasks/pages")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(pagesRequest))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.taskCount").value(1))
+				.andExpect(jsonPath("$.skippedDuplicatePages").value(org.hamcrest.Matchers.contains(2)));
+
+		CollectionTaskMessage onlyNewTask = readTask(receiveSearchTask());
+		assertThat(onlyNewTask.payload().page()).isEqualTo(3);
+	}
+
+	/**
+	 * 요청한 페이지가 모두 이미 진행 중이면 아무것도 발행하지 않고 409를 반환하는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청, Queue 수신 또는 JSON 해석에 실패한 경우
+	 */
+	@Test
+	void rejectsPagesRequestWhenEveryPageIsAlreadyInFlight() throws Exception {
+		mockMvc.perform(post("/internal/v1/collection-tasks")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(minimalRequest().replace("\"page\": 1", "\"page\": 2")))
+				.andExpect(status().isAccepted());
+		receiveSearchTask();
+
+		String pagesRequest = """
+				{
+				  "merchant": "29cm",
+				  "query": "구두",
+				  "startPage": 2,
+				  "pageCount": 1,
+				  "filters": {
+				    "sizes": ["270"],
+				    "inStockOnly": true
+				  }
+				}
+				""";
+
+		mockMvc.perform(post("/internal/v1/collection-tasks/pages")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(pagesRequest))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("DUPLICATE_COLLECTION_TASK"));
+		assertThat(rabbitTemplate.receive(CollectionQueueNames.SEARCH_TASK_QUEUE)).isNull();
 	}
 
 	/**

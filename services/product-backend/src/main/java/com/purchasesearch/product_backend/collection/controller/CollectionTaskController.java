@@ -16,6 +16,7 @@ import com.purchasesearch.product_backend.collection.dto.CollectionTaskRequest;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse;
 import com.purchasesearch.product_backend.collection.dto.CollectionTaskResponse.ErrorResponse;
 import com.purchasesearch.product_backend.collection.exception.CollectionTaskPublishException;
+import com.purchasesearch.product_backend.collection.exception.DuplicateCollectionTaskException;
 import com.purchasesearch.product_backend.collection.exception.InvalidCollectionTaskException;
 import com.purchasesearch.product_backend.collection.service.CollectionTaskPublisher;
 
@@ -68,6 +69,10 @@ public class CollectionTaskController {
 				description = "입력 또는 현재 지원 범위 위반",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(
+				responseCode = "409",
+				description = "동일 조건 작업이 이미 QUEUED 또는 RUNNING으로 진행 중",
+				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+		@ApiResponse(
 				responseCode = "503",
 				description = "RabbitMQ 발행 실패",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
@@ -77,27 +82,30 @@ public class CollectionTaskController {
 	}
 
 	/**
-	 * 같은 판매처와 검색어의 연속 페이지를 개별 Queue 작업으로 등록한다.
+	 * 같은 판매처와 검색어의 연속 페이지를 개별 Queue 작업으로 등록한다. job 등록까지만 이
+	 * 메서드가 동기로 기다리고, 실제 RabbitMQ 발행은 배경 스레드가 처리한다(페이지마다
+	 * broker confirm을 순서대로 기다리면 페이지 수가 많을 때 HTTP 타임아웃을 넘길 수 있기
+	 * 때문). 실제 발행 성공/실패는 {@code GET /internal/v1/collection-jobs/{jobId}}로 조회한다.
 	 *
 	 * @param request 시작 페이지, 페이지 수와 공통 검색 조건
-	 * @return 공통 jobId와 실제 발행된 페이지 범위
+	 * @return 공통 jobId와 접수된 페이지 범위
 	 * @throws InvalidCollectionTaskException 페이지 범위나 검색 조건이 지원 범위를 벗어난 경우
-	 * @throws CollectionTaskPublishException RabbitMQ가 일부 또는 전체 작업 발행을 확인하지 못한 경우
 	 */
 	@PostMapping("/pages")
 	@ResponseStatus(HttpStatus.ACCEPTED)
 	@Operation(
 			summary = "여러 페이지 검색 수집 작업 등록",
-			description = "연속된 검색 페이지를 같은 jobId의 CollectionTask v1 작업으로 나눠 RabbitMQ에 등록합니다.")
+			description = "연속된 검색 페이지를 같은 jobId의 CollectionTask v1 작업으로 등록하고, 실제 RabbitMQ 발행은 배경"
+					+ " 스레드에 맡긴 뒤 즉시 202를 반환합니다. 발행 결과는 jobId로 조회하세요.")
 	@ApiResponses({
-		@ApiResponse(responseCode = "202", description = "모든 페이지 작업 Queue 접수 성공"),
+		@ApiResponse(responseCode = "202", description = "모든 페이지 작업 job 등록 성공(실제 발행은 배경에서 진행)"),
 		@ApiResponse(
 				responseCode = "400",
 				description = "입력 또는 최대 200페이지 범위 위반",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
 		@ApiResponse(
-				responseCode = "503",
-				description = "RabbitMQ 발행 실패이며 일부 앞 페이지는 이미 접수됐을 수 있음",
+				responseCode = "409",
+				description = "요청한 페이지가 모두 이미 진행 중인 동일 조건 작업과 중복",
 				content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
 	})
 	public BulkCollectionTaskResponse publishPages(
@@ -131,6 +139,20 @@ public class CollectionTaskController {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidTask(InvalidCollectionTaskException exception) {
 		return new ErrorResponse("INVALID_COLLECTION_TASK", exception.getMessage());
+	}
+
+	/**
+	 * 이미 진행 중인 동일 조건 작업과의 중복을 409 응답으로 변환한다.
+	 * {@link CollectionTaskPublishException}의 하위 타입이지만 Spring이 더 구체적인 타입을
+	 * 우선 매칭하므로 503이 아닌 이 handler가 적용된다.
+	 *
+	 * @param exception 중복 거부 예외
+	 * @return 오류 코드와 설명
+	 */
+	@ExceptionHandler(DuplicateCollectionTaskException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleDuplicateTask(DuplicateCollectionTaskException exception) {
+		return new ErrorResponse("DUPLICATE_COLLECTION_TASK", exception.getMessage());
 	}
 
 	/**
