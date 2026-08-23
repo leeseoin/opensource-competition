@@ -217,16 +217,12 @@ class Cm29Crawler(SiteCrawler):
     def _save_json(self, payload: dict, keyword: str, page: int, ts_file: str) -> None:
         """29CM 검색 JSON 원본을 실행 시각과 페이지별 파일로 저장한다."""
 
-        try:
-            _JSON_DIR.mkdir(parents=True, exist_ok=True)
-            safe_keyword = "".join(c if c not in r'\/:*?"<>|' else "_" for c in keyword)
-            output = _JSON_DIR / f"29cm_{safe_keyword}_{ts_file}_page{page}.json"
-            output.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except OSError:
-            pass
+        _JSON_DIR.mkdir(parents=True, exist_ok=True)
+        output = _JSON_DIR / f"29cm_{keyword}_{ts_file}_page{page}.json"
+        output.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     async def crawl_category(
         self, category: str, max_items: int
