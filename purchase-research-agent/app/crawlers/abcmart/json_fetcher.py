@@ -81,9 +81,13 @@ class AbcJsonFetcher:
         if not isinstance(raw_items, list) or not isinstance(page_info, dict):
             raise RuntimeError("ABC마트 JSON에서 SEARCH 또는 PAGE를 찾지 못했습니다")
 
-        _JSON_DIR.mkdir(parents=True, exist_ok=True)
-        output = _JSON_DIR / f"abcmart_{keyword}_{ts_file}_page{page}.json"
-        output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            _JSON_DIR.mkdir(parents=True, exist_ok=True)
+            safe_keyword = "".join(c if c not in r'\/:*?"<>|' else "_" for c in keyword)
+            output = _JSON_DIR / f"abcmart_{safe_keyword}_{ts_file}_page{page}.json"
+            output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError:
+            pass
 
         final_page = int(page_info.get("finalPageNo") or page)
         return AbcJsonPage(

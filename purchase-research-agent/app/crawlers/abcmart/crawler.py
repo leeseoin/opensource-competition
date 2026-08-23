@@ -25,9 +25,13 @@ _HTML_DIR = Path("output/raw_html/abcmart")
 
 
 def _save_html(html: str, label: str, page: int, ts_file: str) -> None:
-    _HTML_DIR.mkdir(parents=True, exist_ok=True)
-    out = _HTML_DIR / f"abcmart_{label}_{ts_file}_page{page}.html"
-    out.write_text(html, encoding="utf-8")
+    try:
+        _HTML_DIR.mkdir(parents=True, exist_ok=True)
+        safe_label = "".join(c if c not in r'\/:*?"<>|' else "_" for c in label)
+        out = _HTML_DIR / f"abcmart_{safe_label}_{ts_file}_page{page}.html"
+        out.write_text(html, encoding="utf-8")
+    except OSError:
+        pass
 
 # 카테고리명 -> (ctgrNo, genderGbnCode). 2026-08-15에 검색 결과 페이지 HTML에 박혀있는
 # 전역 카테고리 nav(depth2/depth3 제목)를 파싱해 채운 목록이다(9종 -> 대분류/중분류
