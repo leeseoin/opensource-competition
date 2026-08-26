@@ -127,7 +127,7 @@
 | `OPS-002` | CI/보안/관측 가능성 | 부분 구현 | P1 | 계약 검사, unit/integration, 문서 동기화, 로그, metric과 보안 점검 | PR에서 필수 검사가 자동 실행되고 운영 오류를 request/job ID로 추적함 | 시스템 구조 / 데이터 수집과 DB 적재 설계 | Python Swagger 단계 검증 기반 완료 / 계약 CI와 구조화 로그 |
 | `OPS-003` | 기능 ID 기반 개발 추적 | 완료 | P1 | 기능 목록, 코드트래커, 진행상황 감사 스킬과 AGENTS 실행 규칙 | 세 스킬 형식 검증이 통과하고 하나의 기능 ID로 계획/변경/상태를 연결함 | [기능 ID 추적 프로세스](../development/기능_ID_기반_개발_추적_프로세스.md) | 새 기능 구현마다 코드트래커와 진행상황 감사를 같은 흐름으로 유지 |
 | `OPS-004` | Python/Go 크롤러 확장성과 성능 비교 | 완료 | P1 | 동일 비교 Contract, 최대 10,000개 pagination/checkpoint 수집, parser 및 E2E benchmark | Python/Go가 같은 fixture 계약을 통과하고 판매처별 실제 수집량/중복/오류/시간/CPU/메모리 보고서를 재현함 | [Python/Go 크롤러 비교 설계](../architecture/Python_Go_크롤러_확장성과_성능_비교_설계.md) | 새 판매처 또는 수집 방식 변경 시 같은 조건으로 회귀 측정 |
-| `RUNTIME-001` | 여러 AI 실행 환경 지원 | 부분 구현 | P2 | Codex/Claude Code CLI, Ollama, llama.cpp와 GPU model server adapter | 동일 MCP 도구 계약을 유지하며 실행 환경을 설정으로 교체하고 평가 결과를 비교함 | 시스템 구조 | Claude 로그인 E2E와 stream/취소 후 로컬 model adapter 설계 |
+| `RUNTIME-001` | 여러 AI 실행 환경 지원 | 부분 구현 | P2 | Codex/Claude Code CLI, Ollama, llama.cpp와 GPU model server adapter | 동일 MCP 도구 계약을 유지하며 실행 환경을 설정으로 교체하고 평가 결과를 비교함 | 시스템 구조 | 2026-08-26 점검 / Claude 로그인 E2E와 stream/취소 후 로컬 model adapter 설계 |
 
 ## 다음 우선순위
 
