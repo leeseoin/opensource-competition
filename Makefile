@@ -20,6 +20,7 @@ export COLLECTOR_IDLE_TIMEOUT COLLECTOR_SHUTDOWN_TIMEOUT COLLECTOR_WORKER_TIMEOU
 export PRODUCT_BACKEND_BASE_URL PRODUCT_BACKEND_REQUEST_TIMEOUT_MS
 export EMBEDDING_PROVIDER EMBEDDING_BASE_URL EMBEDDING_MODEL EMBEDDING_MODEL_VERSION EMBEDDING_TIMEOUT_MS
 export CODEX_CLI_PATH CODEX_GATEWAY_TIMEOUT_MS PURCHASE_RESEARCH_REPO_ROOT PURCHASE_RESEARCH_MCP_ENTRY
+export CLAUDE_CLI_PATH CLAUDE_GATEWAY_TIMEOUT_MS
 
 COLLECTOR_DIR := services/collector
 PRODUCT_BACKEND_DIR := services/product-backend
@@ -45,7 +46,7 @@ REDIS_URL ?= $(PURCHASE_RESEARCH_REDIS_URL)
 	python-crawler-env python-crawler-sync python-crawler-setup python-crawler-run python-crawler-swagger python-crawler-worker python-crawler-worker-once python-crawler-test python-crawler-rabbitmq-test python-crawler-safety-check \
 	product-backend-run product-backend-test \
 	mcp-server-install mcp-server-build mcp-server-test \
-	web-install web-dev web-test web-lint web-build retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
+	web-install web-dev web-test web-lint web-build ai-runtime-check retrieval-eval-check retrieval-ab-report retrieval-perf-test wiki-check branch-common-check docs-check test check
 
 help: ## 사용할 수 있는 명령을 보여준다.
 	@printf '%s\n' \
@@ -72,6 +73,7 @@ help: ## 사용할 수 있는 명령을 보여준다.
 		'  make product-backend-test Spring Boot 테스트 실행' \
 		'  make mcp-server-test MCP Server 빌드와 계약 테스트' \
 		'  make web-dev         Next.js 개발 서버 실행' \
+		'  make ai-runtime-check Codex/Claude 설치와 로그인 상태 확인' \
 		'  make retrieval-eval-check 60개 검색 평가 data 검사' \
 		'  make retrieval-ab-report 기존 AND와 현재 FTS 질문별 A/B 검토표 생성' \
 		'  make docs-check      의존성/AI 설정과 공개 문서 동기화 검사' \
@@ -175,6 +177,9 @@ web-install: mcp-server-install ## package-lock.json 기준으로 MCP Server와 
 
 web-dev: mcp-server-build ## MCP Server를 빌드한 뒤 Next.js 개발 서버를 실행한다.
 	cd $(WEB_DIR) && npm run dev -- --port $(WEB_PORT)
+
+ai-runtime-check: ## Codex/Claude CLI 설치와 server 계정 로그인 상태를 확인한다.
+	./scripts/check-ai-runtimes.sh
 
 web-test: ## Codex Adapter와 Next.js server route 단위 테스트를 실행한다.
 	cd $(WEB_DIR) && npm test

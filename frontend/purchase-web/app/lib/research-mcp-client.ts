@@ -3,11 +3,11 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-import type { AgentRunResponse, PurchaseCondition, ResearchSessionResponse } from "./research-session.ts";
+import type { AgentRunResponse, AgentRuntime, PurchaseCondition, ResearchSessionResponse } from "./research-session.ts";
 
 /** ResearchMcpOperations는 Route Handler와 실제 MCP client가 공유하는 도구 경계다. */
 export interface ResearchMcpOperations {
-  createSession(question: string, conditions: PurchaseCondition): Promise<ResearchSessionResponse>;
+  createSession(question: string, conditions: PurchaseCondition, runtime: AgentRuntime): Promise<ResearchSessionResponse>;
   confirmSession(sessionId: string, conditions: PurchaseCondition): Promise<ResearchSessionResponse>;
   searchCandidates(sessionId: string): Promise<ResearchSessionResponse>;
   startAgentRun(sessionId: string, merchants?: string[]): Promise<AgentRunResponse>;
@@ -73,8 +73,12 @@ function parseAgentRunResult(result: Awaited<ReturnType<Client["callTool"]>>): A
 /** StdioResearchMcpClient는 요청마다 MCP process를 열고 닫아 잔여 process를 남기지 않는다. */
 export class StdioResearchMcpClient implements ResearchMcpOperations {
   /** AI 구매 조건을 MCP를 통해 DRAFT 조사 세션으로 저장한다. */
-  createSession(question: string, conditions: PurchaseCondition): Promise<ResearchSessionResponse> {
-    return this.callSession("create_research_session", { question, conditions });
+  createSession(
+    question: string,
+    conditions: PurchaseCondition,
+    runtime: AgentRuntime,
+  ): Promise<ResearchSessionResponse> {
+    return this.callSession("create_research_session", { question, conditions, runtime });
   }
 
   /** 사용자 확인 조건을 MCP를 통해 CONFIRMED 상태로 저장한다. */

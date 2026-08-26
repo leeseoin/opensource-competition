@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-15
+최종 갱신일: 2026-08-24
 
 ## 이 문서를 공개하는 이유
 
@@ -41,8 +41,15 @@
 - MCP의 상태 기반 Agent Run 도구는 확정 세션의 DB 우선 검색, 필요한 수집, 재검색과
   선택 상품 재검증을 Product Backend REST API에 위임한다. 실행 상태와 사건은
   PostgreSQL에 저장하며 MCP와 Web은 제한된 polling만 수행한다.
-- Next.js Agent Gateway는 server에서 Codex CLI를 읽기 전용/비대화형으로 실행해
-  `PurchaseCondition` JSON만 생성하고 Plugin skill 규칙을 prompt에 적용한다.
+- Next.js Agent Gateway는 server에서 Codex CLI 또는 Claude Code CLI를 비대화형으로 실행해
+  `PurchaseCondition` JSON만 생성하고 같은 Plugin skill 규칙을 prompt에 적용한다.
+- Claude Code 경로는 built-in tool을 빈 목록으로 제한하고 session을 저장하지 않는다. 사용자 질문,
+  Plugin 조건 구조화 규칙과 JSON Schema만 Anthropic 서비스에 전송하며 DB 상품, 가격/재고,
+  인증정보와 MCP 응답은 조건 구조화 단계에 전송하지 않는다.
+- Claude runtime은 model을 코드나 환경변수로 지정하지 않고 로그인된 Claude Code CLI의
+  기본 model 선택을 따른다. 실행 위치는 Next.js server이며 model weight는 공개되지 않았고
+  저장소에 포함하지 않는다. 제출 및 배포 검증 때 CLI 결과의 실제 model ID를 확인해 대회
+  model 공개 양식에 기록한다.
 - Agent Gateway는 색상 완화 문맥과 특정 모델명이 잘못 분류된 경우를 결정론적으로
   보정한다. 보정 전후 조건은 사용자가 확인하며 상품 사실을 생성하지 않는다.
 - Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
@@ -57,7 +64,9 @@
   Ollama endpoint다. 가격/재고/옵션/개인정보는 embedding 입력에 포함하지 않는다.
 - embedding adapter는 기본 비활성화 상태다. model 없음/timeout/응답 계약 오류 시
   PostgreSQL 전문 검색과 trigram 검색만 사용하며 weight를 이 저장소에 포함하지 않는다.
-- Claude Code 연동, Ollama, llama.cpp 및 GPU model server는 계획 단계다.
+- Claude Code 조건 구조화 adapter와 Web/MCP/Backend runtime 전달은 구현됐다. 현재 개발 장비의
+  Claude Code CLI 2.1.211은 설치 확인됐으나 server 계정 로그인이 없어 실제 model 응답 E2E는 보류됐다.
+  Ollama, llama.cpp 및 GPU model server는 계획 단계다.
 - 현재 저장소에 직접 포함한 AI model weight는 없다.
 - runtime model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 기록한다.
 
@@ -76,6 +85,7 @@
 
 | 날짜 | 내용 | 검토 방법 |
 |---|---|---|
+| 2026-08-24 | Codex를 사용해 Claude Code CLI 구매 조건 구조화 adapter와 Web/MCP/Backend runtime 전달을 구현 | Claude 도구 비활성화, JSON Schema 출력, 인증정보 비노출을 unit/contract/integration test와 production build로 검증 / Claude Code CLI 2.1.211 설치 확인, 미로그인으로 실제 model 응답은 보류 |
 | 2026-07-30 | 최초 AI 사용 공개 문서 작성 / Codex와 Claude Code 개발 보조 범위 및 runtime AI 미구현 상태 기록 | 저장소 구조, 현재 manifest, 운영규정 7쪽 제9조 제4항과 제5항 대조 |
 | 2026-07-30 | Codex를 사용해 Product Backend의 Flyway/JPA 저장과 조회 API를 구현하고 package-by-feature 구조로 수정 | 사용자가 package 구조를 결정하고 diff 검토 및 Testcontainers integration test 수행 |
 | 2026-07-31 | Codex를 사용해 기능 ID 목록, 코드트래커, 진행상황 점검 스킬과 문서 추적 절차를 구성 | 사용자가 제안한 문서 역할을 세 스킬로 분리하고 스킬 형식 검사, 문서 동기화 검사 및 diff 검토 |

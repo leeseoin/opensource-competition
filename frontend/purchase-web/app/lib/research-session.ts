@@ -1,4 +1,7 @@
 import type { ProductCandidateResponse } from "./product-candidates.ts";
+import type { AgentRuntime } from "./agent-runtime.ts";
+
+export type { AgentRuntime } from "./agent-runtime.ts";
 
 /** ConditionPriority는 후보 제외용 필수 조건과 순위용 선호 조건을 구분한다. */
 export type ConditionPriority = "required" | "preferred";
@@ -42,7 +45,7 @@ export interface PurchaseCondition {
 export interface ResearchSessionResponse {
   sessionId: string;
   question: string;
-  runtime: "codex";
+  runtime: AgentRuntime;
   pluginId: "purchase-research-agent";
   status: "DRAFT" | "CONFIRMED";
   conditions: PurchaseCondition;
@@ -153,11 +156,14 @@ export function isPurchaseCondition(value: unknown): value is PurchaseCondition 
 }
 
 /** browser에서 조건 초안 생성을 Next.js Agent Gateway에 요청한다. */
-export async function createResearchDraft(question: string): Promise<ResearchSessionResponse> {
+export async function createResearchDraft(
+  question: string,
+  runtime: AgentRuntime = "codex",
+): Promise<ResearchSessionResponse> {
   const response = await fetch("/api/research/conditions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, runtime: "codex" }),
+    body: JSON.stringify({ question, runtime }),
   });
   const body = await response.json() as ResearchSessionResponse & { message?: string };
   if (!response.ok) {

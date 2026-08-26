@@ -28,7 +28,11 @@ npm run dev
 
 기본 주소는 [http://localhost:3000](http://localhost:3000)이다. 화면 진입점은
 `app/page.tsx`다. DB 상품을 확인하려면 PostgreSQL과 Product Backend를 먼저 실행하고
-로컬 계정에서 Codex CLI 로그인을 완료해야 한다.
+로컬 계정에서 사용할 Codex CLI 또는 Claude Code CLI 로그인을 완료해야 한다.
+
+처음 받은 저장소에서는 루트 `make ai-runtime-check`로 두 CLI의 설치와 인증 상태를
+확인한다. 하나 이상이 `READY`여야 자연어 질문을 실행할 수 있으며, Plugin 규칙과 MCP
+Server는 저장소에 포함돼 있어 CLI에 별도로 등록하지 않는다.
 
 ```bash
 make infra-up
@@ -37,9 +41,10 @@ make web-dev WEB_PORT=2500
 ```
 
 `make web-dev`는 stdio MCP Server를 먼저 빌드한다. Next.js server가 사용할 Product Backend
-주소, Codex CLI 경로와 timeout은 루트 `.env`의 `PRODUCT_BACKEND_BASE_URL`,
-`CODEX_CLI_PATH`, `CODEX_GATEWAY_TIMEOUT_MS`로 변경할 수 있다. 이 값에는 `NEXT_PUBLIC_`
-접두사를 붙이지 않는다.
+주소와 AI CLI 설정은 루트 `.env`의 `PRODUCT_BACKEND_BASE_URL`, `CODEX_CLI_PATH`,
+`CODEX_GATEWAY_TIMEOUT_MS`, `CLAUDE_CLI_PATH`, `CLAUDE_GATEWAY_TIMEOUT_MS`로
+변경할 수 있다. Claude를 처음 사용할 때는 server 계정에서 `claude`를 실행하고 `/login`을
+완료한다. 이 값에는 `NEXT_PUBLIC_` 접두사를 붙이지 않는다.
 
 ## 검증
 
@@ -49,5 +54,5 @@ npm test
 npm run build
 ```
 
-실제 E2E에서는 `/chat`에서 Codex를 선택하고 질문을 보낸 뒤 AI 조건 카드를 수정하거나
+실제 E2E에서는 `/chat`에서 Codex 또는 Claude Code를 선택하고 질문을 보낸 뒤 AI 조건 카드를 수정하거나
 확인한다. `이 조건으로 검색`을 누른 뒤에만 MCP와 PostgreSQL 검색 단계가 실행된다.

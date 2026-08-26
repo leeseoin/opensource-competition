@@ -3,26 +3,20 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { isPurchaseCondition, type PurchaseCondition } from "./research-session.ts";
+import { AgentRuntimeError, type AgentCommandRunner } from "./agent-runtime.ts";
 
 const DEFAULT_TIMEOUT_MS = 90_000;
 const MAX_OUTPUT_BYTES = 1_000_000;
 let activeExecutions = 0;
 
 /** CodexCommandRunner는 실제 process와 테스트 대역이 공유하는 실행 경계다. */
-export type CodexCommandRunner = (
-  args: string[],
-  input: string,
-  options: { cwd: string; timeoutMs: number },
-) => Promise<string>;
+export type CodexCommandRunner = AgentCommandRunner;
 
 /** CodexRuntimeError는 AI 실행 실패 유형을 API 상태로 변환할 수 있게 보존한다. */
-export class CodexRuntimeError extends Error {
-  readonly code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED";
-
+export class CodexRuntimeError extends AgentRuntimeError {
   /** AI 실행 오류 코드와 사용자에게 노출 가능한 설명을 생성한다. */
   constructor(code: "AI_UNAVAILABLE" | "AI_OUTPUT_INVALID" | "AI_AUTH_REQUIRED", message: string) {
-    super(message);
-    this.code = code;
+    super(code, message);
     this.name = "CodexRuntimeError";
   }
 }
@@ -58,7 +52,7 @@ export function classifyCodexProcessFailure(stderr: string): CodexRuntimeError {
 }
 
 /** 저장소 표식 파일을 찾을 때까지 상위 디렉토리를 탐색한다. */
-function findRepositoryRoot(start = process.cwd()): string {
+export function findRepositoryRoot(start = process.cwd()): string {
   if (process.env.PURCHASE_RESEARCH_REPO_ROOT) {
     return path.resolve(process.env.PURCHASE_RESEARCH_REPO_ROOT);
   }
@@ -191,7 +185,7 @@ function promoteProductModelRequirement(condition: PurchaseCondition): PurchaseC
 }
 
 /** 명시 색상의 강도와 productType의 색상 중복을 검색 정책에 맞게 보정한다. */
-function normalizePurchaseCondition(condition: PurchaseCondition, question: string): PurchaseCondition {
+export function normalizePurchaseCondition(condition: PurchaseCondition, question: string): PurchaseCondition {
   const promoted = promoteProductModelRequirement(condition);
   let productType = promoted.productType.value.trim();
   for (const color of promoted.colors) {
@@ -216,15 +210,9 @@ function normalizePurchaseCondition(condition: PurchaseCondition, question: stri
 }
 
 /** 사용자 질문을 Plugin 규칙과 공통 Schema에 따라 구매 조건 JSON으로 구조화한다. */
-export async function structurePurchaseQuestion(
-  question: string,
-  runner: CodexCommandRunner = runCodexCommand,
-): Promise<PurchaseCondition> {
-  const root = findRepositoryRoot();
-  const schemaPath = path.join(root, "contracts/research/v1/purchase-condition.codex-output.schema.json");
-  const skillPath = path.join(root, "plugins/purchase-research-agent/skills/purchase-research/SKILL.md");
-  const pluginRules = readFileSync(skillPath, "utf8");
-  const prompt = [
+/** buildPurchaseConditionPrompt는 모든 CLI runtime에 동일한 Plugin 규칙과 사용자 질문을 제공한다. */
+export function buildPurchaseConditionPrompt(question: string, pluginRules: string): string {
+  return [
     "당신은 Purchase Research Agent의 구매 조건 구조화 단계다.",
     "아래 Plugin 규칙을 적용하되 상품을 검색하거나 사실을 추측하지 않는다.",
     pluginRules,
@@ -242,6 +230,17 @@ export async function structurePurchaseQuestion(
     "사용자 질문:",
     question,
   ].join("\n\n");
+}
+
+export async function structurePurchaseQuestion(
+  question: string,
+  runner: CodexCommandRunner = runCodexCommand,
+): Promise<PurchaseCondition> {
+  const root = findRepositoryRoot();
+  const schemaPath = path.join(root, "contracts/research/v1/purchase-condition.codex-output.schema.json");
+  const skillPath = path.join(root, "plugins/purchase-research-agent/skills/purchase-research/SKILL.md");
+  const pluginRules = readFileSync(skillPath, "utf8");
+  const prompt = buildPurchaseConditionPrompt(question, pluginRules);
   let output: string;
   if (activeExecutions >= 1) {
     throw new CodexRuntimeError("AI_UNAVAILABLE", "다른 Codex 구매 조건 요청을 처리하고 있습니다.");

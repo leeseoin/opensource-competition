@@ -297,7 +297,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] 구매 질문·근거·재검증 skill workflow 초안 작성
 - [x] Next.js server에서 동작하는 공통 Agent Gateway
 - [ ] Codex CLI adapter와 JSON event stream 중계 **(부분 구현: 구조화 JSON 완료, stream 남음)**
-- [ ] Claude Code CLI adapter와 stream 중계
+- [ ] Claude Code CLI adapter와 stream 중계 **(부분 구현: 구조화 JSON과 runtime 전달 완료 / stream과 로그인 E2E 남음)**
 - [ ] 대화 session, timeout, 취소와 동시 요청 상한 **(부분 구현: DB session과 process timeout 완료)**
 - [ ] 장기 서비스용 OpenAI API Agent 교체 경계
 - [ ] Python MCP SDK 의존성 추가
@@ -2419,6 +2419,40 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 남은 위험: 용량/소재/규격/저장 용량은 아직 판매처 상세 옵션과 연결되지 않았고,
   신발 외 전체 상품군 오병합률/중복 카드율/옵션 출처 누락률은 고정 fixture로 측정하지 않았다.
 
+### 2026-08-24 RUNTIME-001 Claude Code CLI 조건 구조화
+
+- 진행상황: **부분 구현**. `/chat`에서 Codex 또는 Claude Code를 선택하고 같은 구매 조건
+  계약, MCP Server와 Product Backend 조사 세션을 사용하도록 연결했다. Claude stream과
+  로그인된 실제 model 응답 E2E는 남아 있다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/agent-runtime.ts:3` `AgentRuntime`: 공통 runtime과 오류 계약
+  - `frontend/purchase-web/app/lib/claude-runtime.ts:145` `structurePurchaseQuestionWithClaude`:
+    도구 없는 비대화형 JSON Schema 출력, CLI 기본 model 사용, timeout과 동시 실행 상한
+  - `frontend/purchase-web/app/api/research/conditions/handler.ts:40` `handleConditionsRequest`:
+    Codex/Claude 분기와 runtime 유지
+  - `services/mcp-server/src/index.ts:76` `create_research_session`: runtime enum을 Backend에 전달
+  - `services/product-backend/src/main/java/com/purchasesearch/product_backend/research/dto/ResearchSessionRequest.java:17`
+    `ResearchSessionRequest`: Claude 조사 세션 허용
+  - `frontend/purchase-web/app/lib/claude-runtime.test.ts:27` `Claude를 도구 없는 구조화 출력 모드로 실행한다`:
+    CLI 권한, Schema와 prompt 계약 회귀 검증
+  - `scripts/check-ai-runtimes.sh:15` `check_codex`와 `check_claude`: 최초 사용자의 CLI 설치와
+    server 계정 인증 상태를 `READY/AUTH_REQUIRED/NOT_INSTALLED`로 구분
+- 발생 문제: 공통 Codex 출력 Schema를 Claude CLI에 그대로 전달하면 draft 2020-12 식별자를
+  해석하지 못해 실행 전에 거절됐고, 미로그인 오류는 stderr가 아니라 JSON stdout에 반환됐다.
+- 원인: Claude CLI의 `--json-schema` 해석 범위와 오류 envelope가 Codex CLI와 달랐다.
+- 해결: 도메인 Schema 내용은 유지하되 CLI에 넘길 복사본에서 `$schema` 식별자만 제거했다.
+  실패 분류는 제한된 stdout/stderr를 함께 검사하고 원문은 browser에 노출하지 않는다.
+- 검증:
+  - `cd frontend/purchase-web && npm test && npm run lint && npm run build`: 72개 및 전체 통과
+  - `cd services/mcp-server && npm test`: 4개 통과
+  - `cd services/product-backend && ./gradlew test`: 전체 통과
+  - `make docs-check`: 통과
+  - Claude Code CLI 2.1.211 실제 process 실행: Schema 수락 후 `AI_AUTH_REQUIRED` 안전 변환 확인
+  - `make ai-runtime-check`: Codex 0.147.0 `READY`, Claude Code 2.1.211 `AUTH_REQUIRED` 확인
+  - Codex 0.147.0 실제 구조화 호출: 운동화/15만 원/출근 선호 조건 JSON 생성 성공
+- 남은 위험: server 계정에서 Claude `/login`을 완료한 뒤 실제 조건 JSON, MCP DRAFT 저장과
+  후보 검색 E2E를 확인해야 한다. stream/취소는 두 CLI 모두 후속 범위다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -2444,3 +2478,4 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
 - 실제 browser 기반 구매 질문 E2E와 접근성 검증
+- 로그인된 Claude Code CLI의 조건 구조화/MCP/후보 검색 E2E

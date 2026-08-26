@@ -20,6 +20,7 @@ import {
   advanceAgentRun,
   verifyAgentRunOffer,
   type AgentRunResponse,
+  type AgentRuntime,
   type ConditionPriority,
   type PrioritizedText,
   type PurchaseCondition,
@@ -30,6 +31,7 @@ import styles from "./page.module.css";
 const defaultQuestion = "출근할 때 신을 검정 구두가 필요해. 10만 원 이하이고 270 사이즈였으면 좋겠어.";
 const runtimeOptions: AppSelectOption[] = [
   { value: "codex", label: "Codex CLI + Purchase Research Plugin" },
+  { value: "claude", label: "Claude Code CLI + Purchase Research Plugin" },
 ];
 const priorityOptions: AppSelectOption[] = [
   { value: "required", label: "필수" },
@@ -158,10 +160,10 @@ function ShoppingProductCard({
   );
 }
 
-/** ChatExperience는 Codex 조건 구조화부터 사용자 확인과 MCP 상품 검색까지 제공한다. */
+/** ChatExperience는 선택한 AI의 조건 구조화부터 사용자 확인과 MCP 상품 검색까지 제공한다. */
 export default function ChatExperience() {
   const [question, setQuestion] = useState(defaultQuestion);
-  const [runtime, setRuntime] = useState<"codex">("codex");
+  const [runtime, setRuntime] = useState<AgentRuntime>("codex");
   const [session, setSession] = useState<ResearchSessionResponse | null>(null);
   const [agentRun, setAgentRun] = useState<AgentRunResponse | null>(null);
   const [conditions, setConditions] = useState<PurchaseCondition | null>(null);
@@ -171,7 +173,7 @@ export default function ChatExperience() {
   const [listPriorities, setListPriorities] = useState<ListConditionPriorities>(defaultListPriorities);
   const [verifyingProductId, setVerifyingProductId] = useState<number | null>(null);
 
-  /** 자연어 질문을 Codex에 전달하고 검색하지 않은 DRAFT 조건만 표시한다. */
+  /** 자연어 질문을 선택한 AI에 전달하고 검색하지 않은 DRAFT 조건만 표시한다. */
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const nextQuestion = question.trim();
@@ -186,7 +188,7 @@ export default function ChatExperience() {
     setSelectedListings({});
     setListPriorities(defaultListPriorities);
     try {
-      const draft = await createResearchDraft(nextQuestion);
+      const draft = await createResearchDraft(nextQuestion, runtime);
       setSession(draft);
       setConditions(draft.conditions);
       setListPriorities(listPrioritiesFromConditions(draft.conditions));
@@ -351,7 +353,7 @@ export default function ChatExperience() {
         <nav aria-label="사용자 메뉴">
           <Link href="/chat">상품 탐색</Link>
           <a href="#conditions">조건 확인</a>
-          <span>CODEX / MCP</span>
+          <span>AI CLI / MCP</span>
         </nav>
       </header>
 
@@ -374,7 +376,7 @@ export default function ChatExperience() {
                     ariaLabel="실행 환경"
                     value={runtime}
                     options={runtimeOptions}
-                    onValueChange={() => setRuntime("codex")}
+                    onValueChange={(value) => setRuntime(value as AgentRuntime)}
                     tone="lime"
                   />
                 </label>

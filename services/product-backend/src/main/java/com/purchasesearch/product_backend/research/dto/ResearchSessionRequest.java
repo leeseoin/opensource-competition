@@ -16,7 +16,7 @@ import jakarta.validation.constraints.Size;
  */
 public record ResearchSessionRequest(
 		@NotBlank @Size(max = 1000) String question,
-		@NotBlank @Pattern(regexp = "^codex$") String runtime,
+		@NotBlank @Pattern(regexp = "^(codex|claude)$") String runtime,
 		@NotBlank @Pattern(regexp = "^purchase-research-agent$") String pluginId,
 		@NotNull @Valid PurchaseCondition conditions) {
 }

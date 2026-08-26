@@ -4,6 +4,9 @@ export type ConditionPriority = "required" | "preferred";
 /** ConditionDerivation은 정규화 값의 생성 근거를 구분한다. */
 export type ConditionDerivation = "original" | "rule" | "dictionary" | "wiki" | "fuzzy" | "llm";
 
+/** AgentRuntime은 조사 세션을 만든 서버측 AI 실행 환경이다. */
+export type AgentRuntime = "codex" | "claude";
+
 /** PrioritizedText는 구매 조건 값과 사용자가 확인할 강도를 함께 표현한다. */
 export interface PrioritizedText {
   value: string;
@@ -40,7 +43,7 @@ export interface PurchaseCondition {
 export interface ResearchSessionResponse {
   sessionId: string;
   question: string;
-  runtime: "codex";
+  runtime: AgentRuntime;
   pluginId: "purchase-research-agent";
   status: "DRAFT" | "CONFIRMED";
   conditions: PurchaseCondition;
@@ -89,12 +92,16 @@ export class ProductBackendClient {
   ) {}
 
   /** AI가 구조화한 조건을 DRAFT 조사 세션으로 저장한다. */
-  createSession(question: string, conditions: PurchaseCondition): Promise<ResearchSessionResponse> {
+  createSession(
+    question: string,
+    conditions: PurchaseCondition,
+    runtime: AgentRuntime,
+  ): Promise<ResearchSessionResponse> {
     return this.call("/internal/v1/research-sessions", {
       method: "POST",
       body: JSON.stringify({
         question,
-        runtime: "codex",
+        runtime,
         pluginId: "purchase-research-agent",
         conditions,
       }),

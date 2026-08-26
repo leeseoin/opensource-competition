@@ -25,10 +25,10 @@ test("DRAFT 조사 세션 생성 요청을 Product Backend에 전달한다", asy
     return Response.json({ sessionId: "a", status: "DRAFT" });
   });
 
-  await client.createSession("검정 구두를 찾아줘", conditions);
+  await client.createSession("검정 구두를 찾아줘", conditions, "claude");
   assert.deepEqual(JSON.parse(requestBody), {
     question: "검정 구두를 찾아줘",
-    runtime: "codex",
+    runtime: "claude",
     pluginId: "purchase-research-agent",
     conditions,
   });

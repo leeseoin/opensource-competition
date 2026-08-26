@@ -77,6 +77,41 @@ docs/
 
 외부 라이브러리와 container image의 출처 및 license는 [Third-Party Notices](THIRD_PARTY_NOTICES.md), Codex/Claude Code 사용 범위와 사람의 검토 방법은 [AI Usage](AI_USAGE.md)에 공개한다. 대회 운영규정이 이 파일명을 직접 요구한 것은 아니며, 저장소에서 관련 근거를 지속적으로 공개하기 위해 프로젝트가 선택한 관리 방식이다.
 
+## 처음 실행하는 사용자
+
+자연어 질문 기능은 저장소에 인증정보를 포함하지 않는다. 소스를 처음 받은 사용자는
+Codex CLI 또는 Claude Code CLI 중 하나 이상을 자신의 계정으로 설치하고 로그인해야 한다.
+Plugin 규칙과 MCP Server는 저장소에 포함돼 있으므로 별도 Plugin 설치나 MCP 등록은 필요 없다.
+
+1. [OpenAI 공식 Codex CLI 안내](https://developers.openai.com/codex/cli/)에 따라 Codex를
+   설치하고 `codex`를 실행해 `Sign in with ChatGPT`를 선택한다.
+2. [Anthropic 공식 Claude Code 안내](https://docs.anthropic.com/en/docs/claude-code/getting-started)에
+   따라 Claude Code를 설치하고 `claude` 실행 후 `/login`을 수행한다.
+3. 저장소 루트에서 설치와 로그인 상태를 확인한다.
+
+```bash
+make env
+make ai-runtime-check
+```
+
+출력에서 하나 이상이 `READY`면 `/chat`을 사용할 수 있다. `AUTH_REQUIRED`는 CLI는 있지만
+로그인이 필요하다는 뜻이고, `NOT_INSTALLED`는 해당 CLI가 없다는 뜻이다. 두 runtime을 모두
+설치할 필요는 없다. 인증정보는 browser와 저장소에 저장하지 않고 Next.js server를 실행한
+로컬 계정의 CLI 인증을 사용한다.
+
+영상 또는 전체 로컬 기능을 한 번에 확인할 때는 터미널 두 개에서 실행한다.
+
+```bash
+# 터미널 1: 인프라, Spring Boot, Python API와 Worker
+make python-crawler-swagger
+
+# 터미널 2: MCP build와 Next.js
+make web-dev WEB_PORT=2500
+```
+
+수집 대시보드는 `http://localhost:2500/admin/collections`, 구매 질문 화면은
+`http://localhost:2500/chat`에서 확인한다.
+
 ## 로컬 인프라 실행
 
 루트 환경변수 예제를 복사하고 PostgreSQL, Redis, RabbitMQ를 실행한다.
