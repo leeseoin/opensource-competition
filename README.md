@@ -181,3 +181,8 @@ make check
 서비스별 설명은 [Go Collector](services/collector/README.md), [Product Backend](services/product-backend/README.md), [MCP Server](services/mcp-server/README.md)에서 확인한다.
 
 주의: PostgreSQL 공식 이미지는 DB를 처음 만드는 시점에만 DB 이름과 계정 정보를 적용한다. 이미 생성된 Docker Volume을 유지한 채 `.env`의 사용자, 비밀번호, DB 이름만 바꾸면 기존 DB에는 자동 반영되지 않는다.
+
+## 라이선스
+
+이 프로젝트의 직접 작성 코드는 [MIT License](LICENSE)로 배포한다. 외부 구성요소와 자료의
+라이선스 및 권리 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 확인한다.

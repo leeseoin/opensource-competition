@@ -2453,6 +2453,30 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 남은 위험: server 계정에서 Claude `/login`을 완료한 뒤 실제 조건 JSON, MCP DRAFT 저장과
   후보 검색 E2E를 확인해야 한다. stream/취소는 두 CLI 모두 후속 범위다.
 
+### 2026-08-26 OPS-002 문서 동기화 대규모 diff 오탐 수정
+
+- 진행상황: **부분 구현**. 622개 파일을 포함한 `develop`에서 `main` 통합 PR에서도 공개
+  문서 동기화 검사가 정확히 동작하도록 수정했다. 계약 CI, 구조화 로그, metric과 운영 보안
+  점검은 남아 있다.
+- 구현 위치:
+  - `scripts/check-document-sync.sh:41` `의존성 및 AI 문서 동기화 검사`: 긴 변경 파일 목록을
+    here-string으로 전달해 `grep -q` 조기 종료에 따른 broken pipe 오탐 방지
+- 발생 문제: `THIRD_PARTY_NOTICES.md`와 `AI_USAGE.md`가 변경됐는데도 GitHub Actions가
+  공개 문서 누락으로 판정했다.
+- 원인: `set -o pipefail`과 `printf | grep -q` 조합에서 `grep` 조기 종료 후 `printf`가
+  broken pipe로 실패했다.
+- 해결: 생산자 process가 없는 here-string 입력으로 교체해 기존 정규식과 실패 계약을
+  유지했다.
+- 검증:
+  - `bash -n scripts/check-document-sync.sh`: 통과
+  - `DOC_SYNC_CHANGED_FILES="$(git diff --name-only origin/main...HEAD)" ./scripts/check-document-sync.sh`:
+    대규모 통합 PR 변경 목록으로 통과
+  - `make docs-check`: 통과
+  - `git diff --check`: 통과
+- 구현 commit/기록: `f7048db` /
+  `docs/reports/코드트래커/2026-08-26-OPS-002-문서_동기화_대규모_diff.md:1`
+- 남은 위험: `OPS-002` 완료 기준 중 계약 CI, 구조화 로그, metric과 운영 보안 점검은 미완료다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
