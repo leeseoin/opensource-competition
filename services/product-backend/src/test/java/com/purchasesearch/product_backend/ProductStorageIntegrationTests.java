@@ -830,6 +830,21 @@ class ProductStorageIntegrationTests {
 	}
 
 	/**
+	 * Claude Code가 만든 조사 세션도 동일한 조건 계약으로 저장되는지 검증한다.
+	 *
+	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우
+	 */
+	@Test
+	void createsClaudeDraftResearchSession() throws Exception {
+		mockMvc.perform(post("/internal/v1/research-sessions")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(researchSessionRequest("[]").replace("\"runtime\": \"codex\"", "\"runtime\": \"claude\"")))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.runtime").value("claude"))
+				.andExpect(jsonPath("$.status").value("DRAFT"));
+	}
+
+	/**
 	 * 사용자가 조건을 확인하기 전에 검색을 요청하면 DB 상품 노출 없이 409로 차단하는지 검증한다.
 	 *
 	 * @throws Exception HTTP 요청 또는 JSON 처리에 실패한 경우

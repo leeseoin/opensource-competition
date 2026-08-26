@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-최종 갱신일: 2026-08-16
+최종 갱신일: 2026-08-24
 
 ## 이 문서를 공개하는 이유
 
@@ -129,6 +129,11 @@ Docker image에는 Alpine Linux와 여러 system package가 포함되므로 위 
 
 - `plugins/purchase-research-agent`는 이 저장소에서 직접 작성 중인 Codex Plugin이다.
 - `services/mcp-server`는 공식 MCP TypeScript SDK와 Zod를 사용해 stdio 도구를 제공한다.
+- 선택적 Claude runtime은 server에 별도 설치한 Anthropic Claude Code CLI 2.1.211을 호출한다.
+  model은 로그인된 CLI의 기본 선택을 따르며 제공자는 Anthropic, 실행 위치는 Anthropic의
+  외부 서비스이고 model weight는 비공개다. CLI와 model은 저장소 및 배포 artifact에 포함하지
+  않고 [Anthropic Claude Code 설정 문서](https://docs.anthropic.com/en/docs/claude-code/getting-started)와
+  서비스 이용 조건을 따른다. 제출 전 배포 장비의 실제 CLI/model version과 적용 약관을 다시 확인한다.
 - 선택적 로컬 embedding adapter는 `BAAI/bge-m3`를 Ollama `bge-m3:567m` tag로 호출한다.
   BGE-M3는 1024차원/다국어 공개 weight model이며 [BAAI model card](https://huggingface.co/BAAI/bge-m3)에
   MIT로 표시돼 있다. weight는 저장소와 Docker image에 포함하지 않으며 제출 전 Ollama manifest

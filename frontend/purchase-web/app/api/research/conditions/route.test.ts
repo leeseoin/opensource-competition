@@ -72,6 +72,32 @@ test("Codex 조건을 MCP DRAFT 세션으로 저장한다", async () => {
   assert.equal((await response.json()).status, "DRAFT");
 });
 
+/** Claude 선택값을 구조화 실행기와 MCP 조사 세션까지 그대로 전달하는지 검증한다. */
+test("Claude 조건을 Claude runtime DRAFT 세션으로 저장한다", async () => {
+  let structuredRuntime = "";
+  let storedRuntime = "";
+  const response = await handleConditionsRequest(new Request("http://localhost/api/research/conditions", {
+    method: "POST",
+    body: JSON.stringify({ question: "갈색 로퍼", runtime: "claude" }),
+  }), {
+    structure: async (_question, runtime) => {
+      structuredRuntime = runtime;
+      return testConditions;
+    },
+    mcp: mcpStub({
+      createSession: async (_question, conditions, runtime) => {
+        storedRuntime = runtime;
+        return { ...sessionResponse(conditions), runtime };
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(structuredRuntime, "claude");
+  assert.equal(storedRuntime, "claude");
+  assert.equal((await response.json()).runtime, "claude");
+});
+
 /** 조건이 부족하면 missingConditions를 유지한 DRAFT를 반환하는지 검증한다. */
 test("부족한 구매 조건을 사용자 확인 대상으로 반환한다", async () => {
   const missing = { ...testConditions, missingConditions: ["사이즈"] };

@@ -1,4 +1,6 @@
-import { CodexRuntimeError, structurePurchaseQuestion } from "../../../lib/codex-runtime.ts";
+import { AgentRuntimeError, type AgentRuntime } from "../../../lib/agent-runtime.ts";
+import { structurePurchaseQuestionWithClaude } from "../../../lib/claude-runtime.ts";
+import { structurePurchaseQuestion } from "../../../lib/codex-runtime.ts";
 import { ResearchMcpError, StdioResearchMcpClient, type ResearchMcpOperations } from "../../../lib/research-mcp-client.ts";
 import type { PurchaseCondition } from "../../../lib/research-session.ts";
 
@@ -7,14 +9,16 @@ interface ConditionsRequestBody {
   runtime?: unknown;
 }
 
-/** ConditionsDependencies는 Route Handler에서 Codex와 MCP를 테스트 대역으로 교체한다. */
+/** ConditionsDependencies는 Route Handler에서 AI runtime과 MCP를 테스트 대역으로 교체한다. */
 export interface ConditionsDependencies {
-  structure(question: string): Promise<PurchaseCondition>;
+  structure(question: string, runtime: AgentRuntime): Promise<PurchaseCondition>;
   mcp: ResearchMcpOperations;
 }
 
 const defaultDependencies: ConditionsDependencies = {
-  structure: structurePurchaseQuestion,
+  structure: (question, runtime) => runtime === "claude"
+    ? structurePurchaseQuestionWithClaude(question)
+    : structurePurchaseQuestion(question),
   mcp: new StdioResearchMcpClient(),
 };
 
@@ -26,8 +30,8 @@ function validateRequest(body: ConditionsRequestBody): string | null {
   if (body.question.length > 1000) {
     return "question은 1000자 이하여야 합니다.";
   }
-  if (body.runtime !== "codex") {
-    return "현재 지원하는 AI 실행 환경은 codex뿐입니다.";
+  if (body.runtime !== "codex" && body.runtime !== "claude") {
+    return "runtime은 codex 또는 claude여야 합니다.";
   }
   return null;
 }
@@ -50,10 +54,11 @@ export async function handleConditionsRequest(
 
   try {
     const question = (body.question as string).trim();
-    const conditions = await dependencies.structure(question);
-    return Response.json(await dependencies.mcp.createSession(question, conditions));
+    const runtime = body.runtime as AgentRuntime;
+    const conditions = await dependencies.structure(question, runtime);
+    return Response.json(await dependencies.mcp.createSession(question, conditions, runtime));
   } catch (error) {
-    if (error instanceof CodexRuntimeError) {
+    if (error instanceof AgentRuntimeError) {
       return Response.json({ code: error.code, message: error.message }, {
         status: error.code === "AI_OUTPUT_INVALID" ? 502 : 503,
       });

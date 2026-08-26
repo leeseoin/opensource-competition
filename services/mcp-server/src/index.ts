@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { ProductBackendClient, type PurchaseCondition } from "./backend-client.js";
+import { ProductBackendClient, type AgentRuntime, type PurchaseCondition } from "./backend-client.js";
 
 const prioritySchema = z.enum(["required", "preferred"]);
 const derivationSchema = z.enum(["original", "rule", "dictionary", "wiki", "fuzzy", "llm"]);
@@ -77,11 +77,15 @@ async function main(): Promise<void> {
     "create_research_session",
     {
       description: "AI가 구조화한 구매 조건을 사용자 확인 전 DRAFT 조사 세션으로 저장한다.",
-      inputSchema: { question: z.string().min(1).max(1000), conditions: conditionSchema },
+      inputSchema: {
+        question: z.string().min(1).max(1000),
+        runtime: z.enum(["codex", "claude"]),
+        conditions: conditionSchema,
+      },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
-    async ({ question, conditions }) => toToolResult(
-      await client.createSession(question, conditions as PurchaseCondition),
+    async ({ question, runtime, conditions }) => toToolResult(
+      await client.createSession(question, conditions as PurchaseCondition, runtime as AgentRuntime),
     ),
   );
 

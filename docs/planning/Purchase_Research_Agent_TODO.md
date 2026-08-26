@@ -221,15 +221,15 @@
 ### 5.2 Codex·Claude Code 실행 경계
 
 - [x] browser와 Client Component가 CLI를 실행하지 않고 Next.js server Agent Gateway만 실행하도록 경계 구현
-- [x] 공통 `AI Runtime Adapter` 계약 정의 **(Codex 구현, 다음 runtime이 같은 경계 사용)**
+- [x] 공통 `AI Runtime Adapter` 계약 정의 **(Codex와 Claude Code가 같은 경계 사용)**
 - [x] AI 구조화 출력용 `PurchaseCondition` JSON Schema 정의
 - [x] 하위 호환 공용 계약과 Codex CLI 엄격 출력 Schema 분리 및 실제 호출 검증
 - [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
 - [ ] Codex CLI adapter와 stream 중계 구현 **(부분 구현: 읽기 전용 JSON 구조화와 timeout 완료, stream/취소/동시성 상한 남음)**
-- [ ] Claude Code CLI adapter와 stream 중계 구현
+- [ ] Claude Code CLI adapter와 stream 중계 구현 **(부분 구현: 도구 없는 구조화 JSON, timeout과 동시성 상한 완료 / stream과 실제 로그인 E2E 남음)**
 - [ ] 요청별 process, 대화 session, timeout, 취소 정책 정의
 - [x] Codex Plugin 규칙과 공통 MCP 조사 세션 workflow 연결
-- [ ] Claude Code에서 같은 MCP Server 연결 검증
+- [ ] Claude Code에서 같은 MCP Server 연결 검증 **(Web 선택값과 MCP/Backend 계약 전달 자동 검증 / 실제 로그인 E2E 남음)**
 - [x] Agent 인증 정보와 실행 권한을 browser에 노출하지 않는 server 전용 구성
 - [x] Codex 인증 만료와 일반 실행 실패에서 child process stderr 및 Plugin prompt 비노출
 - [ ] MCP 도구 호출과 최종 답변의 근거 누락 contract test
@@ -274,7 +274,7 @@
 - [ ] Astryx AI Chat Conversation 템플릿을 가능한 그대로 적용
 - [x] 정적인 사용자 질문/Agent 답변 예제와 상품 비교 화면 구현
 - [ ] 데스크톱/모바일 브라우저에서 `/chat`과 `/compare` 수동 화면 검증
-- [x] Codex 실행 환경 선택 UI **(Claude Code는 계획 단계임을 선택 항목에서 제외)**
+- [x] Codex/Claude Code 실행 환경 선택 UI
 - [ ] 채팅 입력, 메시지 목록, 응답 stream 표시
 - [x] DB 상품 검색과 MCP 도구 실행 상태 표시
 - [ ] 오른쪽 상품 비교·근거 panel
@@ -417,8 +417,8 @@
 
 - [ ] Phase 5의 공통 `AI Runtime Adapter`를 API·로컬 모델까지 확장
 - [ ] Codex CLI 연결부 회귀 테스트
-- [ ] Claude Code 연결부 회귀 테스트
-- [ ] Codex·Claude Code 공통 규칙과 명령어 원본 위치 결정
+- [x] Claude Code 연결부 회귀 테스트 **(실행 인자/Schema envelope/오류/MCP runtime 계약 자동 검증)**
+- [x] Codex/Claude Code 공통 규칙과 명령어 원본 위치 결정 **(Plugin skill과 공통 prompt builder)**
 - [ ] Rulesync와 AgentSync 최소 예제 비교
 - [ ] 선택한 설정 동기화 도구의 CI 검증 추가
 - [ ] Ollama REST API 연결부
