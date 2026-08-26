@@ -1,0 +1,53 @@
+{
+  "requestId": "research-20260714-002",
+  "operation": "product",
+  "status": "partial",
+  "merchant": "musinsa",
+  "totalCount": null,
+  "hasNext": null,
+  "collectedAt": "2026-07-14T10:05:00+09:00",
+  "collectorVersion": "musinsa-v1",
+  "products": [
+    {
+      "externalId": "product-67890",
+      "name": "베이직 플레인토 구두",
+      "brand": null,
+      "categoryPath": ["신발", "구두"],
+      "productUrl": "https://www.musinsa.com/products/67890",
+      "imageUrls": [],
+      "price": {
+        "amount": 79000,
+        "currency": "KRW"
+      },
+      "shipping": {
+        "fee": null,
+        "summary": null,
+        "provenance": {
+          "sourceUrl": "https://www.musinsa.com/products/67890",
+          "collectedAt": "2026-07-14T10:05:00+09:00",
+          "collectorVersion": "musinsa-v1"
+        }
+      },
+      "stockStatus": "unknown",
+      "rating": null,
+      "reviewCount": null,
+      "options": [],
+      "measurements": {},
+      "reviews": [],
+      "provenance": {
+        "sourceUrl": "https://www.musinsa.com/products/67890",
+        "collectedAt": "2026-07-14T10:05:00+09:00",
+        "collectorVersion": "musinsa-v1"
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "code": "OPTIONS_NOT_COLLECTED",
+      "message": "동적 옵션 영역을 확인하지 못했습니다.",
+      "retryable": true,
+      "sourceUrl": "https://www.musinsa.com/products/67890"
+    }
+  ],
+  "errors": []
+}

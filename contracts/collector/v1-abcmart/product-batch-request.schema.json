@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/v1-abcmart/product-batch-request.schema.json",
+  "title": "Product Batch Request v1-abcmart",
+  "description": "purchase-research-backend의 POST /api/v1/products/batch 요청 본문(ProductBatchRequest)과 1:1로 대응한다. DTO: com.purchaseresearch.backend.dto.ProductBatchRequest/ProductPayload/OptionsPayload/ReviewPayload. DDL: purchase-research-backend/src/main/resources/db/migration/V1__init_schema.sql, V2__product_site_to_site_type.sql. 이 스키마를 통과하면 실제 Spring 검증(@NotBlank 등)과 MySQL 컬럼 제약(VARCHAR 길이, NOT NULL)도 통과한다. site는 여전히 문자열로 주고받지만 DB에는 SiteType 코드(정수)로 저장된다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["site", "products"],
+  "properties": {
+    "site": {
+      "type": "string",
+      "enum": ["abcmart", "29cm"],
+      "description": "com.purchaseresearch.backend.domain.SiteType의 key와 반드시 일치해야 한다. DB에는 이 문자열이 아니라 SiteType.code(정수)로 저장된다 — SiteType에 사이트를 추가할 때 이 enum도 같이 갱신할 것."
+    },
+    "keyword": {
+      "type": ["string", "null"]
+    },
+    "collectedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "누락 시 서버가 LocalDateTime.now()로 대체한다."
+    },
+    "products": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/productPayload" }
+    }
+  },
+  "$defs": {
+    "productPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceProductId", "title", "link"],
+      "properties": {
+        "sourceProductId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "brand": {
+          "type": ["string", "null"],
+          "maxLength": 100
+        },
+        "price": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "크롤러의 '89,000원' 문자열을 CrawlTriggerService.parsePrice()로 파싱한 정수. DB product.price는 nullable INT지만 not-null이면 price_history row도 함께 생긴다."
+        },
+        "priceOriginal": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "discountPercent": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "imageUrl": {
+          "type": ["string", "null"],
+          "maxLength": 500
+        },
+        "styleCode": {
+          "type": ["string", "null"],
+          "maxLength": 50
+        },
+        "link": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "options": {
+          "oneOf": [
+            { "$ref": "#/$defs/optionsPayload" },
+            { "type": "null" }
+          ]
+        },
+        "reviews": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/reviewPayload" }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "optionsPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "colors": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "maxLength": 50 }
+        },
+        "sizes": {
+          "type": ["array", "null"],
+          "items": { "type": "string", "maxLength": 50 }
+        }
+      }
+    },
+    "reviewPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewSourceId"],
+      "properties": {
+        "reviewSourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "DB product_review.review_source_id VARCHAR(50) NOT NULL, UNIQUE(product_id, review_source_id)."
+        },
+        "content": {
+          "type": ["string", "null"]
+        },
+        "score": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 5,
+          "description": "DB product_review.score DECIMAL(3,1)."
+        },
+        "reviewDate": {
+          "type": ["string", "null"],
+          "format": "date"
+        },
+        "size": {
+          "type": ["string", "null"],
+          "maxLength": 20
+        }
+      }
+    }
+  }
+}

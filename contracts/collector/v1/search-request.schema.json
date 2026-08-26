@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/v1/search-request.schema.json",
+  "title": "Collector Search Request v1",
+  "description": "Spring Boot Product Backend가 Go Collector에 전달하는 판매처 상품 검색 요청이다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["requestId", "merchant", "query", "requestedAt"],
+  "properties": {
+    "requestId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "merchant": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}-[A-Z]{2}$",
+      "default": "ko-KR"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "default": "KRW"
+    },
+    "filters": {
+      "$ref": "#/$defs/searchFilters"
+    }
+  },
+  "$defs": {
+    "nonEmptyStringList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "uniqueItems": true,
+      "maxItems": 50
+    },
+    "attributeValue": {
+      "oneOf": [
+        { "type": "string", "maxLength": 200 },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "$ref": "#/$defs/nonEmptyStringList" }
+      ]
+    },
+    "searchFilters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priceMin": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "priceMax": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categories": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "sizes": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "colors": {
+          "$ref": "#/$defs/nonEmptyStringList"
+        },
+        "inStockOnly": {
+          "type": "boolean",
+          "default": false
+        },
+        "attributes": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/attributeValue"
+          },
+          "maxProperties": 30
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "sourceId": "sports-shoe-category-observation-20260808",
+  "sourceType": "repository_snapshot",
+  "uri": "knowledge/raw/snapshots/sports-shoe-category-observation-20260808.json",
+  "sha256": "48f269bc1e92093c4d9e93b7f14e99d1dd44ce16362b6d2ebef4182be7ea9d1b",
+  "collectedAt": "2026-08-08T21:16:00+09:00",
+  "license": "merchant facts are evidence references and are not relicensed",
+  "containsMerchantFacts": true
+}

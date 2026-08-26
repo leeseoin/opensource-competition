@@ -2,183 +2,143 @@
 
 ## 프로젝트 개요
 
-- 프로젝트명: AgentPay Guard
-- 목적: AI Agent가 유료 API, 구독형 서비스, 크레딧 기반 서비스, 사용량 기반 외부 리소스를 사용하기 전에 사용자 intent, 예산, 허용 서비스, 위험 요소를 검증하고 감사 가능한 기록을 남기는 보안 게이트웨이 PoC를 구현한다.
-- 핵심 방향: 실제 결제 시스템이 아니라 mock 결제와 감사 hash anchoring을 사용하는 PoC이다.
-- 현재 상태: PoC 초기 구현 진행 중. API server, audit anchor, dashboard, sample agent 기본 구조가 생성되어 있으며, 구현된 기능과 planned 항목을 문서에서 구분한다.
-- 주요 결정:
-  - DB: PostgreSQL
-  - Dashboard: React + TypeScript
-  - Mock Merchant: 1차 PoC에서는 API server 내부 모듈로 구현
-  - Blockchain: Hardhat local node 우선, 테스트넷 배포는 optional
-  - eventHash: 정렬된 canonical JSON envelope + SHA-256
-  - 구현 프로젝트는 `opensource-competition` 저장소 루트 하위 디렉토리로 둔다.
+- 프로젝트명: Purchase Research Agent(가칭)
+- 목적: 자연어 구매 조건을 구체화하고 실제 판매처의 공개 상품·리뷰 정보를 근거 기반으로 비교·재검증한다.
+- 현재 상태: Python ABC마트/29CM Collector와 RabbitMQ Queue v1 Worker 구현, Go Collector는 전환 비교 기준으로 유지, Spring Boot Product Backend의 작업 발행/결과 소비/Flyway/JPA 저장/작업 상태 DB 및 상품 조회 API 구현, MCP/Web은 부분 구현
+- 핵심 기술: Python, Go, Java, Spring Boot, MCP, Next.js, React, PostgreSQL, RabbitMQ, Redis
 
-## 현재 상태
+## 구성요소 책임
 
-- 완료:
-  - AgentPay Guard 기획안 작성
-  - PoC 범위 정의
-  - 작업 목록 및 일정 초안 작성
-  - 고도화 방향 정리
-  - Spring Boot API server 기본 구현
-  - Hardhat + Solidity AuditAnchor 로컬 구현
-  - React + TypeScript dashboard 초기 화면
-  - Python sample agent 초기 구현
-- 진행 중:
-  - API server 정책/감사/anchoring 흐름 고도화
-  - sample agent와 API server v1 Guard API 연결
-  - dashboard와 API server 연동 준비
-- 다음 작업:
-  - DB entity/repository 기반 영속화
-  - Payment Request 목록 API
-  - Approval 상태 전이 실제 반영
-  - Audit Anchor 조회/검증 API
-  - Dashboard API client 연결
-  - Sample Agent demo scenario 정리
+- `purchase-research-agent`: Python. 전환 대상 Collector runtime, 외부 판매처 검색/상세/옵션/리뷰 parsing과 RabbitMQ Queue v1 작업 처리
+- `services/collector`: Go. 전환 비교와 복구 기준, 판매처 접근 안전성/rate limit/timeout/retry 구현
+- `services/product-backend`: Java/Spring Boot. 상품 조회 API, RabbitMQ 작업 orchestration과 결과 소비, 데이터 검증/정규화, PostgreSQL 적재, 리뷰 신호 추출, 비교/재검증
+- `services/mcp-server`: MCP. Codex/Claude Code가 사용할 도구를 제공하고 Product Backend REST API를 호출하는 얇은 연결 계층
+- `frontend/purchase-web`: Next.js + React. `/chat` 사용자 챗봇과 `/admin/collections` 수집 관리 화면, Agent Gateway, 진행 상태, 비교, 근거, 검증 결과 표시
+- `plugins/purchase-research-agent`: Codex plugin. PoC에서 구매 질문과 MCP tool 호출 workflow를 담당
 
-## 실행/검증
+## 핵심 경계
 
-로컬 PostgreSQL 실행:
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition
-docker compose up -d postgres
-```
-
-API server 테스트:
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-api-server
-./gradlew test
-```
-
-Audit anchor 테스트:
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-audit-anchor
-nvm use
-npm test
-```
-
-Dashboard 빌드:
-
-```bash
-cd /Users/iseoin/Golang_project/opensource-competition/agentpay-guard-dashboard
-npm run build
-```
-
-현재 구현:
-
-- API 서버: Spring Boot 기반으로 부분 구현됨
-- Sample Agent: Python 기반으로 초기 구현됨
-- Smart Contract: Hardhat + Solidity 기반으로 부분 구현됨
-- Dashboard: React + TypeScript 기반으로 초기 화면 구현됨
-- DB: PostgreSQL + Flyway 초기 schema 구현됨
-
-검증 기준:
-
-- 정상 허용, 예산 초과 차단, 승인 필요 시나리오가 end-to-end로 동작해야 한다.
-- 주요 이벤트 hash가 생성되고 AuditAnchor 컨트랙트에 기록되어야 한다.
-- 대시보드 또는 API에서 txHash와 hash 검증 상태를 확인할 수 있어야 한다.
-
-## 프로젝트 구조
-
-현재 구조:
-
-```text
-agentpay-guard-api-server/
-agentpay-guard-dashboard/
-agentpay-guard-sample-agent/
-agentpay-guard-audit-anchor/
-docs/
-  README.md
-  overview/
-  architecture/
-  planning/
-  policies/
-  archive/
-```
-
-구현 프로젝트 구조:
-
-```text
-opensource-competition/
-  agentpay-guard-api-server/       # Spring Boot API, policy engine, mock merchant
-  agentpay-guard-dashboard/        # React + TypeScript dashboard
-  agentpay-guard-sample-agent/     # Python sample agent
-  agentpay-guard-audit-anchor/     # Solidity contract, Hardhat tests, deploy scripts
-  docs/                            # 기획, 설계, 작업 계획
-```
-
-API server Java package 구조:
-
-```text
-com.agentpayguard.api
-  controller/{approval,guard,merchant,payment}
-  dto/{anchor,approval,audit,guard,merchant,payment,policy}
-  service/{anchor,approval,audit,guard,merchant,payment,policy}
-  config
-```
-
-API server는 layer-first 구조를 사용한다. 새 클래스는 `payment/PaymentService`처럼 도메인 먼저 두지 않고, `service/payment/PaymentService`처럼 역할별 패키지 아래에 둔다. DB 영속화가 추가되면 `entity/payment`, `repository/payment` 구조를 사용한다.
+- 외부 판매처에는 활성 Collector Worker만 접근한다. Python/Go Worker를 같은 검색 Queue에서 동시에 실행하지 않는다.
+- PostgreSQL의 최종 쓰기는 Spring Boot Product Backend만 수행한다.
+- MCP Server는 판매처, PostgreSQL, RabbitMQ에 직접 접근하지 않고 Product Backend REST API만 호출한다.
+- RabbitMQ는 수집 작업·결과 전달에 사용하고 Redis를 두 번째 작업 Queue로 사용하지 않는다.
+- Redis는 판매처별 속도 제한, 중복 방지, 짧은 진행 상태와 캐시에 사용한다.
+- browser의 Next.js UI와 Codex Plugin은 크롤러나 DB를 직접 호출하지 않는다.
+- PoC에서 최종 사용자 질문은 Next.js server의 Codex Gateway를 거쳐 Codex로 전달한다.
+- Codex 실행 권한과 인증정보는 browser에 노출하지 않고 server에서만 관리한다.
+- Python/Go Collector는 판매처별 `CollectorResult`를 반환하고 최종 추천을 판단하지 않는다.
+- Product Backend는 Collector가 제공하지 않은 판매처 사실을 생성하지 않는다.
+- Codex는 구조화된 근거를 설명하며 상품 사실을 추측하지 않는다.
 
 ## 작업 원칙
 
 - 기존 사용자 변경을 되돌리지 않는다.
-- 문서의 구현 상태는 실제 코드 상태와 구분한다. 아직 없는 기능은 `planned` 또는 `예정`으로 표시한다.
-- 실제 결제, 카드, 계좌, PG, 메인넷 자산 이동은 PoC 범위에 포함하지 않는다.
-- 블록체인에는 원문 데이터나 개인정보를 올리지 않는다. eventHash만 기록한다.
-- 1차 PoC 블록체인은 Hardhat local node를 기준으로 한다. 테스트넷 배포는 시간이 남을 때 optional로 다룬다.
-- API key, private key, RPC secret, 지갑 mnemonic 등 민감 정보는 커밋하지 않는다.
-- DB schema 변경은 직접 DB에서만 처리하지 않고 Flyway migration으로 남긴다.
-- Docker PostgreSQL volume은 개인 로컬 상태로 보고 공유하지 않는다. 협업용 DB 상태는 migration과 seed SQL로 재현한다.
-- Agent가 외부 API key를 직접 보유하는 구조를 기본 설계로 두지 않는다. Guard가 정책 검증 후 외부 리소스를 호출하는 proxy/gateway 구조를 우선한다.
-- 정책 엔진은 1차 PoC에서 규칙 기반으로 구현한다. LLM 기반 판단은 고도화 항목으로 둔다.
-- 구현할 때는 시연 가능한 end-to-end 흐름을 우선하고, 금융 서비스 수준 기능은 제외한다.
-- 새로 추가하거나 의미 있게 수정하는 클래스와 함수에는 역할을 설명하는 주석을 남긴다.
-- 주석은 "무엇을 하는지"보다 "왜 필요한지", "어떤 책임을 가지는지", "어떤 입력/출력 계약을 갖는지"를 설명한다.
-- 단순 getter/setter, record 필드만 가진 DTO, 프레임워크 boilerplate처럼 코드만으로 의미가 분명한 경우에는 불필요한 반복 주석을 달지 않는다.
-- 보안, 결제 흐름, 정책 판단, 감사 hash, 블록체인 연동, 외부 프로세스/RPC 호출, 상태 전이 로직은 반드시 클래스 또는 함수 단위 주석으로 의도를 남긴다.
-- `agentpay-guard-dashboard`의 프론트엔드 화면이나 컴포넌트를 수정할 때는 `agentpay-guard-dashboard/DESIGN.md`를 먼저 읽고 디자인 규칙을 따른다.
+- 구현된 기능과 planned 기능을 문서에서 구분한다.
+- 한국어 문서와 사용자 설명에서는 가운데점 문장 부호를 사용하지 않는다.
+- 항목을 나란히 표현할 때는 `/`를 사용하고, 문장을 연결할 때는 `및`, `과`, `와`처럼 문맥에 맞는 표현을 사용한다.
+- 로그인, CAPTCHA, robots 제한, 접근 통제를 우회하지 않는다.
+- 공개적으로 접근 가능한 상품 정보만 수집한다.
+- 판매처별 동시성·요청 빈도·timeout·재시도 상한을 둔다.
+- 가격·재고·옵션에는 `sourceUrl`, `collectedAt`, `collectorVersion`을 포함한다.
+- 추천 snapshot과 구매 전 verification snapshot을 분리한다.
+- 리뷰 작성자 이름·프로필 등 식별정보는 저장하지 않는다.
+- 리뷰 이미지는 내려받지 않고 사진 존재 여부와 공개 출처 참조만 저장한다.
+- LLM 추출값은 `derived`와 confidence를 기록하고 공식 정보와 구분한다.
+- API key, cookie, session, 개인 정보는 커밋하지 않는다.
+- Java는 Java 21과 서비스 내부 Gradle Wrapper를 사용한다.
 
-## Review guidelines
+## Spring Boot 패키지 규칙
 
-- 모든 GitHub Pull Request 코드 리뷰는 한국어로 작성한다.
-- 발견 사항은 심각도 순서로 정렬하고, 가능한 경우 파일 경로와 line을 함께 적는다.
-- 보안, 민감정보, API 계약 불일치, 결제/감사/블록체인 연동 오류를 우선적으로 확인한다.
-- 단순 스타일 의견보다 실제 버그, 회귀, 테스트 누락, 운영 위험을 우선한다.
-- 이슈가 없으면 "주요 이슈 없음"이라고 한국어로 명확히 작성한다.
+- `services/product-backend`는 기술 계층보다 업무 도메인을 먼저 나누는 package-by-feature 구조를 사용한다.
+- 최상위 업무 package는 `product`, `collection`, `evidence`처럼 기능 이름으로 구분한다.
+- 각 업무 package 안에서 필요한 경우 `controller`, `dto`, `entity`, `repository`, `service`, `exception`으로 역할을 나눈다.
+- 여러 도메인에서 실제로 공유하는 코드만 `common`에 둔다. 한 곳에서만 사용하는 코드를 미리 `common`으로 옮기지 않는다.
+- 팀 합의 없이 최상위 package를 `application`, `domain`, `infrastructure`, `interfaces` 계층으로 나누지 않는다.
 
-## POC 핵심 시나리오
+## Git 브랜치 규칙
 
-1. 정상 허용:
-   - 허용된 merchant와 예산 안의 요청을 `ALLOW` 처리한다.
-   - mock 결제를 성공 처리하고 감사 hash를 기록한다.
-2. 예산 초과 차단:
-   - 총 예산을 넘는 요청을 `DENY` 처리한다.
-   - 실제 외부 리소스 호출 또는 mock 결제는 실행하지 않는다.
-3. 승인 필요:
-   - 기준 금액을 초과한 요청을 `REQUIRE_APPROVAL` 처리한다.
-   - 사용자 승인 후 mock 결제를 실행하고, 거절 시 차단한다.
+- 전체 작업 방식은 `docs/development/Git_브랜치_작업_방식.md`를 따른다.
+- `sandbox/ls`는 서인의 개인 실험 브랜치이며 `develop`으로 직접 PR을 만들지 않는다.
+- `sandbox/ls`에서 검증한 작업은 필요한 커밋만 `dev-ls`로 옮긴다.
+- `dev-ls`와 `dev-jw`는 개인별 검토 가능 작업 브랜치이며 PR의 base는 `develop`으로 지정한다.
+- `develop`은 협업 통합 및 테스트 브랜치이며 직접 기능 개발과 직접 push를 피한다.
+- `main`은 안정 브랜치이며 검증된 `develop` PR만 반영한다.
+- 공유 브랜치에서 강제 push가 필요한 rebase보다 `origin/develop` 일반 merge를 우선한다.
+- 브랜치를 전환하기 전에 `git status --short`로 커밋되지 않은 사용자 변경을 확인한다.
+- Codex가 코드, 문서, 설계 또는 검증에 실질적으로 참여한 커밋에는 커밋 본문 마지막에 `Co-authored-by: OpenAI Codex <codex@openai.com>` trailer를 반드시 포함한다.
 
-## 문서 관리
+## 코드 주석 규칙
 
-- 문서 인덱스: `docs/README.md`
-- 프로젝트 개요와 범위: `docs/overview/AgentPay_Guard_기획안.md`, `docs/overview/AgentPay_Guard_PoC_범위.md`
-- 구성요소 쉬운 설명: `docs/overview/AgentPay_Guard_구성요소_쉬운설명.md`
-- 작업 목록과 일정: `docs/planning/AgentPay_Guard_작업목록.md`
-- 구현 아키텍처: `docs/architecture/AgentPay_Guard_시스템_아키텍처.md`
-- 디렉토리별 개발 계획: `docs/planning/AgentPay_Guard_디렉토리별_개발계획.md`
-- 디렉토리별 ToDo: `docs/planning/AgentPay_Guard_디렉토리별_TODO.md`
-- DB 협업 정책: `docs/policies/AgentPay_Guard_DB_협업_정책.md`
-- 고도화 항목: `docs/overview/AgentPay_Guard_고도화_방향.md`
+- 새로 만들거나 수정하는 class, struct, interface, type, function, method에는 한국어 주석을 작성한다.
+- Go의 exported symbol 주석은 해당 심볼 이름으로 시작하고 책임, 주요 입력·출력, 실패 조건을 설명한다.
+- Python은 class/function/method에 한국어 docstring을 작성하고 책임, 인자, 반환값, 발생 가능한 예외를 설명한다.
+- Java는 class/interface/method에 한국어 Javadoc을 작성하고 책임, 주요 인자, 반환값, 발생 가능한 예외를 설명한다.
+- TypeScript/React는 component, hook, class, named function에 한국어 TSDoc 또는 바로 위 주석을 작성한다.
+- 테스트 함수에도 검증 목적을 설명하는 한국어 주석을 작성한다.
+- Go의 모든 `*_test.go`는 `services/collector/tests/unit` 또는 `services/collector/tests/integration` 아래에 둔다.
+- `services/collector/internal`에는 실행에 사용되는 실제 코드만 두고, 테스트는 공개 type·function·HTTP route를 통해 검증한다.
+- 한 줄짜리 익명 callback, 생성 코드, 외부 vendor 코드는 주석 의무에서 제외한다.
+- 코드의 동작을 그대로 번역하는 주석보다 책임, 경계, 실패 계약처럼 코드만으로 알기 어려운 내용을 기록한다.
 
-문서를 수정할 때는 날짜를 `YYYY-MM-DD` 형식으로 쓰고, 구현된 내용과 계획된 내용을 구분한다.
+## 진행 관리와 완료 보고
 
-## 확인 필요
+- 아키텍처에서 추출한 상위 기능과 완료 기준은 `docs/planning/Purchase_Research_Agent_기능_목록.md`의 고정 기능 ID로 관리한다.
+- 구현 계획은 `docs/planning/Purchase_Research_Agent_TODO.md`의 영역별 체크박스로 관리한다.
+- 상위 계획의 세부 구현 상태는 `docs/development/Purchase_Research_Agent_개발_진행_관리.md`의 원자 작업 체크리스트로 관리한다.
+- 새 기능을 구현하기 전에 기능 ID를 확인하고, 없다면 `feature-catalog` 스킬로 기능 목록에 먼저 등록한다.
+- 기능 구현과 테스트를 commit한 뒤 `code-tracker` 스킬로 해당 기능 ID, commit, 변경 위치와 검증 결과를 기록한다.
+- 코드트래커 작성 뒤 `feature-progress` 스킬로 실제 코드와 테스트를 대조해 기능 목록, TODO와 개발 진행 관리 상태를 갱신한다.
+- 전체 순서와 각 문서의 책임은 `docs/development/기능_ID_기반_개발_추적_프로세스.md`를 따른다.
+- 큰 기능 하나를 한 항목으로 묶지 않고 골격, 정상 경로, 실패 경로, 테스트, 문서, 검증을 독립 체크 항목으로 분리한다.
+- 시작한 미완료 항목은 체크하지 않고 항목 끝에 `**(진행 중)**`을 표시한다.
+- 코드, 관련 테스트, 문서 또는 계약 갱신이 모두 끝나고 검증 명령이 통과한 경우에만 `[x]`로 변경한다.
+- 작업을 완료할 때 `docs/development/Purchase_Research_Agent_개발_진행_관리.md`에 구현 근거를 갱신한다.
+- 구현 근거에는 작업명, 상태, 구현 파일, 시작 줄, class/function/method 또는 schema 이름, 검증 명령을 기록한다.
+- 줄 번호만 기록하지 않고 `경로:줄 + 심볼 이름`을 함께 남긴다. 이후 코드 이동으로 줄 번호가 바뀌면 같은 작업에서 문서도 갱신한다.
+- 개발 중 문제가 발생하면 증상, 원인, 해결 방법, 재발 방지 또는 남은 위험을 문제 기록에 남긴다.
+- 에이전트의 최종 작업 보고에는 진행상황, 발생 문제와 해결, 변경 파일과 핵심 시작 줄, 실행한 검증과 결과를 포함한다.
 
-- DB entity/repository 설계
-- Approval 상태 전이 모델
-- Audit Anchor 조회/검증 API 응답 형식
-- Dashboard API client와 화면 라우팅 구조
+## 규정과 공개 문서 동기화
+
+- 대회 운영규정은 `THIRD_PARTY_NOTICES.md`와 `AI_USAGE.md`라는 파일명을 직접 요구하지 않는다. 이 저장소는 외부 구성요소와 AI 사용 내역을 공개하는 증거 문서로 두 파일을 사용한다.
+- 라이브러리, 프레임워크, Gradle plugin, Node package, Go module, container image, 외부 코드, Plugin, MCP SDK 및 AI model을 추가/삭제하거나 version을 변경하면 같은 작업과 commit에서 `THIRD_PARTY_NOTICES.md`를 갱신한다.
+- Codex, Claude Code 또는 다른 AI가 중요한 코드/설계/문서를 생성하거나 수정하면 같은 작업의 commit, PR 또는 개발 진행 관리 문서에 사용 범위와 사람의 검토 결과를 남기고 필요하면 `AI_USAGE.md`를 갱신한다.
+- Plugin, MCP Server, Agent Gateway, model adapter, runtime AI model, provider 및 실행 방식을 추가/삭제/변경하면 같은 작업과 commit에서 `AI_USAGE.md`를 갱신한다.
+- runtime AI model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 `THIRD_PARTY_NOTICES.md`, `AI_USAGE.md` 및 대회 규정 대응 체크리스트에 기록한다.
+- manifest 또는 AI integration 관련 파일을 변경한 뒤 `make docs-check`를 실행한다. 검사가 통과해도 출처와 license의 정확성은 작성자가 공식 자료로 직접 확인한다.
+- 규정 근거가 특정 파일 형식을 요구하는 직접 의무인지, 프로젝트가 증거를 남기기 위해 선택한 운영 방식인지 문서에서 구분한다.
+
+## 실행과 검증
+
+PostgreSQL, Redis, RabbitMQ는 루트 `compose.yaml`로 실행할 수 있다. 검색 작업의
+Python/Go consumer와 result publisher는 구현됐다. Python Worker는 Queue v1의
+ACK/retry/DLQ/publisher confirm을 처리한다. 기존 Python producer/result consumer와
+DB 직접 적재 코드는 Spring Boot 전환 과정에서 제거됐다. Spring Boot의 검색 작업 producer,
+결과 consumer, DB 적재와 작업 상태 DB는 구현됐으며 Redis application adapter와
+Agent Gateway stream은 구현 전이다. MCP와 Next.js 구매 조건 확인/후보 조회 경로는
+부분 구현됐다.
+Spring Boot의 Flyway 초기 schema, CollectorResult 검증/JPA 적재 및 상품 조회 API는
+구현됐다.
+
+예정 검증 계층:
+
+- Go unit/contract test: parser, rate limit, 저장된 HTML fixture
+- Python unit/contract test: parser, page/필터, Queue 계약, ACK/retry/DLQ
+- Java unit/integration test: 정규화, DB 적재, review signal, REST API와 Queue 계약
+- MCP contract test: 도구 입력/출력과 Product Backend API 연결
+- E2E: 구매 질문 → 실제 수집 → 근거 비교 → 재검증
+- 실제 판매처 smoke test는 기본 CI에서 제외하고 opt-in으로 실행
+
+## 문서
+
+- 시스템 구조: `docs/architecture/Purchase_Research_Agent_시스템_구조.md`
+- 기능 ID 목록과 완료 기준: `docs/planning/Purchase_Research_Agent_기능_목록.md`
+- 구현 계획: `docs/planning/Purchase_Research_Agent_TODO.md`
+- 개발 진행·구현 근거·문제 기록: `docs/development/Purchase_Research_Agent_개발_진행_관리.md`
+- 기능 ID 기반 개발 추적 절차: `docs/development/기능_ID_기반_개발_추적_프로세스.md`
+- 구현 commit 기록 인덱스: `docs/reports/코드트래커/INDEX.md`
+- Git 브랜치 작업 방식: `docs/development/Git_브랜치_작업_방식.md`
+- 대회 제출 전 규정 확인: `docs/planning/오픈소스_개발자대회_규정_대응_체크리스트.md`
+- 외부 구성요소 공개: `THIRD_PARTY_NOTICES.md`
+- AI 사용 공개: `AI_USAGE.md`
+- 날짜는 `YYYY-MM-DD` 형식을 사용한다.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "기능 진행상황 점검"
+  short_description: "기능별 코드와 테스트 근거를 확인해 구현 상태 판정"
+  default_prompt: "Use $feature-progress to audit implementation status for the requested feature IDs."

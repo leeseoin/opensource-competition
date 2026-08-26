@@ -1,0 +1,20 @@
+{
+  "requestId": "research-20260714-001",
+  "merchant": "musinsa",
+  "query": "면접용 남성 구두",
+  "requestedAt": "2026-07-14T10:00:00+09:00",
+  "limit": 10,
+  "locale": "ko-KR",
+  "currency": "KRW",
+  "filters": {
+    "priceMax": 120000,
+    "categories": ["구두"],
+    "sizes": ["270"],
+    "colors": ["블랙"],
+    "inStockOnly": true,
+    "attributes": {
+      "purpose": "면접",
+      "footWidth": "wide"
+    }
+  }
+}

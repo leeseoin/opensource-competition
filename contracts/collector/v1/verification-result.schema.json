@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purchase-research-agent.local/contracts/collector/v1/verification-result.schema.json",
+  "title": "Collector Verification Result v1",
+  "description": "Go Collector가 선택 상품과 옵션을 다시 수집한 최신 검증 결과다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "requestId",
+    "merchant",
+    "productExternalId",
+    "optionExternalId",
+    "status",
+    "checkedAt",
+    "sourceUrl",
+    "collectorVersion",
+    "currentOffer",
+    "changes",
+    "warnings",
+    "errors"
+  ],
+  "properties": {
+    "requestId": {
+      "$ref": "#/$defs/identifier"
+    },
+    "merchant": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "productExternalId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "optionExternalId": {
+      "type": ["string", "null"],
+      "maxLength": 200
+    },
+    "status": {
+      "type": "string",
+      "enum": ["verified", "changed", "unavailable", "blocked"]
+    },
+    "checkedAt": {
+      "$ref": "#/$defs/dateTime"
+    },
+    "sourceUrl": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048
+    },
+    "collectorVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "currentOffer": {
+      "oneOf": [
+        { "$ref": "#/$defs/currentOffer" },
+        { "type": "null" }
+      ]
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/change"
+      },
+      "maxItems": 100
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "verified" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "currentOffer": { "$ref": "#/$defs/currentOffer" },
+          "changes": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "changed" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "currentOffer": { "$ref": "#/$defs/currentOffer" },
+          "changes": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "enum": ["unavailable", "blocked"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "currentOffer": { "type": "null" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "currency"],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "nullableMoney": {
+      "oneOf": [
+        { "$ref": "#/$defs/money" },
+        { "type": "null" }
+      ]
+    },
+    "stockStatus": {
+      "type": "string",
+      "enum": ["available", "low_stock", "out_of_stock", "unknown"]
+    },
+    "currentOffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "price",
+        "shippingFee",
+        "stockStatus",
+        "optionLabel",
+        "deliverySummary"
+      ],
+      "properties": {
+        "price": {
+          "$ref": "#/$defs/nullableMoney"
+        },
+        "shippingFee": {
+          "$ref": "#/$defs/nullableMoney"
+        },
+        "stockStatus": {
+          "$ref": "#/$defs/stockStatus"
+        },
+        "optionLabel": {
+          "type": ["string", "null"],
+          "maxLength": 300
+        },
+        "deliverySummary": {
+          "type": ["string", "null"],
+          "maxLength": 1000
+        }
+      }
+    },
+    "jsonValue": {
+      "type": ["string", "number", "integer", "boolean", "object", "array", "null"]
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "previousValue", "currentValue", "severity"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "price",
+            "shippingFee",
+            "stockStatus",
+            "option",
+            "deliverySummary",
+            "seller"
+          ]
+        },
+        "previousValue": {
+          "$ref": "#/$defs/jsonValue"
+        },
+        "currentValue": {
+          "$ref": "#/$defs/jsonValue"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "requires_confirmation", "blocking"]
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

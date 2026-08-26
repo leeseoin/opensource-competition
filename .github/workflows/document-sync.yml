@@ -1,0 +1,25 @@
+name: Document Sync
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  document-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 공개 문서 동기화 검사
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: ./scripts/check-document-sync.sh "$BASE_SHA"

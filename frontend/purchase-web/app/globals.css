@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f2efe6;
+  --foreground: #101010;
+  --font-geist-sans: "Helvetica Neue", "Apple SD Gothic Neo", Arial, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, monospace;
+  --font-bodoni: Didot, "Times New Roman", serif;
+  --font-noto-kr: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-kr), var(--font-geist-sans), sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}

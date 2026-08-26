@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "taskId": "task-20260726-001",
+  "jobId": "job-20260726-001",
+  "merchant": "abcmart",
+  "operation": "search",
+  "priority": 20,
+  "attempt": 0,
+  "maxAttempts": 2,
+  "requestedAt": "2026-07-26T16:00:00+09:00",
+  "idempotencyKey": "collection:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "payload": {
+    "query": "구두",
+    "page": 1,
+    "limit": 3,
+    "locale": "ko-KR",
+    "currency": "KRW",
+    "filters": {
+      "sizes": ["270"],
+      "inStockOnly": true
+    }
+  }
+}

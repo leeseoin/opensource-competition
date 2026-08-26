@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1",
+  "taskId": "task-20260726-001",
+  "jobId": "job-20260726-001",
+  "status": "running",
+  "startedAt": "2026-07-26T16:00:01+09:00",
+  "completedAt": null,
+  "durationMs": null,
+  "collectorResult": null,
+  "error": null
+}
