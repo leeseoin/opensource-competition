@@ -38,15 +38,15 @@ fi
 dependency_pattern='(^|/)(go\.mod|go\.sum|pyproject\.toml|uv\.lock|package\.json|package-lock\.json|build\.gradle|build\.gradle\.kts|settings\.gradle|settings\.gradle\.kts|gradle\.properties|gradle-wrapper\.properties|compose\.ya?ml|Dockerfile[^/]*)$|^plugins/.*/(\.codex-plugin/plugin\.json|\.mcp\.json)$|(^|/)(models?|model-servers?)/'
 ai_pattern='^plugins/|^services/mcp-server/|(^|/)(models?|model-servers?)/|(^|/)(ollama|llama-cpp|llama_cpp)(/|$)|^AGENTS\.md$|^\.agents/|^\.codex/'
 
-if printf '%s\n' "$changed_files" | grep -Eq "$dependency_pattern"; then
-  if ! printf '%s\n' "$changed_files" | grep -Fxq 'THIRD_PARTY_NOTICES.md'; then
+if grep -Eq "$dependency_pattern" <<< "$changed_files"; then
+  if ! grep -Fxq 'THIRD_PARTY_NOTICES.md' <<< "$changed_files"; then
     printf '%s\n' '문서 동기화 실패: 의존성, image, plugin 또는 model 설정이 변경됐지만 THIRD_PARTY_NOTICES.md가 갱신되지 않았습니다.' >&2
     exit 1
   fi
 fi
 
-if printf '%s\n' "$changed_files" | grep -Eq "$ai_pattern"; then
-  if ! printf '%s\n' "$changed_files" | grep -Fxq 'AI_USAGE.md'; then
+if grep -Eq "$ai_pattern" <<< "$changed_files"; then
+  if ! grep -Fxq 'AI_USAGE.md' <<< "$changed_files"; then
     printf '%s\n' '문서 동기화 실패: AI, Plugin 또는 MCP 관련 설정이 변경됐지만 AI_USAGE.md가 갱신되지 않았습니다.' >&2
     exit 1
   fi
