@@ -226,10 +226,10 @@
 - [x] 하위 호환 공용 계약과 Codex CLI 엄격 출력 Schema 분리 및 실제 호출 검증
 - [x] Spring Boot 조사 세션 DRAFT/CONFIRMED 상태와 사용자 확인 전 검색 차단
 - [ ] Codex CLI adapter와 stream 중계 구현 **(부분 구현: 읽기 전용 JSON 구조화와 timeout 완료, stream/취소/동시성 상한 남음)**
-- [ ] Claude Code CLI adapter와 stream 중계 구현 **(부분 구현: 도구 없는 구조화 JSON, timeout과 동시성 상한 완료 / stream과 실제 로그인 E2E 남음)**
+- [ ] Claude Code CLI adapter와 stream 중계 구현 **(부분 구현: 도구 없는 구조화 JSON, timeout, 동시성 상한과 실제 로그인 Web 검색 E2E 완료 / stream 남음)**
 - [ ] 요청별 process, 대화 session, timeout, 취소 정책 정의
 - [x] Codex Plugin 규칙과 공통 MCP 조사 세션 workflow 연결
-- [ ] Claude Code에서 같은 MCP Server 연결 검증 **(Web 선택값과 MCP/Backend 계약 전달 자동 검증 / 실제 로그인 E2E 남음)**
+- [x] Claude Code에서 같은 MCP Server 연결 검증 **(Web 선택값과 MCP/Backend 계약 자동 검증 및 실제 로그인 Web 검색 E2E 완료)**
 - [x] Agent 인증 정보와 실행 권한을 browser에 노출하지 않는 server 전용 구성
 - [x] Codex 인증 만료와 일반 실행 실패에서 child process stderr 및 Plugin prompt 비노출
 - [ ] MCP 도구 호출과 최종 답변의 근거 누락 contract test

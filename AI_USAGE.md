@@ -1,6 +1,6 @@
 # AI Usage
 
-최종 갱신일: 2026-08-24
+최종 갱신일: 2026-08-27
 
 ## 이 문서를 공개하는 이유
 
@@ -50,6 +50,9 @@
   기본 model 선택을 따른다. 실행 위치는 Next.js server이며 model weight는 공개되지 않았고
   저장소에 포함하지 않는다. 제출 및 배포 검증 때 CLI 결과의 실제 model ID를 확인해 대회
   model 공개 양식에 기록한다.
+- Claude child process에는 macOS Keychain 사용자 문맥과 공식 인증 방식에 필요한 환경만
+  allowlist로 전달한다. `USER`/`LOGNAME`/`SHELL`/설정 경로와 Claude/Anthropic 인증 및
+  통신 설정은 전달하지만 DB password 등 프로젝트의 다른 secret은 전달하지 않는다.
 - Agent Gateway는 색상 완화 문맥과 특정 모델명이 잘못 분류된 경우를 결정론적으로
   보정한다. 보정 전후 조건은 사용자가 확인하며 상품 사실을 생성하지 않는다.
 - Codex CLI 인증 만료와 일반 실행 실패는 server에서 안전한 오류 코드로 변환한다.
@@ -65,7 +68,8 @@
 - embedding adapter는 기본 비활성화 상태다. model 없음/timeout/응답 계약 오류 시
   PostgreSQL 전문 검색과 trigram 검색만 사용하며 weight를 이 저장소에 포함하지 않는다.
 - Claude Code 조건 구조화 adapter와 Web/MCP/Backend runtime 전달은 구현됐다. 현재 개발 장비의
-  Claude Code CLI 2.1.211은 설치 확인됐으나 server 계정 로그인이 없어 실제 model 응답 E2E는 보류됐다.
+  Claude Code CLI 2.1.211 설치와 server 계정 로그인을 확인했다. 실제 model 응답 Web E2E는
+  인증 환경 수정 후 수동 재검증 대상으로 남긴다.
   Ollama, llama.cpp 및 GPU model server는 계획 단계다.
 - 현재 저장소에 직접 포함한 AI model weight는 없다.
 - runtime model을 추가하면 model 이름/version/제공자/출처/weight 공개 여부/license/실행 위치/전송 데이터/사용 목적을 기록한다.
@@ -85,6 +89,7 @@
 
 | 날짜 | 내용 | 검토 방법 |
 |---|---|---|
+| 2026-08-27 | Codex를 사용해 Claude CLI 로그인 검사는 성공하지만 Next.js child process만 인증에 실패하는 환경 allowlist 버그를 수정 | Claude 사용자 식별값/설정 경로/공식 인증값 전달과 DB password 비전달을 unit test로 검증하고 Web 72개 test 및 ESLint 통과 / 실제 Web E2E는 사용자 server 재시작 후 확인 |
 | 2026-08-24 | Codex를 사용해 Claude Code CLI 구매 조건 구조화 adapter와 Web/MCP/Backend runtime 전달을 구현 | Claude 도구 비활성화, JSON Schema 출력, 인증정보 비노출을 unit/contract/integration test와 production build로 검증 / Claude Code CLI 2.1.211 설치 확인, 미로그인으로 실제 model 응답은 보류 |
 | 2026-07-30 | 최초 AI 사용 공개 문서 작성 / Codex와 Claude Code 개발 보조 범위 및 runtime AI 미구현 상태 기록 | 저장소 구조, 현재 manifest, 운영규정 7쪽 제9조 제4항과 제5항 대조 |
 | 2026-07-30 | Codex를 사용해 Product Backend의 Flyway/JPA 저장과 조회 API를 구현하고 package-by-feature 구조로 수정 | 사용자가 package 구조를 결정하고 diff 검토 및 Testcontainers integration test 수행 |
