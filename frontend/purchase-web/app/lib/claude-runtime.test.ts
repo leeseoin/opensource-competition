@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { AgentRuntimeError } from "./agent-runtime.ts";
 import {
+  buildClaudeEnvironment,
   classifyClaudeProcessFailure,
   resolveClaudeCommand,
   structurePurchaseQuestionWithClaude,
@@ -48,6 +49,31 @@ test("빈 Claude 실행 경로에 기본 명령을 사용한다", () => {
   assert.equal(resolveClaudeCommand(""), "claude");
   assert.equal(resolveClaudeCommand("  "), "claude");
   assert.equal(resolveClaudeCommand("/usr/local/bin/claude"), "/usr/local/bin/claude");
+});
+
+/** Claude child process에 사용자 식별값과 지원 인증값을 전달하는지 검증한다. */
+test("Claude 인증에 필요한 환경만 선별해 전달한다", () => {
+  const environment = buildClaudeEnvironment({
+    NODE_ENV: "test",
+    PATH: "/usr/bin",
+    HOME: "/Users/tester",
+    USER: "tester",
+    LOGNAME: "tester",
+    SHELL: "/bin/zsh",
+    XDG_CONFIG_HOME: "/Users/tester/.config",
+    CLAUDE_CONFIG_DIR: "/Users/tester/.claude",
+    CLAUDE_CODE_OAUTH_TOKEN: "oauth-secret",
+    ANTHROPIC_AUTH_TOKEN: "auth-secret",
+    DATABASE_PASSWORD: "must-not-leak",
+  });
+
+  assert.equal(environment.USER, "tester");
+  assert.equal(environment.LOGNAME, "tester");
+  assert.equal(environment.SHELL, "/bin/zsh");
+  assert.equal(environment.XDG_CONFIG_HOME, "/Users/tester/.config");
+  assert.equal(environment.CLAUDE_CODE_OAUTH_TOKEN, "oauth-secret");
+  assert.equal(environment.ANTHROPIC_AUTH_TOKEN, "auth-secret");
+  assert.equal(environment.DATABASE_PASSWORD, undefined);
 });
 
 /** Claude 인증 실패에서 stderr 원문을 노출하지 않는지 검증한다. */

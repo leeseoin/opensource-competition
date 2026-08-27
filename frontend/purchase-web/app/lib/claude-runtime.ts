@@ -22,6 +22,38 @@ export function resolveClaudeCommand(configured = process.env.CLAUDE_CLI_PATH): 
   return configured?.trim() || "claude";
 }
 
+/** buildClaudeEnvironment는 Claude 인증과 통신에 필요한 값만 child process에 전달한다. */
+export function buildClaudeEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const allowedEnvironment = [
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "XDG_CONFIG_HOME",
+    "CLAUDE_CONFIG_DIR",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TMPDIR",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS",
+  ];
+  const environment: NodeJS.ProcessEnv = { NODE_ENV: source.NODE_ENV ?? "production" };
+  for (const key of allowedEnvironment) {
+    if (source[key]) {
+      environment[key] = source[key];
+    }
+  }
+  return environment;
+}
+
 /** classifyClaudeProcessFailure는 stderr 원문을 숨긴 채 인증, Schema와 일반 실패를 구분한다. */
 export function classifyClaudeProcessFailure(stderr: string): AgentRuntimeError {
   const normalized = stderr.toLowerCase();
@@ -62,18 +94,9 @@ export function runClaudeCommand(
   options: { cwd: string; timeoutMs: number },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const allowedEnvironment = [
-      "PATH", "HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "LANG", "LC_ALL", "TMPDIR",
-    ];
-    const environment: NodeJS.ProcessEnv = { NODE_ENV: process.env.NODE_ENV ?? "production" };
-    for (const key of allowedEnvironment) {
-      if (process.env[key]) {
-        environment[key] = process.env[key];
-      }
-    }
     const child = spawn(resolveClaudeCommand(), args, {
       cwd: options.cwd,
-      env: environment,
+      env: buildClaudeEnvironment(),
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
     });

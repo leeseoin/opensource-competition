@@ -4,6 +4,7 @@
 
 ## 최신 기록
 
+- 2026-08-27 / [`RUNTIME-001` Claude 인증 환경](2026-08-27-RUNTIME-001-Claude_인증_환경.md) / `a2b7544` / 부모 shell과 Claude child process의 인증 환경을 맞추고 최초 실행 README 및 실제 Web 검색 E2E 기록
 - 2026-08-26 / [`OPS-002` 문서 동기화 대규모 diff 오탐 수정](2026-08-26-OPS-002-문서_동기화_대규모_diff.md) / `f7048db` / 긴 변경 파일 목록의 grep 조기 종료로 발생한 공개 문서 누락 오탐 방지
 - 2026-08-26 / [`RUNTIME-001` Claude Code CLI 런타임](2026-08-26-RUNTIME-001-Claude_Code_CLI_런타임.md) / `b664708` / Codex와 Claude Code가 같은 조건/MCP 계약을 사용하고 최초 사용자가 CLI 인증 상태를 점검하도록 연결
 - 2026-08-16 / [`ANALYSIS-004` Python 옵션 재고 근거](2026-08-16-ANALYSIS-004-Python_옵션_재고_근거.md) / `ccda7c8` / ABC마트와 29CM의 실제 옵션별 구매 가능 상태 및 provenance를 Queue 저장과 추천 조회에 연결

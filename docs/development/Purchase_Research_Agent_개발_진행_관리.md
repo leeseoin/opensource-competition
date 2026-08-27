@@ -297,7 +297,7 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - [x] 구매 질문·근거·재검증 skill workflow 초안 작성
 - [x] Next.js server에서 동작하는 공통 Agent Gateway
 - [ ] Codex CLI adapter와 JSON event stream 중계 **(부분 구현: 구조화 JSON 완료, stream 남음)**
-- [ ] Claude Code CLI adapter와 stream 중계 **(부분 구현: 구조화 JSON과 runtime 전달 완료 / stream과 로그인 E2E 남음)**
+- [ ] Claude Code CLI adapter와 stream 중계 **(부분 구현: 구조화 JSON/runtime 전달/로그인 Web 검색 E2E 완료 / stream 남음)**
 - [ ] 대화 session, timeout, 취소와 동시 요청 상한 **(부분 구현: DB session과 process timeout 완료)**
 - [ ] 장기 서비스용 OpenAI API Agent 교체 경계
 - [ ] Python MCP SDK 의존성 추가
@@ -2477,6 +2477,34 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
   `docs/reports/코드트래커/2026-08-26-OPS-002-문서_동기화_대규모_diff.md:1`
 - 남은 위험: `OPS-002` 완료 기준 중 계약 CI, 구조화 로그, metric과 운영 보안 점검은 미완료다.
 
+### 2026-08-27 RUNTIME-001 Claude child process 인증 환경 수정
+
+- 진행상황: **부분 구현**. 일반 터미널의 `make ai-runtime-check`에서는 Claude Code가
+  `READY`였지만 Next.js child process만 `AI_AUTH_REQUIRED`를 반환하던 문제를 수정하고,
+  실제 로그인된 Claude Code의 조건 구조화/MCP DRAFT/상품 검색 Web E2E를 확인했다.
+- 구현 위치:
+  - `frontend/purchase-web/app/lib/claude-runtime.ts:26` `buildClaudeEnvironment`: macOS
+    Keychain 사용자 문맥과 Claude/Anthropic 인증 및 통신 설정만 allowlist로 전달
+  - `frontend/purchase-web/app/lib/claude-runtime.ts:91` `runClaudeCommand`: 제한된 인증
+    환경을 Claude child process에 적용하고 프로젝트 DB secret은 전달하지 않음
+  - `frontend/purchase-web/app/lib/claude-runtime.test.ts:55`
+    `Claude 인증에 필요한 환경만 선별해 전달한다`: 사용자/인증값 전달과 DB password 차단 검증
+  - `README.md:3` `처음 실행`: 환경 파일/AI CLI/인프라/Python/Web 설치와 두 터미널 실행 순서
+- 발생 문제: 로그인된 같은 macOS 계정에서도 Web 질문은 Claude 로그인이 필요하다는 503을
+  반환해 사용자가 인증을 반복하게 됐다.
+- 원인: CLI 상태 검사는 부모 shell 전체 환경을 사용하지만 Agent Gateway는 Claude child
+  process에서 `USER`/`LOGNAME`/`SHELL`과 지원 인증 설정을 제거해 두 실행 경계가 달랐다.
+- 해결: 다른 프로젝트 secret을 노출하지 않는 allowlist 원칙을 유지하면서 사용자 식별값,
+  설정 경로, Claude/Anthropic 인증 및 HTTPS 인증서 설정만 추가했다. README 첫 화면에는
+  완전한 최초 실행 순서를 배치하고 중복되거나 오래된 구현 상태를 현재 구조에 맞췄다.
+- 검증:
+  - `cd frontend/purchase-web && npm test`: 72개 통과
+  - `cd frontend/purchase-web && npm run lint`: 통과
+  - `make docs-check`: 통과
+  - 사용자 수동 E2E: Claude Code CLI 2.1.211 `READY` 확인 후 `/chat` 조건 구조화와 상품 검색 성공
+- 남은 위험: Claude/Codex stream과 요청 취소, 로컬 model adapter 및 runtime별 정량 평가는
+  `RUNTIME-001` 후속 범위다.
+
 ## 작업 기록 템플릿
 
 새 작업을 완료할 때 아래 형식을 복사해 기록한다.
@@ -2502,4 +2530,4 @@ Product Backend에 전달하며, Redis가 판매처 전체 속도 제한과 짧�
 - 최초 상품 동시 upsert 충돌 처리
 - JSON Schema 직접 검증과 공통 오류 응답
 - 실제 browser 기반 구매 질문 E2E와 접근성 검증
-- 로그인된 Claude Code CLI의 조건 구조화/MCP/후보 검색 E2E
+- Claude/Codex stream과 요청 취소 및 runtime별 정량 평가
