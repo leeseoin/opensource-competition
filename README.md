@@ -1,5 +1,8 @@
 # Purchase Research Agent
 
+## 준비물
+필수: Claude Code Max Plan 계정 / Codex Max Plan 
+
 ## 처음 실행
 
 처음 저장소를 받은 사용자는 아래 순서대로 환경 파일, AI CLI, 인프라와 애플리케이션
